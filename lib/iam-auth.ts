@@ -105,16 +105,31 @@ export async function startLogin(config: IamAuthConfig): Promise<void> {
   window.location.href = `${base}/login/oauth/authorize?${params}`
 }
 
-/** Handle the OAuth callback — exchange code for tokens. */
+/** Handle the OAuth callback — exchange code for tokens or accept implicit grant. */
 export async function handleCallback(config: IamAuthConfig): Promise<IamUser | null> {
   const url = new URL(window.location.href)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   const error = url.searchParams.get('error')
 
+  // Also check for implicit grant tokens (access_token in query or hash)
+  const implicitToken =
+    url.searchParams.get('access_token') ||
+    new URLSearchParams(url.hash.replace(/^#/, '')).get('access_token')
+
   if (error) {
     const desc = url.searchParams.get('error_description') ?? error
     throw new Error(`OAuth error: ${desc}`)
+  }
+
+  // Implicit flow: IAM returned access_token directly
+  if (implicitToken && !code) {
+    const expiresIn = Number(url.searchParams.get('expires_in') ?? '3600')
+    sessionStorage.setItem(KEY_ACCESS_TOKEN, implicitToken)
+    sessionStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
+    sessionStorage.removeItem(KEY_STATE)
+    sessionStorage.removeItem(KEY_CODE_VERIFIER)
+    return getCurrentUser()
   }
 
   if (!code) throw new Error('No authorization code in callback')
