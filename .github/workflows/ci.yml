@@ -25,9 +25,30 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
 
-  deploy:
+      - name: Upload artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy-pages:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_CLOUDFLARE == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
