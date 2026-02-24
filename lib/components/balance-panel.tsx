@@ -6,7 +6,10 @@ import type { Balance } from '@/lib/commerce-client'
 export interface BalancePanelProps {
   balance: Balance | null
   currency?: string
+  isAdmin?: boolean
+  userEmail?: string
   onAddFunds?: (amount: number) => Promise<void>
+  onGrantCredit?: (email: string, amount: number) => Promise<void>
   presetAmounts?: number[]
 }
 
@@ -23,13 +26,23 @@ function formatCurrency(value: number, currency: string = 'USD') {
 export function BalancePanel({
   balance,
   currency = 'USD',
+  isAdmin = false,
+  userEmail,
   onAddFunds,
+  onGrantCredit,
   presetAmounts = DEFAULT_PRESETS,
 }: BalancePanelProps) {
   const [customAmount, setCustomAmount] = React.useState('')
   const [selectedPreset, setSelectedPreset] = React.useState<number | null>(null)
   const [adding, setAdding] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [success, setSuccess] = React.useState<string | null>(null)
+
+  // Admin credit grant state
+  const [showAdminPanel, setShowAdminPanel] = React.useState(false)
+  const [creditEmail, setCreditEmail] = React.useState(userEmail ?? '')
+  const [creditAmount, setCreditAmount] = React.useState('5')
+  const [granting, setGranting] = React.useState(false)
 
   const effectiveAmount = selectedPreset ?? (parseFloat(customAmount) || 0)
 
@@ -37,16 +50,37 @@ export function BalancePanel({
     if (!onAddFunds || effectiveAmount <= 0) return
     setAdding(true)
     setError(null)
+    setSuccess(null)
     try {
       await onAddFunds(effectiveAmount)
       setCustomAmount('')
       setSelectedPreset(null)
+      setSuccess(`Added ${formatCurrency(effectiveAmount, currency)}`)
+      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add funds')
     } finally {
       setAdding(false)
     }
-  }, [effectiveAmount, onAddFunds])
+  }, [effectiveAmount, onAddFunds, currency])
+
+  const handleGrantCredit = React.useCallback(async () => {
+    if (!onGrantCredit || !creditEmail || !creditAmount) return
+    const amount = parseFloat(creditAmount)
+    if (amount <= 0) return
+    setGranting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await onGrantCredit(creditEmail, amount)
+      setSuccess(`Granted ${formatCurrency(amount, currency)} credit to ${creditEmail}`)
+      setTimeout(() => setSuccess(null), 5000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to grant credit')
+    } finally {
+      setGranting(false)
+    }
+  }, [creditEmail, creditAmount, onGrantCredit, currency])
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-50 to-white">
@@ -58,18 +92,18 @@ export function BalancePanel({
               Account Balance
             </p>
             <p className="mt-2 text-4xl font-bold text-zinc-900">
-              {balance ? formatCurrency(balance.available, currency) : '—'}
+              {balance ? formatCurrency(balance.available / 100, currency) : '—'}
             </p>
             {balance && balance.holds > 0 && (
               <p className="mt-1 text-sm text-zinc-500">
-                {formatCurrency(balance.holds, currency)} on hold
+                {formatCurrency(balance.holds / 100, currency)} on hold
               </p>
             )}
           </div>
           {balance && (
             <div className="text-right text-sm text-zinc-500">
-              <p>Total: {formatCurrency(balance.balance, currency)}</p>
-              <p>Available: {formatCurrency(balance.available, currency)}</p>
+              <p>Total: {formatCurrency(balance.balance / 100, currency)}</p>
+              <p>Available: {formatCurrency(balance.available / 100, currency)}</p>
             </div>
           )}
         </div>
@@ -128,10 +162,72 @@ export function BalancePanel({
           </button>
         </div>
 
+        {success && (
+          <p className="mt-2 text-sm text-green-600">{success}</p>
+        )}
         {error && (
           <p className="mt-2 text-sm text-red-600">{error}</p>
         )}
       </div>
+
+      {/* Admin: Grant credit to any user */}
+      {isAdmin && (
+        <div className="border-t border-zinc-200 p-6">
+          <button
+            type="button"
+            onClick={() => setShowAdminPanel(!showAdminPanel)}
+            className="flex items-center gap-2 text-sm font-medium text-zinc-700"
+          >
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+              Admin
+            </span>
+            Grant credit to user
+            <span className="text-zinc-400">{showAdminPanel ? '▲' : '▼'}</span>
+          </button>
+
+          {showAdminPanel && (
+            <div className="mt-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+              <div>
+                <label htmlFor="credit-email" className="text-xs font-medium text-zinc-600">
+                  User email
+                </label>
+                <input
+                  id="credit-email"
+                  type="email"
+                  value={creditEmail}
+                  onChange={(e) => setCreditEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="credit-amount" className="text-xs font-medium text-zinc-600">
+                  Amount ($)
+                </label>
+                <input
+                  id="credit-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={!creditEmail || !creditAmount || parseFloat(creditAmount) <= 0 || granting}
+                onClick={handleGrantCredit}
+                className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {granting
+                  ? 'Granting...'
+                  : `Grant ${formatCurrency(parseFloat(creditAmount) || 0, currency)} credit`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

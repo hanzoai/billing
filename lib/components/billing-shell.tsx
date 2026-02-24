@@ -14,7 +14,7 @@ import type {
 import type { Balance } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
-import type { BillingOrgConfig } from '@/lib/config'
+import { type BillingOrgConfig, isAdminUser } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 import { BalancePanel } from './balance-panel'
 
@@ -91,14 +91,30 @@ export function BillingShell({ org, user }: BillingShellProps) {
     loadBillingData()
   }, [loadBillingData])
 
+  const admin = isAdminUser(user.email)
+
   const handleAddFunds = useCallback(async (amount: number) => {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
     const userId = user.email || user.sub
-    await commerce.addDeposit({ user: userId, amount, currency: 'usd' })
+    // Commerce API uses cents
+    await commerce.addDeposit({ user: userId, amount: Math.round(amount * 100), currency: 'usd' })
     const newBalance = await commerce.getBalance(userId)
     setBalance(newBalance)
+  }, [org, user])
+
+  const handleGrantCredit = useCallback(async (email: string, amount: number) => {
+    const token = getAccessToken()
+    if (!token) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    // Commerce API uses cents
+    await commerce.addDeposit({ user: email, amount: Math.round(amount * 100), currency: 'usd', notes: `Admin credit grant by ${user.email}` })
+    // Refresh own balance if granting to self
+    if (email === user.email || email === user.sub) {
+      const newBalance = await commerce.getBalance(email)
+      setBalance(newBalance)
+    }
   }, [org, user])
 
   const handleUpgrade = useCallback(async (planId: string) => {
@@ -203,7 +219,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
           </div>
         )}
 
-        <BalancePanel balance={balance} onAddFunds={handleAddFunds} />
+        <BalancePanel
+          balance={balance}
+          isAdmin={admin}
+          userEmail={user.email}
+          onAddFunds={handleAddFunds}
+          onGrantCredit={admin ? handleGrantCredit : undefined}
+        />
 
         <div className="mt-6">
           <BillingWorkspace
