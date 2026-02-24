@@ -11,13 +11,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hanzo/auth": "^2.7.0",
-    "@hanzo/commerce": "^7.4.0",
-    "@hanzo/ui": "^5.3.34",
-    "class-variance-authority": "^0.7.1",
-    "lucide-react": "^0.562.0",
-    "mobx": "^6.12.3",
-    "mobx-react-lite": "^4.0.7",
     "next": "^16.1.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

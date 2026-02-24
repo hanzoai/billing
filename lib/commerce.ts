@@ -1,4 +1,4 @@
-import { Commerce } from '@hanzo/commerce'
+import { Commerce } from './commerce-client'
 
 let instance: Commerce | null = null
 

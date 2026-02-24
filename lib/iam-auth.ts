@@ -1,0 +1,159 @@
+/**
+ * Minimal IAM auth module for the billing portal.
+ *
+ * Handles OIDC/PKCE login via Casdoor (hanzo.id) and token storage.
+ * Self-contained — no external auth package dependency.
+ */
+
+const KEY_PREFIX = 'hanzo_billing_'
+const KEY_ACCESS_TOKEN = `${KEY_PREFIX}access_token`
+const KEY_REFRESH_TOKEN = `${KEY_PREFIX}refresh_token`
+const KEY_EXPIRES_AT = `${KEY_PREFIX}expires_at`
+const KEY_CODE_VERIFIER = `${KEY_PREFIX}code_verifier`
+const KEY_STATE = `${KEY_PREFIX}state`
+
+export interface IamUser {
+  email: string
+  displayName: string | null
+  avatar: string | null
+  sub: string
+}
+
+export interface IamAuthConfig {
+  iamServerUrl: string
+  clientId: string
+  redirectUri: string
+  orgName: string
+  appName: string
+}
+
+function generateRandom(length: number): string {
+  const array = new Uint8Array(length)
+  crypto.getRandomValues(array)
+  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256(message: string): Promise<ArrayBuffer> {
+  const encoder = new TextEncoder()
+  return crypto.subtle.digest('SHA-256', encoder.encode(message))
+}
+
+function base64UrlEncode(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Check if user is logged in (has valid token). */
+export function isLoggedIn(): boolean {
+  const token = sessionStorage.getItem(KEY_ACCESS_TOKEN)
+  const expiresAt = sessionStorage.getItem(KEY_EXPIRES_AT)
+  if (!token) return false
+  if (expiresAt && Date.now() > Number(expiresAt)) return false
+  return true
+}
+
+/** Get the current access token. */
+export function getAccessToken(): string | null {
+  if (!isLoggedIn()) return null
+  return sessionStorage.getItem(KEY_ACCESS_TOKEN)
+}
+
+/** Parse the JWT payload to extract user info. */
+export function getCurrentUser(): IamUser | null {
+  const token = getAccessToken()
+  if (!token) return null
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return {
+      email: payload.email ?? payload.name ?? '',
+      displayName: payload.displayName ?? payload.name ?? null,
+      avatar: payload.avatar ?? null,
+      sub: payload.sub ?? payload.name ?? '',
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Start OIDC/PKCE login flow — redirects to IAM server. */
+export async function startLogin(config: IamAuthConfig): Promise<void> {
+  const state = generateRandom(16)
+  const codeVerifier = generateRandom(32)
+  const challengeBuffer = await sha256(codeVerifier)
+  const codeChallenge = base64UrlEncode(challengeBuffer)
+
+  sessionStorage.setItem(KEY_STATE, state)
+  sessionStorage.setItem(KEY_CODE_VERIFIER, codeVerifier)
+
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    response_type: 'code',
+    redirect_uri: config.redirectUri,
+    scope: 'openid profile email',
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+  })
+
+  window.location.href = `${config.iamServerUrl}/login/oauth/authorize?${params}`
+}
+
+/** Handle the OAuth callback — exchange code for tokens. */
+export async function handleCallback(config: IamAuthConfig): Promise<IamUser | null> {
+  const url = new URL(window.location.href)
+  const code = url.searchParams.get('code')
+  const state = url.searchParams.get('state')
+  const savedState = sessionStorage.getItem(KEY_STATE)
+  const codeVerifier = sessionStorage.getItem(KEY_CODE_VERIFIER)
+
+  if (!code) throw new Error('No authorization code in callback')
+  if (state !== savedState) throw new Error('State mismatch — possible CSRF')
+  if (!codeVerifier) throw new Error('Missing code verifier')
+
+  // Clean up state
+  sessionStorage.removeItem(KEY_STATE)
+  sessionStorage.removeItem(KEY_CODE_VERIFIER)
+
+  // Exchange code for tokens
+  const tokenRes = await fetch(`${config.iamServerUrl}/api/login/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: config.clientId,
+      code,
+      redirect_uri: config.redirectUri,
+      code_verifier: codeVerifier,
+    }),
+  })
+
+  if (!tokenRes.ok) {
+    const text = await tokenRes.text()
+    throw new Error(`Token exchange failed: ${text}`)
+  }
+
+  const data = await tokenRes.json()
+  const accessToken = data.access_token
+  const refreshToken = data.refresh_token
+  const expiresIn = data.expires_in ?? 3600
+
+  if (!accessToken) throw new Error('No access token received')
+
+  // Store tokens
+  sessionStorage.setItem(KEY_ACCESS_TOKEN, accessToken)
+  if (refreshToken) sessionStorage.setItem(KEY_REFRESH_TOKEN, refreshToken)
+  sessionStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
+
+  return getCurrentUser()
+}
+
+/** Clear all stored tokens. */
+export function logout(): void {
+  sessionStorage.removeItem(KEY_ACCESS_TOKEN)
+  sessionStorage.removeItem(KEY_REFRESH_TOKEN)
+  sessionStorage.removeItem(KEY_EXPIRES_AT)
+  sessionStorage.removeItem(KEY_STATE)
+  sessionStorage.removeItem(KEY_CODE_VERIFIER)
+}

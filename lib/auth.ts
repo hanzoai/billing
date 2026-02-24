@@ -1,14 +1,14 @@
-import type { AuthServiceConf } from '@hanzo/auth'
+import type { IamAuthConfig } from './iam-auth'
 import type { BillingOrgConfig } from './config'
 
-export function makeAuthConf(org: BillingOrgConfig): AuthServiceConf {
+export function makeAuthConf(org: BillingOrgConfig): IamAuthConfig {
   return {
     iamServerUrl: org.iamServerUrl,
-    iamClientId: org.iamClientId,
-    iamRedirectUri: typeof window !== 'undefined'
+    clientId: org.iamClientId,
+    redirectUri: typeof window !== 'undefined'
       ? `${window.location.origin}/auth/callback`
       : '',
-    iamOrgName: org.id,
-    iamAppName: `billing-${org.id}`,
+    orgName: org.id,
+    appName: `billing-${org.id}`,
   }
 }

@@ -1,27 +1,25 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAuth, IamAuthService } from '@hanzo/auth'
-import { observer } from 'mobx-react-lite'
+import { getOrgByHost } from '@/lib/config'
+import { makeAuthConf } from '@/lib/auth'
+import { handleCallback } from '@/lib/iam-auth'
 
-const CallbackPage = observer(function CallbackPage() {
-  const auth = useAuth()
+export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const handle = async () => {
-      try {
-        const iam = auth as IamAuthService
-        if (typeof iam.handleCallback === 'function') {
-          await iam.handleCallback()
-        }
+    const org = getOrgByHost(window.location.host)
+    const conf = makeAuthConf(org)
+
+    handleCallback(conf)
+      .then(() => {
         window.location.href = '/'
-      } catch (err) {
+      })
+      .catch((err) => {
         setError(err instanceof Error ? err.message : 'Authentication failed')
-      }
-    }
-    handle()
-  }, [auth])
+      })
+  }, [])
 
   if (error) {
     return (
@@ -48,6 +46,4 @@ const CallbackPage = observer(function CallbackPage() {
       </div>
     </main>
   )
-})
-
-export default CallbackPage
+}

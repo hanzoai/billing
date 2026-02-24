@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { observer } from 'mobx-react-lite'
-import { useAuth, IamAuthService } from '@hanzo/auth'
-import { BillingWorkspace } from '@hanzo/ui/billing'
+import { BillingWorkspace } from '@/lib/billing'
 import type {
   Subscription,
   SubscriptionPlan,
@@ -12,18 +10,19 @@ import type {
   BusinessProfile,
   TaxSettings,
   ComplianceItem,
-  BillingMetric,
-} from '@hanzo/ui/billing'
-import type { Balance } from '@hanzo/commerce'
+} from '@/lib/billing'
+import type { Balance } from '@/lib/commerce-client'
+import type { IamUser } from '@/lib/iam-auth'
+import { getAccessToken, logout } from '@/lib/iam-auth'
 import type { BillingOrgConfig } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 import { BalancePanel } from './balance-panel'
 
 interface BillingShellProps {
   org: BillingOrgConfig
+  user: IamUser
 }
 
-// Default empty state for required BillingWorkspace props
 const EMPTY_SUBSCRIPTION: Subscription = {
   id: '',
   customerId: '',
@@ -36,12 +35,7 @@ const EMPTY_SUBSCRIPTION: Subscription = {
 const EMPTY_BUSINESS_PROFILE: BusinessProfile = {
   legalName: '',
   displayName: '',
-  registeredAddress: {
-    line1: '',
-    city: '',
-    zip: '',
-    country: 'US',
-  },
+  registeredAddress: { line1: '', city: '', zip: '', country: 'US' },
 }
 
 const EMPTY_TAX_SETTINGS: TaxSettings = {
@@ -49,35 +43,25 @@ const EMPTY_TAX_SETTINGS: TaxSettings = {
   registrations: [],
 }
 
-export const BillingShell = observer(function BillingShell({ org }: BillingShellProps) {
-  const auth = useAuth()
+export function BillingShell({ org, user }: BillingShellProps) {
   const [balance, setBalance] = useState<Balance | null>(null)
-  const [subscription, setSubscription] = useState<Subscription>(EMPTY_SUBSCRIPTION)
+  const [subscription] = useState<Subscription>(EMPTY_SUBSCRIPTION)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
-  const [usageMetrics, setUsageMetrics] = useState<BillingMetric[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
-  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [invoices] = useState<Invoice[]>([])
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE)
   const [taxSettings] = useState<TaxSettings>(EMPTY_TAX_SETTINGS)
   const [complianceItems] = useState<ComplianceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const getToken = useCallback(async (): Promise<string | null> => {
-    const iam = auth as IamAuthService
-    if (typeof iam.getAccessToken === 'function') {
-      return iam.getAccessToken()
-    }
-    return null
-  }, [auth])
-
   const loadBillingData = useCallback(async () => {
     try {
-      const token = await getToken()
+      const token = getAccessToken()
       if (!token) return
 
       const commerce = getCommerce(org.commerceUrl, token)
-      const userId = auth.user?.email ?? ''
+      const userId = user.email || user.sub
 
       const [bal, planList] = await Promise.allSettled([
         commerce.getBalance(userId),
@@ -101,71 +85,52 @@ export const BillingShell = observer(function BillingShell({ org }: BillingShell
     } finally {
       setLoading(false)
     }
-  }, [auth, org, getToken])
+  }, [org, user])
 
   useEffect(() => {
-    if (!auth.loggedIn) {
-      const iam = auth as IamAuthService
-      if (typeof iam.loginEmailAndPassword === 'function') {
-        iam.loginEmailAndPassword('', '')
-      }
-      return
-    }
     loadBillingData()
-  }, [auth.loggedIn, loadBillingData])
-
-  // ---- Callbacks wired to Commerce API ----
+  }, [loadBillingData])
 
   const handleAddFunds = useCallback(async (amount: number) => {
-    const token = await getToken()
+    const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = auth.user?.email ?? ''
+    const userId = user.email || user.sub
     await commerce.addDeposit({ user: userId, amount, currency: 'usd' })
     const newBalance = await commerce.getBalance(userId)
     setBalance(newBalance)
-  }, [auth, org, getToken])
+  }, [org, user])
 
   const handleUpgrade = useCallback(async (planId: string) => {
-    const token = await getToken()
+    const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = auth.user?.email ?? ''
-    const sub = await commerce.subscribe({ planId, userId })
-    setSubscription((prev) => ({
-      ...prev,
-      planId: sub.planId ?? planId,
-      status: (sub.status as Subscription['status']) ?? 'active',
-    }))
-  }, [auth, org, getToken])
+    const userId = user.email || user.sub
+    await commerce.subscribe({ planId, userId })
+  }, [org, user])
 
   const handleDowngrade = useCallback(async (planId: string) => {
     await handleUpgrade(planId)
   }, [handleUpgrade])
 
   const handleCancel = useCallback(async (_reason: string, _feedback?: string) => {
-    const token = await getToken()
+    const token = getAccessToken()
     if (!token || !subscription.id) return
     const commerce = getCommerce(org.commerceUrl, token)
     await commerce.cancelSubscription(subscription.id)
-    setSubscription((prev) => ({ ...prev, status: 'canceled' }))
-  }, [subscription.id, org, getToken])
+  }, [subscription.id, org])
 
   const handleAddPaymentMethod = useCallback(async (method: PaymentMethod) => {
-    setPaymentMethods((prev) => [...prev, method])
+    setPaymentMethods((prev: PaymentMethod[]) => [...prev, method])
   }, [])
 
   const handleRemovePaymentMethod = useCallback(async (id: string) => {
-    setPaymentMethods((prev) => prev.filter((m) => m.id !== id))
+    setPaymentMethods((prev: PaymentMethod[]) => prev.filter((m) => m.id !== id))
   }, [])
 
   const handleSetDefaultPaymentMethod = useCallback(async (id: string) => {
-    setPaymentMethods((prev) =>
-      prev.map((m) => ({
-        ...m,
-        is_default: m.id === id,
-        isDefault: m.id === id,
-      }))
+    setPaymentMethods((prev: PaymentMethod[]) =>
+      prev.map((m) => ({ ...m, is_default: m.id === id, isDefault: m.id === id }))
     )
   }, [])
 
@@ -182,18 +147,10 @@ export const BillingShell = observer(function BillingShell({ org }: BillingShell
     // Persisted via Commerce API when available
   }, [])
 
-  // ---- Render ----
-
-  if (!auth.loggedIn) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-bg">
-        <div className="text-center">
-          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-text-dim border-t-brand" />
-          <p className="mt-4 text-sm text-text-muted">Redirecting to sign in...</p>
-        </div>
-      </main>
-    )
-  }
+  const handleLogout = useCallback(() => {
+    logout()
+    window.location.href = '/'
+  }, [])
 
   if (loading) {
     return (
@@ -218,14 +175,12 @@ export const BillingShell = observer(function BillingShell({ org }: BillingShell
             <span className="text-sm text-text-muted">Billing</span>
           </div>
           <div className="flex items-center gap-3">
-            {auth.user && (
-              <span className="text-sm text-text-muted">
-                {auth.user.displayName ?? auth.user.email}
-              </span>
-            )}
+            <span className="text-sm text-text-muted">
+              {user.displayName ?? user.email}
+            </span>
             <button
               type="button"
-              onClick={() => auth.logout()}
+              onClick={handleLogout}
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-bg-elevated hover:text-text"
             >
               Sign out
@@ -242,18 +197,12 @@ export const BillingShell = observer(function BillingShell({ org }: BillingShell
           </div>
         )}
 
-        {/* Balance panel */}
-        <BalancePanel
-          balance={balance}
-          onAddFunds={handleAddFunds}
-        />
+        <BalancePanel balance={balance} onAddFunds={handleAddFunds} />
 
-        {/* Billing workspace from @hanzo/ui */}
         <div className="mt-6">
           <BillingWorkspace
             subscription={subscription}
             plans={plans}
-            usageMetrics={usageMetrics}
             paymentMethods={paymentMethods}
             invoices={invoices}
             businessProfile={businessProfile}
@@ -277,11 +226,11 @@ export const BillingShell = observer(function BillingShell({ org }: BillingShell
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 text-xs text-text-dim">
           <span>{org.displayName} Billing</span>
           <div className="flex gap-4">
-            <a href="https://docs.hanzo.ai" target="_blank" rel="noreferrer" className="hover:text-text-muted transition">Docs</a>
-            <a href="https://hanzo.ai" target="_blank" rel="noreferrer" className="hover:text-text-muted transition">Hanzo</a>
+            <a href="https://docs.hanzo.ai" target="_blank" rel="noreferrer" className="transition hover:text-text-muted">Docs</a>
+            <a href="https://hanzo.ai" target="_blank" rel="noreferrer" className="transition hover:text-text-muted">Hanzo</a>
           </div>
         </div>
       </footer>
     </div>
   )
-})
+}

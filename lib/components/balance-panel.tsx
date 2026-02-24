@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import type { Balance } from '@hanzo/commerce'
+import type { Balance } from '@/lib/commerce-client'
 
 export interface BalancePanelProps {
   balance: Balance | null
