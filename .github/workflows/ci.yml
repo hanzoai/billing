@@ -46,6 +46,53 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  deploy-docker:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/hanzoai/billing:latest
+            ghcr.io/hanzoai/billing:${{ github.sha }}
+
+  deploy-k8s:
+    needs: deploy-docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save do-sfo3-hanzo-k8s
+
+      - name: Deploy to K8s
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl set image deployment/billing billing=ghcr.io/hanzoai/billing:${{ github.sha }} -n hanzo
+          kubectl rollout status deployment/billing -n hanzo --timeout=120s
+
   deploy-cloudflare:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_CLOUDFLARE == 'true'
