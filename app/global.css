@@ -1,18 +1,29 @@
 @import 'tailwindcss';
 
 @theme {
+  /* Brand (constant in both modes) */
   --color-brand: #fd4444;
   --color-brand-foreground: #ffffff;
   --color-brand-hover: #e03e3e;
   --color-brand-muted: rgba(253, 68, 68, 0.1);
 
-  --color-bg: #0a0a0a;
-  --color-bg-card: #111111;
-  --color-bg-elevated: #171717;
-  --color-border: #262626;
-  --color-text: #fafafa;
-  --color-text-muted: #a3a3a3;
-  --color-text-dim: #737373;
+  /* Semantic tokens — dark mode default (matches docs site) */
+  --color-bg: hsl(0, 0%, 2%);
+  --color-bg-card: hsl(0, 0%, 4%);
+  --color-bg-elevated: hsl(0, 0%, 7%);
+  --color-bg-input: hsl(0, 0%, 6%);
+  --color-border: hsla(0, 0%, 40%, 0.2);
+  --color-border-strong: hsla(0, 0%, 40%, 0.4);
+  --color-text: hsl(0, 0%, 96%);
+  --color-text-secondary: hsl(0, 0%, 70%);
+  --color-text-muted: hsl(0, 0%, 55%);
+  --color-text-dim: hsl(0, 0%, 40%);
+
+  /* Status colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
 }
 
 @theme inline {
@@ -23,6 +34,21 @@
 html {
   scrollbar-gutter: stable;
   color-scheme: dark;
+}
+
+html.light {
+  --color-bg: hsl(0, 0%, 98%);
+  --color-bg-card: hsl(0, 0%, 100%);
+  --color-bg-elevated: hsl(0, 0%, 96%);
+  --color-bg-input: hsl(0, 0%, 100%);
+  --color-border: hsl(0, 0%, 88%);
+  --color-border-strong: hsl(0, 0%, 78%);
+  --color-text: hsl(0, 0%, 8%);
+  --color-text-secondary: hsl(0, 0%, 35%);
+  --color-text-muted: hsl(0, 0%, 45%);
+  --color-text-dim: hsl(0, 0%, 60%);
+
+  color-scheme: light;
 }
 
 body {
@@ -42,4 +68,12 @@ body {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+/* Smooth theme transitions */
+html.transitioning,
+html.transitioning *,
+html.transitioning *::before,
+html.transitioning *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
 }

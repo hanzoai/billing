@@ -13,13 +13,16 @@ import type {
   SpendAlert,
   UsageSummary,
   DiscountCode,
+  CreditGrant,
+  TransactionRecord,
 } from '@/lib/billing'
-import type { Balance, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert } from '@/lib/commerce-client'
+import type { Balance, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 import { BalancePanel } from './balance-panel'
+import { ThemeToggle } from '@/lib/theme/theme-toggle'
 
 interface BillingShellProps {
   org: BillingOrgConfig
@@ -111,6 +114,36 @@ function mapCommercePaymentMethod(cpm: CommercePaymentMethod): PaymentMethod {
   }
 }
 
+function mapCommerceCreditGrant(cg: CommerceCreditGrant): CreditGrant {
+  return {
+    id: cg.id ?? '',
+    userId: cg.userId,
+    name: cg.name ?? 'Credit',
+    amountCents: cg.amountCents ?? 0,
+    remainingCents: cg.remainingCents ?? 0,
+    currency: cg.currency ?? 'usd',
+    expiresAt: cg.expiresAt,
+    priority: cg.priority,
+    eligibility: cg.eligibility,
+    voided: cg.voided ?? false,
+    active: cg.active ?? true,
+    createdAt: cg.createdAt,
+  }
+}
+
+function mapCommerceTransaction(tx: Transaction): TransactionRecord {
+  return {
+    id: tx.id ?? '',
+    type: tx.type,
+    amountCents: tx.amount ?? 0,
+    currency: tx.currency ?? 'usd',
+    description: tx.metadata?.description as string | undefined,
+    balanceAfter: tx.metadata?.balanceAfter as number | undefined,
+    tags: tx.tags,
+    createdAt: tx.createdAt ?? new Date().toISOString(),
+  }
+}
+
 function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
   return {
     id: csa.id ?? '',
@@ -135,6 +168,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [spendAlerts, setSpendAlerts] = useState<SpendAlert[]>([])
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
+  const [creditGrants, setCreditGrants] = useState<CreditGrant[]>([])
+  const [creditBalance, setCreditBalance] = useState(0)
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([])
+  const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -146,13 +183,16 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.email || user.sub
 
-      const [bal, planList, subs, invList, pmList, alertList] = await Promise.allSettled([
+      const [bal, planList, subs, invList, pmList, alertList, cgList, cBal, txList] = await Promise.allSettled([
         commerce.getBalance(userId),
         commerce.getPlans(),
         commerce.getUserSubscriptions(userId),
         commerce.getInvoices(userId, { limit: 50 }),
         commerce.getPaymentMethods(userId),
         commerce.getSpendAlerts(userId),
+        commerce.getCreditGrants(userId),
+        commerce.getCreditBalance(userId),
+        commerce.getTransactions(userId, { limit: 100 }),
       ])
 
       if (bal.status === 'fulfilled') setBalance(bal.value)
@@ -193,6 +233,20 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
       if (alertList.status === 'fulfilled') {
         setSpendAlerts(alertList.value.map(mapCommerceSpendAlert))
+      }
+
+      if (cgList.status === 'fulfilled') {
+        setCreditGrants(cgList.value.map(mapCommerceCreditGrant))
+      }
+
+      if (cBal.status === 'fulfilled') {
+        const balances = cBal.value.balances ?? []
+        const usdBal = balances.find((b) => (b.currency ?? 'usd').toLowerCase() === 'usd')
+        setCreditBalance(usdBal?.available ?? 0)
+      }
+
+      if (txList.status === 'fulfilled') {
+        setTransactions(txList.value.map(mapCommerceTransaction))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load billing data')
@@ -404,6 +458,24 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setSpendAlerts((prev) => prev.filter((a) => a.id !== id))
   }, [org])
 
+  const handleClaimStarterCredit = useCallback(async () => {
+    const token = getAccessToken()
+    if (!token) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    const userId = user.email || user.sub
+    await commerce.grantStarterCredit(userId)
+    await loadBillingData()
+  }, [org, user, loadBillingData])
+
+  const handleSubscribeSupport = useCallback(async (tierId: string) => {
+    const token = getAccessToken()
+    if (!token) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    const userId = user.email || user.sub
+    await commerce.subscribe({ planId: `support-${tierId}`, userId })
+    await loadBillingData()
+  }, [org, user, loadBillingData])
+
   const handleLogout = useCallback(() => {
     logout()
     window.location.href = '/'
@@ -441,6 +513,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
             <span className="text-sm text-text-muted">
               {user.displayName ?? user.email}
             </span>
+            <a
+              href="https://hanzo.id/account"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-bg-elevated hover:text-text"
+            >
+              Account
+            </a>
+            <ThemeToggle />
             <button
               type="button"
               onClick={handleLogout}
@@ -464,6 +545,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
           balance={balance}
           isAdmin={admin}
           userEmail={user.email}
+          starterCredit={creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null}
           onAddFunds={handleAddFunds}
           onGrantCredit={admin ? handleGrantCredit : undefined}
         />
@@ -493,6 +575,12 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onCreateSpendAlert={handleCreateSpendAlert}
             onUpdateSpendAlert={handleUpdateSpendAlert}
             onDeleteSpendAlert={handleDeleteSpendAlert}
+            creditGrants={creditGrants}
+            creditBalance={creditBalance}
+            transactions={transactions}
+            transactionsLoading={transactionsLoading}
+            onClaimStarterCredit={handleClaimStarterCredit}
+            onSubscribeSupport={handleSubscribeSupport}
           />
         </div>
       </div>

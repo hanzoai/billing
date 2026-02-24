@@ -41,12 +41,12 @@ const METER_ICONS: Record<string, string> = {
 }
 
 const METER_COLORS: Record<string, string> = {
-  ai: 'bg-violet-600',
-  storage: 'bg-blue-600',
-  network: 'bg-emerald-600',
-  network_egress: 'bg-teal-600',
-  gpu: 'bg-amber-600',
-  api_calls: 'bg-indigo-600',
+  ai: 'bg-violet-500',
+  storage: 'bg-blue-500',
+  network: 'bg-emerald-500',
+  network_egress: 'bg-teal-500',
+  gpu: 'bg-amber-500',
+  api_calls: 'bg-indigo-500',
 }
 
 function UsageMeter({ record }: { record: UsageRecord }) {
@@ -55,20 +55,20 @@ function UsageMeter({ record }: { record: UsageRecord }) {
     : null
 
   const icon = METER_ICONS[record.meterId] ?? '📊'
-  const barColor = METER_COLORS[record.meterId] ?? 'bg-zinc-600'
+  const barColor = METER_COLORS[record.meterId] ?? 'bg-brand'
 
   const isOverage = utilization !== null && utilization >= 100
   const isWarning = utilization !== null && utilization >= 80 && utilization < 100
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
+    <div className="rounded-lg border border-border bg-bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{icon}</span>
-          <p className="text-sm font-medium text-zinc-900">{record.label}</p>
+          <p className="text-sm font-medium text-text">{record.label}</p>
         </div>
         {record.cost > 0 && (
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
+          <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
             {formatCurrency(record.cost)}
           </span>
         )}
@@ -76,12 +76,12 @@ function UsageMeter({ record }: { record: UsageRecord }) {
 
       <div className="mt-3">
         <div className="flex items-end justify-between">
-          <p className="text-2xl font-semibold text-zinc-900">
+          <p className="text-2xl font-semibold text-text">
             {formatNumber(record.current)}
-            <span className="ml-1 text-sm font-normal text-zinc-500">{record.unit}</span>
+            <span className="ml-1 text-sm font-normal text-text-muted">{record.unit}</span>
           </p>
           {record.limit && record.limit > 0 && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-text-muted">
               of {formatNumber(record.limit)} {record.unit}
             </p>
           )}
@@ -89,16 +89,16 @@ function UsageMeter({ record }: { record: UsageRecord }) {
 
         {utilization !== null && (
           <div className="mt-2">
-            <div className="h-2 rounded-full bg-zinc-100">
+            <div className="h-2 rounded-full bg-bg-elevated">
               <div
                 className={`h-2 rounded-full transition-all ${
-                  isOverage ? 'bg-red-500' : isWarning ? 'bg-amber-500' : barColor
+                  isOverage ? 'bg-danger' : isWarning ? 'bg-warning' : barColor
                 }`}
                 style={{ width: `${Math.min(utilization, 100)}%` }}
               />
             </div>
             <p className={`mt-1 text-xs ${
-              isOverage ? 'text-red-600 font-medium' : isWarning ? 'text-amber-600' : 'text-zinc-500'
+              isOverage ? 'text-danger font-medium' : isWarning ? 'text-warning' : 'text-text-muted'
             }`}>
               {isOverage
                 ? `${(utilization - 100).toFixed(0)}% over limit`
@@ -116,21 +116,21 @@ export function UsagePanel(props: UsagePanelProps) {
 
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white p-8 text-center">
-        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
-        <p className="mt-3 text-sm text-zinc-500">Loading usage data...</p>
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card p-8 text-center">
+        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-text-dim border-t-brand" />
+        <p className="mt-3 text-sm text-text-muted">Loading usage data...</p>
       </div>
     )
   }
 
   if (!usage || usage.records.length === 0) {
     return (
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <div className="border-b border-zinc-200 p-4">
-          <h3 className="text-lg font-semibold text-zinc-900">Usage</h3>
-          <p className="text-sm text-zinc-500">Current billing period resource consumption</p>
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+        <div className="border-b border-border p-4">
+          <h3 className="text-lg font-semibold text-text">Usage</h3>
+          <p className="text-sm text-text-muted">Current billing period resource consumption</p>
         </div>
-        <div className="p-6 text-sm text-zinc-500">No usage data available for this period.</div>
+        <div className="p-6 text-sm text-text-muted">No usage data available for this period.</div>
       </div>
     )
   }
@@ -141,15 +141,15 @@ export function UsagePanel(props: UsagePanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 p-4">
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
           <div>
-            <h3 className="text-lg font-semibold text-zinc-900">Usage</h3>
-            <p className="text-sm text-zinc-500">{periodLabel}</p>
+            <h3 className="text-lg font-semibold text-text">Usage</h3>
+            <p className="text-sm text-text-muted">{periodLabel}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Total cost</p>
-            <p className="mt-1 text-xl font-semibold text-zinc-900">
+            <p className="text-xs uppercase tracking-wide text-text-muted">Total cost</p>
+            <p className="mt-1 text-xl font-semibold text-text">
               {formatCurrency(usage.totalCost, usage.currency)}
             </p>
           </div>

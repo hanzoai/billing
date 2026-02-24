@@ -190,6 +190,58 @@ export type CommerceDiscountCode = {
   valid?: boolean
 }
 
+export type CommerceCreditGrant = {
+  id?: string
+  userId?: string
+  name?: string
+  amountCents?: number
+  remainingCents?: number
+  currency?: string
+  expiresAt?: string
+  priority?: number
+  eligibility?: string[]
+  tags?: string
+  voided?: boolean
+  active?: boolean
+  createdAt?: string
+}
+
+export type CommerceCreditBalance = {
+  userId?: string
+  balances?: Array<{ currency?: string; available?: number }>
+}
+
+export type CommerceMeter = {
+  id?: string
+  name?: string
+  description?: string
+  unit?: string
+  aggregation?: string
+  createdAt?: string
+}
+
+export type CommerceMeterEventsSummary = {
+  userId?: string
+  meters?: Array<{
+    meterId?: string
+    name?: string
+    total?: number
+    unit?: string
+    dimensions?: Record<string, number>
+  }>
+  period?: { start?: string; end?: string }
+}
+
+export type CommercePortalOverview = {
+  customerId?: string
+  balance?: Balance
+  creditBalance?: number
+  activeSubscription?: Subscription
+  pendingInvoices?: number
+  totalSpendThisPeriod?: number
+  currency?: string
+}
+
 export class CommerceApiError extends Error {
   readonly status: number
 
@@ -438,5 +490,47 @@ export class Commerce {
     return this.request<CommerceDiscountCode>('/api/v1/billing/discount/validate', {
       params: { code }, token,
     })
+  }
+
+  // ── Credit Grants ─────────────────────────────────────────────────────
+
+  async getCreditGrants(userId: string, token?: string): Promise<CommerceCreditGrant[]> {
+    try {
+      return await this.request<CommerceCreditGrant[]>('/api/v1/billing/credit-grants', {
+        params: { userId }, token,
+      })
+    } catch { return [] }
+  }
+
+  async getCreditBalance(userId: string, token?: string): Promise<CommerceCreditBalance> {
+    try {
+      return await this.request<CommerceCreditBalance>('/api/v1/billing/credit-balance', {
+        params: { userId }, token,
+      })
+    } catch { return { userId, balances: [] } }
+  }
+
+  // ── Portal ────────────────────────────────────────────────────────────
+
+  async getPortalOverview(customerId: string, token?: string): Promise<CommercePortalOverview> {
+    return this.request<CommercePortalOverview>('/api/v1/billing/portal/overview', {
+      params: { customerId }, token,
+    })
+  }
+
+  // ── Meters ────────────────────────────────────────────────────────────
+
+  async getMeters(token?: string): Promise<CommerceMeter[]> {
+    try {
+      return await this.request<CommerceMeter[]>('/api/v1/billing/meters', { token })
+    } catch { return [] }
+  }
+
+  async getMeterEventsSummary(userId: string, token?: string): Promise<CommerceMeterEventsSummary> {
+    try {
+      return await this.request<CommerceMeterEventsSummary>('/api/v1/billing/meter-events/summary', {
+        params: { userId }, token,
+      })
+    } catch { return { userId, meters: [], period: {} } }
   }
 }

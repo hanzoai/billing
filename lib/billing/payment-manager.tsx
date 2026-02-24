@@ -22,11 +22,9 @@ interface DraftMethod {
   last4: string
   expMonth: string
   expYear: string
-  // Crypto fields
   cryptoNetwork: CryptoNetwork
   walletAddress: string
   walletLabel: string
-  // Wire fields
   wireBankName: string
   wireAccountHolder: string
   wireRoutingNumber: string
@@ -34,7 +32,6 @@ interface DraftMethod {
   wireSwift: string
   wireIban: string
   wireCountry: string
-  // PayPal
   paypalEmail: string
 }
 
@@ -193,6 +190,8 @@ function methodSubtext(method: PaymentMethod) {
   return null
 }
 
+const INPUT_CLASS = 'rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand'
+
 export function PaymentMethodManager(props: PaymentMethodManagerProps) {
   const {
     paymentMethods,
@@ -289,23 +288,23 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 p-4">
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div>
-            <h3 className="text-lg font-semibold text-zinc-900">Payment methods</h3>
-            <p className="text-sm text-zinc-500">Manage cards, crypto wallets, bank transfers, and digital wallets</p>
+            <h3 className="text-lg font-semibold text-text">Payment methods</h3>
+            <p className="text-sm text-text-muted">Manage cards, crypto wallets, bank transfers, and digital wallets</p>
           </div>
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
+            className="rounded-lg bg-text px-3 py-2 text-sm font-medium text-bg transition hover:opacity-80"
           >
             {showForm ? 'Cancel' : 'Add method'}
           </button>
         </div>
 
         {showForm ? (
-          <div className="border-b border-zinc-200 p-4">
+          <div className="border-b border-border p-4">
             {/* Method type selector */}
             <div className="mb-4 flex flex-wrap gap-2">
               {([
@@ -323,8 +322,8 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   onClick={() => setDraft((prev) => ({ ...prev, type }))}
                   className={`rounded-lg px-3 py-1.5 text-sm transition ${
                     draft.type === type
-                      ? 'bg-zinc-900 text-white'
-                      : 'border border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+                      ? 'bg-text text-bg'
+                      : 'border border-border text-text-secondary hover:bg-bg-elevated'
                   }`}
                 >
                   {label}
@@ -339,12 +338,12 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   value={draft.holderName}
                   onChange={(e) => setDraft((prev) => ({ ...prev, holderName: e.target.value }))}
                   placeholder="Cardholder name"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <select
                   value={draft.cardBrand}
                   onChange={(e) => setDraft((prev) => ({ ...prev, cardBrand: e.target.value }))}
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 >
                   <option value="visa">Visa</option>
                   <option value="mastercard">Mastercard</option>
@@ -360,7 +359,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                     }))
                   }
                   placeholder="Last 4 digits"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.expMonth}
@@ -371,7 +370,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                     }))
                   }
                   placeholder="MM"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.expYear}
@@ -382,7 +381,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                     }))
                   }
                   placeholder="YYYY"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
               </div>
             )}
@@ -398,7 +397,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                       cryptoNetwork: e.target.value as CryptoNetwork,
                     }))
                   }
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 >
                   <option value="bitcoin">Bitcoin (BTC)</option>
                   <option value="ethereum">Ethereum (ETH)</option>
@@ -409,13 +408,13 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   value={draft.walletAddress}
                   onChange={(e) => setDraft((prev) => ({ ...prev, walletAddress: e.target.value }))}
                   placeholder="Wallet address"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono outline-none transition focus:border-zinc-900"
+                  className={`${INPUT_CLASS} font-mono`}
                 />
                 <input
                   value={draft.walletLabel}
                   onChange={(e) => setDraft((prev) => ({ ...prev, walletLabel: e.target.value }))}
                   placeholder="Label (optional)"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                  className={`${INPUT_CLASS} md:col-span-2`}
                 />
               </div>
             )}
@@ -427,37 +426,37 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   value={draft.wireBankName}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireBankName: e.target.value }))}
                   placeholder="Bank name"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.wireAccountHolder}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireAccountHolder: e.target.value }))}
                   placeholder="Account holder name"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.wireRoutingNumber}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireRoutingNumber: e.target.value }))}
                   placeholder="Routing number (domestic)"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.wireSwift}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireSwift: e.target.value }))}
                   placeholder="SWIFT/BIC (international)"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.wireIban}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireIban: e.target.value }))}
                   placeholder="IBAN (international)"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
                 <input
                   value={draft.wireCountry}
                   onChange={(e) => setDraft((prev) => ({ ...prev, wireCountry: e.target.value }))}
                   placeholder="Country"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                  className={INPUT_CLASS}
                 />
               </div>
             )}
@@ -470,7 +469,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   onChange={(e) => setDraft((prev) => ({ ...prev, paypalEmail: e.target.value }))}
                   placeholder="PayPal email"
                   type="email"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                  className={`${INPUT_CLASS} md:col-span-2`}
                 />
               </div>
             )}
@@ -482,7 +481,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   value={draft.holderName}
                   onChange={(e) => setDraft((prev) => ({ ...prev, holderName: e.target.value }))}
                   placeholder="Account holder name"
-                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                  className={`${INPUT_CLASS} md:col-span-2`}
                 />
               </div>
             )}
@@ -492,7 +491,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                 type="button"
                 disabled={!canCreate || isAdding}
                 onClick={handleCreate}
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-text px-4 py-2 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isAdding ? 'Saving…' : 'Add payment method'}
               </button>
@@ -500,9 +499,9 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
           </div>
         ) : null}
 
-        <div className="divide-y divide-zinc-200">
+        <div className="divide-y divide-border">
           {methods.length === 0 ? (
-            <div className="p-6 text-sm text-zinc-500">No payment methods on file.</div>
+            <div className="p-6 text-sm text-text-muted">No payment methods on file.</div>
           ) : (
             methods.map((method) => {
               const isDefault = method.is_default || method.isDefault
@@ -514,15 +513,15 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 text-lg">{methodIcon(method.type)}</span>
                     <div>
-                      <p className="text-sm font-medium text-zinc-900">{methodDisplay(method)}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                      <p className="text-sm font-medium text-text">{methodDisplay(method)}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span>
                           Added {new Date(method.created_at).toLocaleDateString('en-US')}
                         </span>
                         {methodExpiration(method) ? <span>Expires {methodExpiration(method)}</span> : null}
                         {sub ? <span>{sub}</span> : null}
                         {isDefault ? (
-                          <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-foreground">
                             Default
                           </span>
                         ) : null}
@@ -536,7 +535,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleSetDefault(method.id)}
-                        className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isBusy ? 'Saving…' : 'Set default'}
                       </button>
@@ -545,7 +544,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                       type="button"
                       disabled={isBusy}
                       onClick={() => handleRemove(method.id)}
-                      className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md border border-rose-500/30 px-3 py-1.5 text-xs font-medium text-rose-500 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isBusy ? 'Removing…' : 'Remove'}
                     </button>

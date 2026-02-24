@@ -262,6 +262,46 @@ export interface UsageSummary {
   records: UsageRecord[]
 }
 
+// Credit grant types
+export interface CreditGrant {
+  id: string
+  userId?: string
+  name: string
+  amountCents: number
+  remainingCents: number
+  currency: string
+  expiresAt?: string
+  priority?: number
+  eligibility?: string[]
+  voided?: boolean
+  active: boolean
+  createdAt?: string
+}
+
+// Transaction record types
+export type TransactionType = 'hold' | 'hold-removed' | 'transfer' | 'deposit' | 'withdraw'
+
+export interface TransactionRecord {
+  id: string
+  type: TransactionType
+  amountCents: number
+  currency: string
+  description?: string
+  balanceAfter?: number
+  tags?: string[]
+  createdAt: string
+}
+
+// Support tier types
+export interface SupportTier {
+  id: string
+  name: string
+  price: number
+  billingPeriod: 'monthly' | 'yearly'
+  features: string[]
+  highlighted?: boolean
+}
+
 // Discount / promotion code
 export interface DiscountCode {
   id: string

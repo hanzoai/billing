@@ -99,11 +99,11 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 p-4">
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div>
-            <h3 className="text-lg font-semibold text-zinc-900">Spend alerts</h3>
-            <p className="text-sm text-zinc-500">
+            <h3 className="text-lg font-semibold text-text">Spend alerts</h3>
+            <p className="text-sm text-text-muted">
               Get notified when your spending crosses a threshold. Alerts check every 90 minutes.
             </p>
           </div>
@@ -116,24 +116,24 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                 setShowForm(true)
               }
             }}
-            className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
+            className="rounded-lg bg-text px-3 py-2 text-sm font-medium text-bg transition hover:opacity-80"
           >
             {showForm ? 'Cancel' : 'New alert'}
           </button>
         </div>
 
         {showForm && (
-          <div className="border-b border-zinc-200 p-4">
+          <div className="border-b border-border p-4">
             <div className="grid gap-3 md:grid-cols-3">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Alert name (e.g. Monthly budget)"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand md:col-span-2"
               />
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">$</span>
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-dim">$</span>
                   <input
                     type="number"
                     min="1"
@@ -141,26 +141,26 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
                     placeholder="Threshold"
-                    className="w-full rounded-lg border border-zinc-300 py-2 pl-7 pr-3 text-sm outline-none transition focus:border-zinc-900"
+                    className="w-full rounded-lg border border-border bg-bg-input py-2 pl-7 pr-3 text-sm text-text outline-none transition focus:border-brand"
                   />
                 </div>
                 <button
                   type="button"
                   disabled={!canSubmit || busy}
                   onClick={editingId ? handleUpdate : handleCreate}
-                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg bg-text px-4 py-2 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy ? 'Saving…' : editingId ? 'Update' : 'Create'}
                 </button>
               </div>
             </div>
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-sm text-danger">{error}</p>}
           </div>
         )}
 
-        <div className="divide-y divide-zinc-200">
+        <div className="divide-y divide-border">
           {alerts.length === 0 ? (
-            <div className="p-6 text-sm text-zinc-500">No spend alerts configured.</div>
+            <div className="p-6 text-sm text-text-muted">No spend alerts configured.</div>
           ) : (
             alerts.map((alert) => {
               const isDeleting = busyDeleteId === alert.id
@@ -168,14 +168,14 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                 <div key={alert.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-900">{alert.title}</p>
+                      <p className="text-sm font-medium text-text">{alert.title}</p>
                       {alert.triggeredAt && (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-600/20">
+                        <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-500 ring-1 ring-amber-500/20">
                           Triggered
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                       <span>Threshold: {formatCurrency(alert.threshold, alert.currency)}</span>
                       <span>Created {formatDate(alert.createdAt)}</span>
                       {alert.triggeredAt && (
@@ -188,7 +188,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                       type="button"
                       onClick={() => startEdit(alert)}
                       disabled={isDeleting}
-                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Edit
                     </button>
@@ -196,7 +196,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                       type="button"
                       onClick={() => handleDelete(alert.id)}
                       disabled={isDeleting}
-                      className="rounded-md border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md border border-rose-500/30 px-3 py-1.5 text-xs font-medium text-rose-500 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isDeleting ? 'Deleting…' : 'Delete'}
                     </button>

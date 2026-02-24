@@ -9,10 +9,15 @@ import { BusinessProfilePanel } from './business-profile-panel'
 import { TaxCompliancePanel } from './tax-compliance-panel'
 import { SpendAlertsPanel } from './spend-alerts'
 import { UsagePanel } from './usage-panel'
+import { CreditsPanel } from './credits-panel'
+import { TransactionsPanel } from './transactions-panel'
+import { PromotionsPanel } from './promotions-panel'
+import { SupportTiersPanel } from './support-tiers-panel'
 import type {
   BillingMetric,
   BusinessProfile,
   ComplianceItem,
+  CreditGrant,
   DiscountCode,
   Invoice,
   PaymentMethod,
@@ -21,16 +26,21 @@ import type {
   SubscriptionHistory,
   SubscriptionPlan,
   TaxSettings,
+  TransactionRecord,
   RetentionOffer,
   UsageSummary,
 } from './types'
 
 type WorkspaceTab =
   | 'overview'
+  | 'usage'
+  | 'credits'
   | 'payment'
   | 'invoices'
-  | 'usage'
+  | 'transactions'
   | 'alerts'
+  | 'promotions'
+  | 'support'
   | 'business'
   | 'compliance'
 
@@ -48,6 +58,11 @@ export interface BillingWorkspaceProps {
   spendAlerts?: SpendAlert[]
   usage?: UsageSummary | null
   usageLoading?: boolean
+  creditGrants?: CreditGrant[]
+  creditBalance?: number
+  transactions?: TransactionRecord[]
+  transactionsLoading?: boolean
+  currentSupportTier?: string
   defaultTab?: WorkspaceTab
 
   onUpgrade?: (planId: string) => Promise<void>
@@ -67,14 +82,21 @@ export interface BillingWorkspaceProps {
   onCreateSpendAlert?: (title: string, threshold: number) => Promise<void>
   onUpdateSpendAlert?: (id: string, title: string, threshold: number) => Promise<void>
   onDeleteSpendAlert?: (id: string) => Promise<void>
+
+  onClaimStarterCredit?: () => Promise<void>
+  onSubscribeSupport?: (tierId: string) => Promise<void>
 }
 
 const tabs: Array<{ id: WorkspaceTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'usage', label: 'Usage' },
+  { id: 'credits', label: 'Credits' },
   { id: 'payment', label: 'Payment methods' },
   { id: 'invoices', label: 'Invoices' },
+  { id: 'transactions', label: 'Transactions' },
   { id: 'alerts', label: 'Spend alerts' },
+  { id: 'promotions', label: 'Promotions' },
+  { id: 'support', label: 'Support' },
   { id: 'business', label: 'Business info' },
   { id: 'compliance', label: 'Tax & compliance' },
 ]
@@ -94,6 +116,11 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     spendAlerts = [],
     usage = null,
     usageLoading = false,
+    creditGrants = [],
+    creditBalance = 0,
+    transactions = [],
+    transactionsLoading = false,
+    currentSupportTier,
     defaultTab = 'overview',
 
     onUpgrade,
@@ -113,16 +140,19 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     onCreateSpendAlert,
     onUpdateSpendAlert,
     onDeleteSpendAlert,
+
+    onClaimStarterCredit,
+    onSubscribeSupport,
   } = props
 
   const [activeTab, setActiveTab] = React.useState<WorkspaceTab>(defaultTab)
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-50 to-white">
-        <div className="border-b border-zinc-200 px-4 py-4">
-          <h2 className="text-2xl font-semibold text-zinc-900">Billing</h2>
-          <p className="text-sm text-zinc-500">
+      <div className="overflow-hidden rounded-2xl border border-border bg-bg-card">
+        <div className="border-b border-border px-4 py-4">
+          <h2 className="text-2xl font-semibold text-text">Billing</h2>
+          <p className="text-sm text-text-muted">
             Manage your subscription, payments, usage, invoices, and compliance from one place.
           </p>
         </div>
@@ -134,8 +164,8 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
               onClick={() => setActiveTab(tab.id)}
               className={`rounded-lg px-3 py-1.5 text-sm transition ${
                 activeTab === tab.id
-                  ? 'bg-zinc-900 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100'
+                  ? 'bg-text text-bg'
+                  : 'text-text-muted hover:bg-bg-elevated hover:text-text'
               }`}
             >
               {tab.label}
@@ -163,6 +193,14 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
         <UsagePanel usage={usage} loading={usageLoading} />
       ) : null}
 
+      {activeTab === 'credits' ? (
+        <CreditsPanel
+          creditGrants={creditGrants}
+          creditBalance={creditBalance}
+          onClaimStarterCredit={onClaimStarterCredit}
+        />
+      ) : null}
+
       {activeTab === 'payment' ? (
         <PaymentMethodManager
           paymentMethods={paymentMethods}
@@ -176,12 +214,33 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
         <InvoiceManager invoices={invoices} onDownload={onDownloadInvoice} />
       ) : null}
 
+      {activeTab === 'transactions' ? (
+        <TransactionsPanel
+          transactions={transactions}
+          loading={transactionsLoading}
+        />
+      ) : null}
+
       {activeTab === 'alerts' ? (
         <SpendAlertsPanel
           alerts={spendAlerts}
           onCreateAlert={onCreateSpendAlert}
           onUpdateAlert={onUpdateSpendAlert}
           onDeleteAlert={onDeleteSpendAlert}
+        />
+      ) : null}
+
+      {activeTab === 'promotions' ? (
+        <PromotionsPanel
+          discount={subscription.discount}
+          onApplyDiscount={onApplyDiscount}
+        />
+      ) : null}
+
+      {activeTab === 'support' ? (
+        <SupportTiersPanel
+          currentTier={currentSupportTier}
+          onSubscribe={onSubscribeSupport}
         />
       ) : null}
 
