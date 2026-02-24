@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import type { PaymentMethod } from './types'
+import type { PaymentMethod, PaymentMethodType, CryptoNetwork } from './types'
 
 export interface PaymentMethodManagerProps {
   paymentMethods?: PaymentMethod[]
@@ -17,11 +17,25 @@ export interface PaymentMethodManagerProps {
 
 interface DraftMethod {
   holderName: string
-  type: PaymentMethod['type']
+  type: PaymentMethodType
   cardBrand: string
   last4: string
   expMonth: string
   expYear: string
+  // Crypto fields
+  cryptoNetwork: CryptoNetwork
+  walletAddress: string
+  walletLabel: string
+  // Wire fields
+  wireBankName: string
+  wireAccountHolder: string
+  wireRoutingNumber: string
+  wireAccountLast4: string
+  wireSwift: string
+  wireIban: string
+  wireCountry: string
+  // PayPal
+  paypalEmail: string
 }
 
 const defaultDraft: DraftMethod = {
@@ -31,6 +45,17 @@ const defaultDraft: DraftMethod = {
   last4: '',
   expMonth: '',
   expYear: '',
+  cryptoNetwork: 'ethereum',
+  walletAddress: '',
+  walletLabel: '',
+  wireBankName: '',
+  wireAccountHolder: '',
+  wireRoutingNumber: '',
+  wireAccountLast4: '',
+  wireSwift: '',
+  wireIban: '',
+  wireCountry: 'US',
+  paypalEmail: '',
 }
 
 function formatCardBrand(brand: string) {
@@ -38,17 +63,29 @@ function formatCardBrand(brand: string) {
   return brand.charAt(0).toUpperCase() + brand.slice(1)
 }
 
+const CRYPTO_NETWORK_LABELS: Record<CryptoNetwork, string> = {
+  bitcoin: 'Bitcoin (BTC)',
+  ethereum: 'Ethereum (ETH)',
+  solana: 'Solana (SOL)',
+  usdc: 'USDC',
+}
+
 function buildPaymentMethodFromDraft(draft: DraftMethod): PaymentMethod {
   const now = new Date().toISOString()
   const id = `pm_${Math.random().toString(36).slice(2, 12)}`
 
+  const base: PaymentMethod = {
+    id,
+    type: draft.type,
+    is_default: false,
+    created_at: now,
+    isDefault: false,
+    billing_details: { name: draft.holderName },
+  }
+
   if (draft.type === 'card') {
     return {
-      id,
-      type: 'card',
-      is_default: false,
-      created_at: now,
-      isDefault: false,
+      ...base,
       card: {
         brand: draft.cardBrand,
         last4: draft.last4,
@@ -56,27 +93,60 @@ function buildPaymentMethodFromDraft(draft: DraftMethod): PaymentMethod {
         exp_year: Number(draft.expYear),
         funding: 'credit',
       },
-      billing_details: {
-        name: draft.holderName,
+    }
+  }
+
+  if (draft.type === 'crypto') {
+    return {
+      ...base,
+      crypto: {
+        network: draft.cryptoNetwork,
+        walletAddress: draft.walletAddress,
+        label: draft.walletLabel || undefined,
       },
     }
   }
 
-  return {
-    id,
-    type: draft.type,
-    is_default: false,
-    created_at: now,
-    isDefault: false,
-    billing_details: {
-      name: draft.holderName,
-    },
+  if (draft.type === 'wire') {
+    return {
+      ...base,
+      wire: {
+        bankName: draft.wireBankName,
+        accountHolder: draft.wireAccountHolder,
+        routingNumber: draft.wireRoutingNumber || undefined,
+        accountLast4: draft.wireAccountLast4 || undefined,
+        swift: draft.wireSwift || undefined,
+        iban: draft.wireIban || undefined,
+        country: draft.wireCountry || undefined,
+      },
+    }
   }
+
+  if (draft.type === 'paypal') {
+    return {
+      ...base,
+      paypal: { email: draft.paypalEmail },
+    }
+  }
+
+  return base
 }
 
 function methodDisplay(method: PaymentMethod) {
   if (method.type === 'card') {
     return `${formatCardBrand(method.card?.brand || '')} •••• ${method.card?.last4 || '••••'}`
+  }
+  if (method.type === 'crypto') {
+    const network = method.crypto?.network ?? 'ethereum'
+    const label = CRYPTO_NETWORK_LABELS[network as CryptoNetwork] ?? network
+    const addr = method.crypto?.walletAddress ?? ''
+    const shortAddr = addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr
+    return `${label} ${shortAddr}`
+  }
+  if (method.type === 'wire') {
+    const bank = method.wire?.bankName ?? 'Wire'
+    const last4 = method.wire?.accountLast4 ? ` •••• ${method.wire.accountLast4}` : ''
+    return `${bank}${last4}`
   }
   if (method.type === 'paypal') {
     return `PayPal ${method.paypal?.email ? `(${method.paypal.email})` : ''}`
@@ -84,10 +154,22 @@ function methodDisplay(method: PaymentMethod) {
   if (method.type === 'bank_account' || method.type === 'sepa_debit') {
     return `${method.bank_account?.bankName || 'Bank account'} •••• ${method.bank_account?.last4 || '••••'}`
   }
-  if (method.type === 'apple_pay') {
-    return 'Apple Pay'
-  }
+  if (method.type === 'apple_pay') return 'Apple Pay'
   return 'Google Pay'
+}
+
+function methodIcon(type: PaymentMethodType) {
+  switch (type) {
+    case 'card': return '💳'
+    case 'crypto': return '🔗'
+    case 'wire': return '🏦'
+    case 'paypal': return '🅿️'
+    case 'bank_account':
+    case 'sepa_debit': return '🏛️'
+    case 'apple_pay': return '🍎'
+    case 'google_pay': return '🔵'
+    default: return '💰'
+  }
 }
 
 function methodExpiration(method: PaymentMethod) {
@@ -96,6 +178,19 @@ function methodExpiration(method: PaymentMethod) {
   const year = method.card?.exp_year
   if (!month || !year) return null
   return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`
+}
+
+function methodSubtext(method: PaymentMethod) {
+  if (method.type === 'crypto') {
+    return method.crypto?.label || 'Crypto wallet'
+  }
+  if (method.type === 'wire') {
+    const parts: string[] = []
+    if (method.wire?.swift) parts.push(`SWIFT: ${method.wire.swift}`)
+    if (method.wire?.country) parts.push(method.wire.country)
+    return parts.join(' · ') || 'Wire transfer'
+  }
+  return null
 }
 
 export function PaymentMethodManager(props: PaymentMethodManagerProps) {
@@ -126,9 +221,21 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
     }
   }, [paymentMethods])
 
-  const canCreate =
-    draft.holderName.trim().length > 1 &&
-    (draft.type !== 'card' || (draft.last4.length === 4 && draft.expMonth && draft.expYear))
+  const canCreate = React.useMemo(() => {
+    if (draft.type === 'card') {
+      return draft.holderName.trim().length > 1 && draft.last4.length === 4 && draft.expMonth && draft.expYear
+    }
+    if (draft.type === 'crypto') {
+      return draft.walletAddress.trim().length >= 10
+    }
+    if (draft.type === 'wire') {
+      return draft.wireBankName.trim().length > 1 && draft.wireAccountHolder.trim().length > 1
+    }
+    if (draft.type === 'paypal') {
+      return draft.paypalEmail.includes('@')
+    }
+    return draft.holderName.trim().length > 1
+  }, [draft])
 
   const handleCreate = React.useCallback(async () => {
     if (!canCreate) return
@@ -186,7 +293,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 p-4">
           <div>
             <h3 className="text-lg font-semibold text-zinc-900">Payment methods</h3>
-            <p className="text-sm text-zinc-500">Securely manage cards, wallets, and bank methods</p>
+            <p className="text-sm text-zinc-500">Manage cards, crypto wallets, bank transfers, and digital wallets</p>
           </div>
           <button
             type="button"
@@ -198,65 +305,196 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
         </div>
 
         {showForm ? (
-          <div className="grid gap-3 border-b border-zinc-200 p-4 md:grid-cols-2 xl:grid-cols-5">
-            <input
-              value={draft.holderName}
-              onChange={(e) => setDraft((prev) => ({ ...prev, holderName: e.target.value }))}
-              placeholder="Cardholder name"
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
-            />
-            <select
-              value={draft.type}
-              onChange={(e) => setDraft((prev) => ({ ...prev, type: e.target.value as PaymentMethod['type'] }))}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
-            >
-              <option value="card">Card</option>
-              <option value="paypal">PayPal</option>
-              <option value="apple_pay">Apple Pay</option>
-              <option value="google_pay">Google Pay</option>
-              <option value="bank_account">Bank account</option>
-            </select>
-            <input
-              value={draft.last4}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  last4: e.target.value.replace(/\D/g, '').slice(0, 4),
-                }))
-              }
-              placeholder="Last 4 digits"
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
-            />
-            <input
-              value={draft.expMonth}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  expMonth: e.target.value.replace(/\D/g, '').slice(0, 2),
-                }))
-              }
-              placeholder="MM"
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
-            />
-            <div className="flex gap-2">
-              <input
-                value={draft.expYear}
-                onChange={(e) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    expYear: e.target.value.replace(/\D/g, '').slice(0, 4),
-                  }))
-                }
-                placeholder="YYYY"
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
-              />
+          <div className="border-b border-zinc-200 p-4">
+            {/* Method type selector */}
+            <div className="mb-4 flex flex-wrap gap-2">
+              {([
+                ['card', 'Card'],
+                ['crypto', 'Crypto wallet'],
+                ['wire', 'Wire transfer'],
+                ['paypal', 'PayPal'],
+                ['bank_account', 'Bank account'],
+                ['apple_pay', 'Apple Pay'],
+                ['google_pay', 'Google Pay'],
+              ] as const).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, type }))}
+                  className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                    draft.type === type
+                      ? 'bg-zinc-900 text-white'
+                      : 'border border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Card fields */}
+            {draft.type === 'card' && (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <input
+                  value={draft.holderName}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, holderName: e.target.value }))}
+                  placeholder="Cardholder name"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <select
+                  value={draft.cardBrand}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, cardBrand: e.target.value }))}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                >
+                  <option value="visa">Visa</option>
+                  <option value="mastercard">Mastercard</option>
+                  <option value="amex">Amex</option>
+                  <option value="discover">Discover</option>
+                </select>
+                <input
+                  value={draft.last4}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      last4: e.target.value.replace(/\D/g, '').slice(0, 4),
+                    }))
+                  }
+                  placeholder="Last 4 digits"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.expMonth}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      expMonth: e.target.value.replace(/\D/g, '').slice(0, 2),
+                    }))
+                  }
+                  placeholder="MM"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.expYear}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      expYear: e.target.value.replace(/\D/g, '').slice(0, 4),
+                    }))
+                  }
+                  placeholder="YYYY"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+              </div>
+            )}
+
+            {/* Crypto fields */}
+            {draft.type === 'crypto' && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <select
+                  value={draft.cryptoNetwork}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      cryptoNetwork: e.target.value as CryptoNetwork,
+                    }))
+                  }
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                >
+                  <option value="bitcoin">Bitcoin (BTC)</option>
+                  <option value="ethereum">Ethereum (ETH)</option>
+                  <option value="solana">Solana (SOL)</option>
+                  <option value="usdc">USDC</option>
+                </select>
+                <input
+                  value={draft.walletAddress}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, walletAddress: e.target.value }))}
+                  placeholder="Wallet address"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.walletLabel}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, walletLabel: e.target.value }))}
+                  placeholder="Label (optional)"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                />
+              </div>
+            )}
+
+            {/* Wire fields */}
+            {draft.type === 'wire' && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={draft.wireBankName}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireBankName: e.target.value }))}
+                  placeholder="Bank name"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.wireAccountHolder}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireAccountHolder: e.target.value }))}
+                  placeholder="Account holder name"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.wireRoutingNumber}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireRoutingNumber: e.target.value }))}
+                  placeholder="Routing number (domestic)"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.wireSwift}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireSwift: e.target.value }))}
+                  placeholder="SWIFT/BIC (international)"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.wireIban}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireIban: e.target.value }))}
+                  placeholder="IBAN (international)"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+                <input
+                  value={draft.wireCountry}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, wireCountry: e.target.value }))}
+                  placeholder="Country"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900"
+                />
+              </div>
+            )}
+
+            {/* PayPal fields */}
+            {draft.type === 'paypal' && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={draft.paypalEmail}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, paypalEmail: e.target.value }))}
+                  placeholder="PayPal email"
+                  type="email"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                />
+              </div>
+            )}
+
+            {/* Bank account / Apple Pay / Google Pay */}
+            {(draft.type === 'bank_account' || draft.type === 'apple_pay' || draft.type === 'google_pay') && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={draft.holderName}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, holderName: e.target.value }))}
+                  placeholder="Account holder name"
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-900 md:col-span-2"
+                />
+              </div>
+            )}
+
+            <div className="mt-3 flex justify-end">
               <button
                 type="button"
                 disabled={!canCreate || isAdding}
                 onClick={handleCreate}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isAdding ? 'Saving…' : 'Save'}
+                {isAdding ? 'Saving…' : 'Add payment method'}
               </button>
             </div>
           </div>
@@ -269,21 +507,26 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
             methods.map((method) => {
               const isDefault = method.is_default || method.isDefault
               const isBusy = busyMethodId === method.id
+              const sub = methodSubtext(method)
 
               return (
                 <div key={method.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900">{methodDisplay(method)}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                      <span>
-                        Added {new Date(method.created_at).toLocaleDateString('en-US')}
-                      </span>
-                      {methodExpiration(method) ? <span>Expires {methodExpiration(method)}</span> : null}
-                      {isDefault ? (
-                        <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                          Default
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 text-lg">{methodIcon(method.type)}</span>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">{methodDisplay(method)}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                        <span>
+                          Added {new Date(method.created_at).toLocaleDateString('en-US')}
                         </span>
-                      ) : null}
+                        {methodExpiration(method) ? <span>Expires {methodExpiration(method)}</span> : null}
+                        {sub ? <span>{sub}</span> : null}
+                        {isDefault ? (
+                          <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            Default
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 

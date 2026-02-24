@@ -7,6 +7,7 @@ import type {
   SubscriptionPlan,
   RetentionOffer,
   SubscriptionHistory,
+  DiscountCode,
 } from './types'
 
 export interface SubscriptionPortalProps {
@@ -19,6 +20,7 @@ export interface SubscriptionPortalProps {
   onDowngrade?: (planId: string) => Promise<void>
   onCancel?: (reason: string, feedback?: string) => Promise<void>
   onAcceptOffer?: (offerId: string) => Promise<void>
+  onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
   showHistory?: boolean
   defaultView?: 'overview' | 'plans' | 'history'
 }
@@ -78,11 +80,23 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     subscriptionHistory = [],
     onUpgrade,
     onDowngrade,
+    onCancel,
+    onApplyDiscount,
     defaultView = 'overview',
   } = props
 
   const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
+
+  // Discount code state
+  const [discountCode, setDiscountCode] = React.useState('')
+  const [applyingDiscount, setApplyingDiscount] = React.useState(false)
+  const [discountResult, setDiscountResult] = React.useState<{ success: boolean; message: string } | null>(null)
+
+  // Cancel confirmation
+  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false)
+  const [cancelReason, setCancelReason] = React.useState('')
+  const [canceling, setCanceling] = React.useState(false)
 
   const currentPlan = React.useMemo(
     () => availablePlans.find((p) => p.id === subscription.planId),
@@ -107,26 +121,77 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     [currentPlan, onDowngrade, onUpgrade],
   )
 
+  const handleApplyDiscount = React.useCallback(async () => {
+    if (!onApplyDiscount || !discountCode.trim()) return
+    setApplyingDiscount(true)
+    setDiscountResult(null)
+    try {
+      const result = await onApplyDiscount(discountCode.trim())
+      if (result && result.valid) {
+        const desc = result.kind === 'percent'
+          ? `${result.value}% off`
+          : `${formatCurrency(result.value)} off`
+        setDiscountResult({ success: true, message: `Applied: ${result.name || result.code} (${desc})` })
+        setDiscountCode('')
+      } else {
+        setDiscountResult({ success: false, message: 'Invalid or expired discount code' })
+      }
+    } catch (err) {
+      setDiscountResult({ success: false, message: err instanceof Error ? err.message : 'Failed to apply code' })
+    } finally {
+      setApplyingDiscount(false)
+    }
+  }, [onApplyDiscount, discountCode])
+
+  const handleCancel = React.useCallback(async () => {
+    if (!onCancel || !cancelReason.trim()) return
+    setCanceling(true)
+    try {
+      await onCancel(cancelReason.trim())
+      setShowCancelConfirm(false)
+      setCancelReason('')
+    } finally {
+      setCanceling(false)
+    }
+  }, [onCancel, cancelReason])
+
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-50 to-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-              Subscription Control
+              Subscription
             </p>
             <h2 className="text-2xl font-semibold text-zinc-900">
               {currentPlan?.name ?? 'No active plan'}
             </h2>
             <p className="text-sm text-zinc-600">
-              Billing period ends on {formatDate(subscription.currentPeriodEnd)}
+              {subscription.id
+                ? `Billing period ends on ${formatDate(subscription.currentPeriodEnd)}`
+                : 'Select a plan to get started'}
             </p>
+            {subscription.discount && (
+              <p className="text-sm text-emerald-600">
+                Discount: {subscription.discount.name || subscription.discount.code} (
+                {subscription.discount.kind === 'percent'
+                  ? `${subscription.discount.value}% off`
+                  : `${formatCurrency(subscription.discount.value)} off`}
+                {subscription.discount.duration === 'repeating' && subscription.discount.durationInMonths
+                  ? ` for ${subscription.discount.durationInMonths} months`
+                  : subscription.discount.duration === 'forever'
+                    ? ' forever'
+                    : ''})
+              </p>
+            )}
           </div>
-          <span
-            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusTone[subscription.status].className}`}
-          >
-            {statusTone[subscription.status].label}
-          </span>
+          {subscription.id && (
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusTone[subscription.status].className}`}
+            >
+              {statusTone[subscription.status].label}
+            </span>
+          )}
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2 rounded-xl border border-zinc-200 bg-white p-1">
@@ -178,15 +243,50 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           <div className="rounded-xl border border-zinc-200 bg-white p-4">
             <p className="text-xs uppercase tracking-wide text-zinc-500">Next invoice</p>
             <p className="mt-2 text-lg font-semibold text-zinc-900">
-              {formatDate(subscription.currentPeriodEnd)}
+              {subscription.id ? formatDate(subscription.currentPeriodEnd) : '—'}
             </p>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Cancellation</p>
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Status</p>
             <p className="mt-2 text-lg font-semibold text-zinc-900">
-              {subscription.cancelAtPeriodEnd ? 'At period end' : 'Auto-renewing'}
+              {subscription.cancelAtPeriodEnd
+                ? 'Cancels at period end'
+                : subscription.id
+                  ? 'Auto-renewing'
+                  : 'No subscription'}
             </p>
           </div>
+
+          {/* Discount code */}
+          {onApplyDiscount && subscription.id && (
+            <div className="md:col-span-3 rounded-xl border border-zinc-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Discount code</p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={discountCode}
+                  onChange={(e) => {
+                    setDiscountCode(e.target.value.toUpperCase())
+                    setDiscountResult(null)
+                  }}
+                  placeholder="Enter promo code"
+                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase outline-none transition focus:border-zinc-900"
+                />
+                <button
+                  type="button"
+                  disabled={!discountCode.trim() || applyingDiscount}
+                  onClick={handleApplyDiscount}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {applyingDiscount ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              {discountResult && (
+                <p className={`mt-2 text-sm ${discountResult.success ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {discountResult.message}
+                </p>
+              )}
+            </div>
+          )}
 
           {usageMetrics.length > 0 && (
             <div className="md:col-span-3 rounded-xl border border-zinc-200 bg-white p-4">
@@ -240,6 +340,55 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
               </div>
             </div>
           )}
+
+          {/* Cancel subscription */}
+          {subscription.id && subscription.status === 'active' && !subscription.cancelAtPeriodEnd && onCancel && (
+            <div className="md:col-span-3">
+              {showCancelConfirm ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4">
+                  <p className="text-sm font-medium text-rose-900">Cancel subscription</p>
+                  <p className="mt-1 text-sm text-rose-700">
+                    Your subscription will remain active until {formatDate(subscription.currentPeriodEnd)}.
+                  </p>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Why are you canceling? (required)"
+                    rows={2}
+                    className="mt-3 w-full rounded-lg border border-rose-200 px-3 py-2 text-sm outline-none transition focus:border-rose-400"
+                  />
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      disabled={!cancelReason.trim() || canceling}
+                      onClick={handleCancel}
+                      className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {canceling ? 'Canceling…' : 'Confirm cancellation'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCancelConfirm(false)
+                        setCancelReason('')
+                      }}
+                      className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+                    >
+                      Keep subscription
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="text-sm text-zinc-500 transition hover:text-rose-600"
+                >
+                  Cancel subscription
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -248,15 +397,18 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           {availablePlans.map((plan) => {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
-            const periodPrice = `${formatCurrency(plan.price)}/${plan.billingPeriod}`
+            const isFree = plan.price === 0
+            const periodPrice = isFree ? 'Free' : `${formatCurrency(plan.price)}/${plan.billingPeriod}`
 
             return (
               <div
                 key={plan.id}
-                className={`rounded-xl border p-5 ${
-                  isCurrent
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-zinc-200 bg-white text-zinc-900'
+                className={`relative rounded-xl border p-5 ${
+                  plan.highlighted && !isCurrent
+                    ? 'border-2 border-zinc-900 bg-white text-zinc-900'
+                    : isCurrent
+                      ? 'border-zinc-900 bg-zinc-900 text-white'
+                      : 'border-zinc-200 bg-white text-zinc-900'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -281,7 +433,10 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
                 <ul className={`mt-4 space-y-2 text-sm ${isCurrent ? 'text-zinc-200' : 'text-zinc-700'}`}>
                   {plan.features.map((feature) => (
-                    <li key={feature}>• {feature}</li>
+                    <li key={feature} className="flex items-start gap-2">
+                      <span className={`mt-0.5 ${isCurrent ? 'text-zinc-400' : 'text-emerald-500'}`}>✓</span>
+                      {feature}
+                    </li>
                   ))}
                 </ul>
 
@@ -294,10 +449,18 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                       ? 'cursor-not-allowed bg-zinc-700 text-zinc-300'
                       : isBusy
                         ? 'cursor-wait bg-zinc-300 text-zinc-600'
-                        : 'bg-zinc-900 text-white hover:bg-zinc-700'
+                        : plan.highlighted
+                          ? 'bg-zinc-900 text-white hover:bg-zinc-700'
+                          : 'bg-zinc-900 text-white hover:bg-zinc-700'
                   }`}
                 >
-                  {isCurrent ? 'Current plan' : isBusy ? 'Applying…' : 'Switch plan'}
+                  {isCurrent
+                    ? 'Current plan'
+                    : isBusy
+                      ? 'Applying…'
+                      : currentPlan && plan.price < currentPlan.price
+                        ? 'Downgrade'
+                        : 'Upgrade'}
                 </button>
               </div>
             )

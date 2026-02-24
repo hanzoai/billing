@@ -7,23 +7,30 @@ import { PaymentMethodManager } from './payment-manager'
 import { SubscriptionPortal } from './subscription-portal'
 import { BusinessProfilePanel } from './business-profile-panel'
 import { TaxCompliancePanel } from './tax-compliance-panel'
+import { SpendAlertsPanel } from './spend-alerts'
+import { UsagePanel } from './usage-panel'
 import type {
   BillingMetric,
   BusinessProfile,
   ComplianceItem,
+  DiscountCode,
   Invoice,
   PaymentMethod,
+  SpendAlert,
   Subscription,
   SubscriptionHistory,
   SubscriptionPlan,
   TaxSettings,
   RetentionOffer,
+  UsageSummary,
 } from './types'
 
 type WorkspaceTab =
   | 'overview'
   | 'payment'
   | 'invoices'
+  | 'usage'
+  | 'alerts'
   | 'business'
   | 'compliance'
 
@@ -38,12 +45,16 @@ export interface BillingWorkspaceProps {
   businessProfile: BusinessProfile
   taxSettings: TaxSettings
   complianceItems: ComplianceItem[]
+  spendAlerts?: SpendAlert[]
+  usage?: UsageSummary | null
+  usageLoading?: boolean
   defaultTab?: WorkspaceTab
 
   onUpgrade?: (planId: string) => Promise<void>
   onDowngrade?: (planId: string) => Promise<void>
   onCancel?: (reason: string, feedback?: string) => Promise<void>
   onAcceptOffer?: (offerId: string) => Promise<void>
+  onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
 
   onAddPaymentMethod?: (method: PaymentMethod) => Promise<void>
   onRemovePaymentMethod?: (id: string) => Promise<void>
@@ -52,12 +63,18 @@ export interface BillingWorkspaceProps {
   onDownloadInvoice?: (invoice: Invoice) => Promise<void>
   onSaveBusinessProfile?: (profile: BusinessProfile) => Promise<void>
   onToggleAutomaticTax?: (enabled: boolean) => Promise<void>
+
+  onCreateSpendAlert?: (title: string, threshold: number) => Promise<void>
+  onUpdateSpendAlert?: (id: string, title: string, threshold: number) => Promise<void>
+  onDeleteSpendAlert?: (id: string) => Promise<void>
 }
 
 const tabs: Array<{ id: WorkspaceTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'usage', label: 'Usage' },
   { id: 'payment', label: 'Payment methods' },
   { id: 'invoices', label: 'Invoices' },
+  { id: 'alerts', label: 'Spend alerts' },
   { id: 'business', label: 'Business info' },
   { id: 'compliance', label: 'Tax & compliance' },
 ]
@@ -74,12 +91,16 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     businessProfile,
     taxSettings,
     complianceItems,
+    spendAlerts = [],
+    usage = null,
+    usageLoading = false,
     defaultTab = 'overview',
 
     onUpgrade,
     onDowngrade,
     onCancel,
     onAcceptOffer,
+    onApplyDiscount,
 
     onAddPaymentMethod,
     onRemovePaymentMethod,
@@ -88,6 +109,10 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     onDownloadInvoice,
     onSaveBusinessProfile,
     onToggleAutomaticTax,
+
+    onCreateSpendAlert,
+    onUpdateSpendAlert,
+    onDeleteSpendAlert,
   } = props
 
   const [activeTab, setActiveTab] = React.useState<WorkspaceTab>(defaultTab)
@@ -96,9 +121,9 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-50 to-white">
         <div className="border-b border-zinc-200 px-4 py-4">
-          <h2 className="text-2xl font-semibold text-zinc-900">Billing workspace</h2>
+          <h2 className="text-2xl font-semibold text-zinc-900">Billing</h2>
           <p className="text-sm text-zinc-500">
-            Run subscription, invoicing, payment, business profile, and compliance operations from one surface.
+            Manage your subscription, payments, usage, invoices, and compliance from one place.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 p-3">
@@ -130,7 +155,12 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
           onDowngrade={onDowngrade}
           onCancel={onCancel}
           onAcceptOffer={onAcceptOffer}
+          onApplyDiscount={onApplyDiscount}
         />
+      ) : null}
+
+      {activeTab === 'usage' ? (
+        <UsagePanel usage={usage} loading={usageLoading} />
       ) : null}
 
       {activeTab === 'payment' ? (
@@ -144,6 +174,15 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
 
       {activeTab === 'invoices' ? (
         <InvoiceManager invoices={invoices} onDownload={onDownloadInvoice} />
+      ) : null}
+
+      {activeTab === 'alerts' ? (
+        <SpendAlertsPanel
+          alerts={spendAlerts}
+          onCreateAlert={onCreateSpendAlert}
+          onUpdateAlert={onUpdateSpendAlert}
+          onDeleteAlert={onDeleteSpendAlert}
+        />
       ) : null}
 
       {activeTab === 'business' ? (

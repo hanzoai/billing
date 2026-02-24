@@ -1,3 +1,5 @@
+import type { SubscriptionPlan } from './billing/types'
+
 export interface BillingOrgConfig {
   id: string
   displayName: string
@@ -42,4 +44,136 @@ export function getOrgByHost(host: string): BillingOrgConfig {
 
 export function isAdminUser(email: string): boolean {
   return ADMIN_EMAILS.includes(email.toLowerCase())
+}
+
+/** Canonical Hanzo subscription plans with feature lists. */
+export const HANZO_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'cloud:hobby',
+    name: 'Hobby',
+    description: 'For personal projects and experimentation',
+    price: 0,
+    billingPeriod: 'monthly',
+    currency: 'usd',
+    features: [
+      '1,000 API requests/month',
+      '7-day data retention',
+      '1 project',
+      'Community support',
+    ],
+    limits: {
+      apiRequests: 1_000,
+      dataRetentionDays: 7,
+      projects: 1,
+    },
+  },
+  {
+    id: 'cloud:core',
+    name: 'Core',
+    description: 'For growing teams shipping to production',
+    price: 29,
+    billingPeriod: 'monthly',
+    currency: 'usd',
+    features: [
+      '100k API requests/month included',
+      '90-day data retention',
+      'Unlimited users',
+      'Email and chat support',
+      'Overage: $8 per 100k requests',
+    ],
+    limits: {
+      apiRequests: 100_000,
+      dataRetentionDays: 90,
+      projects: 5,
+    },
+  },
+  {
+    id: 'cloud:pro',
+    name: 'Pro',
+    description: 'For scaling workloads with compliance needs',
+    price: 199,
+    billingPeriod: 'monthly',
+    currency: 'usd',
+    highlighted: true,
+    badge: 'Popular',
+    features: [
+      'Everything in Core',
+      '3-year data retention',
+      'Unlimited queues',
+      'Data retention management',
+      'High rate limits',
+      'SOC2 and ISO 27001 reports',
+      'Overage: $6 per 100k requests',
+    ],
+    limits: {
+      apiRequests: 500_000,
+      dataRetentionDays: 1095,
+      projects: 20,
+    },
+  },
+  {
+    id: 'cloud:team',
+    name: 'Team',
+    description: 'For organizations with SSO and RBAC requirements',
+    price: 499,
+    billingPeriod: 'monthly',
+    currency: 'usd',
+    features: [
+      'Everything in Pro',
+      'Enterprise SSO (Okta, SAML)',
+      'SSO enforcement',
+      'Fine-grained RBAC',
+      'Priority Slack support',
+      'Dedicated success manager',
+    ],
+    limits: {
+      apiRequests: 2_000_000,
+      dataRetentionDays: 1095,
+      projects: 50,
+    },
+  },
+  {
+    id: 'cloud:enterprise',
+    name: 'Enterprise',
+    description: 'For mission-critical deployments with custom SLAs',
+    price: 2499,
+    billingPeriod: 'monthly',
+    currency: 'usd',
+    features: [
+      'Everything in Team',
+      'Audit logs',
+      'SCIM API for user provisioning',
+      'Custom rate limits',
+      '99.99% uptime SLA',
+      'Dedicated support engineer',
+      'Custom contract and invoicing',
+    ],
+    limits: {
+      apiRequests: -1,
+      dataRetentionDays: 1825,
+      projects: -1,
+    },
+  },
+]
+
+/**
+ * Merge server-side plans from Commerce API with local feature definitions.
+ * Commerce API returns pricing/interval but not features; local config has features.
+ */
+export function mergePlans(commercePlans: SubscriptionPlan[], localPlans: SubscriptionPlan[] = HANZO_PLANS): SubscriptionPlan[] {
+  if (commercePlans.length === 0) return localPlans
+
+  return localPlans.map((local) => {
+    const remote = commercePlans.find((p) => p.id === local.id || p.name === local.name)
+    if (remote) {
+      return {
+        ...local,
+        price: remote.price || local.price,
+        billingPeriod: remote.billingPeriod || local.billingPeriod,
+        currency: remote.currency || local.currency,
+        priceId: remote.priceId || local.priceId,
+      }
+    }
+    return local
+  })
 }

@@ -15,5 +15,11 @@ export type { BusinessProfilePanelProps } from './business-profile-panel'
 export { TaxCompliancePanel } from './tax-compliance-panel'
 export type { TaxCompliancePanelProps } from './tax-compliance-panel'
 
+export { SpendAlertsPanel } from './spend-alerts'
+export type { SpendAlertsPanelProps } from './spend-alerts'
+
+export { UsagePanel } from './usage-panel'
+export type { UsagePanelProps } from './usage-panel'
+
 export { BillingWorkspace } from './billing-workspace'
 export type { BillingWorkspaceProps } from './billing-workspace'

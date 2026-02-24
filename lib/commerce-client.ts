@@ -47,6 +47,16 @@ export type Subscription = {
   trialEnd?: string
   quantity?: number
   createdAt?: string
+  discount?: {
+    id: string
+    code: string | null
+    name: string | null
+    kind: 'percent' | 'amount'
+    value: number
+    currency: string | null
+    duration: 'forever' | 'once' | 'repeating' | null
+    durationInMonths: number | null
+  } | null
 }
 
 export type Plan = {
@@ -73,6 +83,111 @@ export type Payment = {
   captured?: boolean
   live?: boolean
   createdAt?: string
+}
+
+export type CommerceInvoice = {
+  id?: string
+  number?: string
+  userId?: string
+  subscriptionId?: string
+  amount?: number
+  tax?: number
+  total?: number
+  currency?: string
+  status?: 'paid' | 'unpaid' | 'failed' | 'pending' | 'refunded' | 'void' | string
+  pdfUrl?: string
+  createdAt?: string
+  dueAt?: string
+  items?: Array<{
+    id?: string
+    description?: string
+    quantity?: number
+    unitPrice?: number
+    total?: number
+  }>
+}
+
+export type CommercePaymentMethod = {
+  id?: string
+  userId?: string
+  type?: string
+  isDefault?: boolean
+  card?: {
+    brand?: string
+    last4?: string
+    expMonth?: number
+    expYear?: number
+    funding?: string
+  }
+  crypto?: {
+    network?: string
+    walletAddress?: string
+    label?: string
+  }
+  wire?: {
+    bankName?: string
+    accountHolder?: string
+    routingNumber?: string
+    accountLast4?: string
+    swift?: string
+    iban?: string
+    country?: string
+  }
+  paypal?: {
+    email?: string
+  }
+  bankAccount?: {
+    bankName?: string
+    last4?: string
+    country?: string
+    currency?: string
+  }
+  billingDetails?: {
+    name?: string
+    email?: string
+  }
+  createdAt?: string
+}
+
+export type CommerceSpendAlert = {
+  id?: string
+  userId?: string
+  title?: string
+  threshold?: number
+  currency?: string
+  triggeredAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type CommerceUsageRecord = {
+  meterId?: string
+  label?: string
+  current?: number
+  limit?: number | null
+  unit?: string
+  cost?: number
+  periodStart?: string
+  periodEnd?: string
+}
+
+export type CommerceUsageSummary = {
+  totalCost?: number
+  currency?: string
+  period?: { start?: string; end?: string }
+  records?: CommerceUsageRecord[]
+}
+
+export type CommerceDiscountCode = {
+  id?: string
+  code?: string
+  name?: string | null
+  kind?: 'percent' | 'amount'
+  value?: number
+  currency?: string | null
+  duration?: 'forever' | 'once' | 'repeating' | null
+  durationInMonths?: number | null
+  valid?: boolean
 }
 
 export class CommerceApiError extends Error {
@@ -141,6 +256,8 @@ export class Commerce {
     }
   }
 
+  // ── Balance ──────────────────────────────────────────────────────────
+
   async getBalance(user: string, currency = 'usd', token?: string): Promise<Balance> {
     return this.request<Balance>('/api/v1/billing/balance', {
       params: { user, currency }, token,
@@ -162,6 +279,26 @@ export class Commerce {
     })
   }
 
+  // ── Transactions ─────────────────────────────────────────────────────
+
+  async getTransactions(
+    user: string,
+    params?: { limit?: number; offset?: number; currency?: string },
+    token?: string,
+  ): Promise<Transaction[]> {
+    return this.request<Transaction[]>('/api/v1/billing/transactions', {
+      params: {
+        user,
+        ...(params?.limit ? { limit: String(params.limit) } : {}),
+        ...(params?.offset ? { offset: String(params.offset) } : {}),
+        ...(params?.currency ? { currency: params.currency } : {}),
+      },
+      token,
+    })
+  }
+
+  // ── Subscriptions ────────────────────────────────────────────────────
+
   async subscribe(params: { planId: string; userId: string; paymentToken?: string }, token?: string): Promise<Subscription> {
     return this.request<Subscription>('/api/v1/subscribe', {
       method: 'POST', body: params, token,
@@ -174,11 +311,33 @@ export class Commerce {
     } catch { return null }
   }
 
+  async getUserSubscriptions(userId: string, token?: string): Promise<Subscription[]> {
+    try {
+      return await this.request<Subscription[]>('/api/v1/subscribe', {
+        params: { userId }, token,
+      })
+    } catch { return [] }
+  }
+
   async cancelSubscription(subscriptionId: string, token?: string): Promise<void> {
     await this.request<void>(`/api/v1/subscribe/${subscriptionId}`, {
       method: 'DELETE', token,
     })
   }
+
+  async updateSubscription(subscriptionId: string, params: { planId: string }, token?: string): Promise<Subscription> {
+    return this.request<Subscription>(`/api/v1/subscribe/${subscriptionId}`, {
+      method: 'PATCH', body: params, token,
+    })
+  }
+
+  async applyDiscount(subscriptionId: string, code: string, token?: string): Promise<CommerceDiscountCode> {
+    return this.request<CommerceDiscountCode>(`/api/v1/subscribe/${subscriptionId}/promotion`, {
+      method: 'POST', body: { code }, token,
+    })
+  }
+
+  // ── Plans ────────────────────────────────────────────────────────────
 
   async getPlans(token?: string): Promise<Plan[]> {
     return this.request<Plan[]>('/api/v1/plan', { token })
@@ -188,5 +347,96 @@ export class Commerce {
     try {
       return await this.request<Plan>(`/api/v1/plan/${planId}`, { token })
     } catch { return null }
+  }
+
+  // ── Invoices ─────────────────────────────────────────────────────────
+
+  async getInvoices(userId: string, params?: { limit?: number; offset?: number }, token?: string): Promise<CommerceInvoice[]> {
+    try {
+      return await this.request<CommerceInvoice[]>('/api/v1/billing/invoices', {
+        params: {
+          user: userId,
+          ...(params?.limit ? { limit: String(params.limit) } : {}),
+          ...(params?.offset ? { offset: String(params.offset) } : {}),
+        },
+        token,
+      })
+    } catch { return [] }
+  }
+
+  // ── Payment Methods ──────────────────────────────────────────────────
+
+  async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
+    try {
+      return await this.request<CommercePaymentMethod[]>('/api/v1/billing/payment-methods', {
+        params: { user: userId }, token,
+      })
+    } catch { return [] }
+  }
+
+  async addPaymentMethod(params: CommercePaymentMethod, token?: string): Promise<CommercePaymentMethod> {
+    return this.request<CommercePaymentMethod>('/api/v1/billing/payment-methods', {
+      method: 'POST', body: params, token,
+    })
+  }
+
+  async removePaymentMethod(methodId: string, token?: string): Promise<void> {
+    await this.request<void>(`/api/v1/billing/payment-methods/${methodId}`, {
+      method: 'DELETE', token,
+    })
+  }
+
+  async setDefaultPaymentMethod(methodId: string, token?: string): Promise<void> {
+    await this.request<void>(`/api/v1/billing/payment-methods/${methodId}/default`, {
+      method: 'POST', token,
+    })
+  }
+
+  // ── Usage ────────────────────────────────────────────────────────────
+
+  async getUsage(userId: string, token?: string): Promise<CommerceUsageSummary> {
+    try {
+      return await this.request<CommerceUsageSummary>('/api/v1/billing/usage', {
+        params: { user: userId }, token,
+      })
+    } catch {
+      return { totalCost: 0, currency: 'usd', period: {}, records: [] }
+    }
+  }
+
+  // ── Spend Alerts ─────────────────────────────────────────────────────
+
+  async getSpendAlerts(userId: string, token?: string): Promise<CommerceSpendAlert[]> {
+    try {
+      return await this.request<CommerceSpendAlert[]>('/api/v1/billing/spend-alerts', {
+        params: { user: userId }, token,
+      })
+    } catch { return [] }
+  }
+
+  async createSpendAlert(params: { userId: string; title: string; threshold: number; currency?: string }, token?: string): Promise<CommerceSpendAlert> {
+    return this.request<CommerceSpendAlert>('/api/v1/billing/spend-alerts', {
+      method: 'POST', body: params, token,
+    })
+  }
+
+  async updateSpendAlert(alertId: string, params: { title?: string; threshold?: number }, token?: string): Promise<CommerceSpendAlert> {
+    return this.request<CommerceSpendAlert>(`/api/v1/billing/spend-alerts/${alertId}`, {
+      method: 'PATCH', body: params, token,
+    })
+  }
+
+  async deleteSpendAlert(alertId: string, token?: string): Promise<void> {
+    await this.request<void>(`/api/v1/billing/spend-alerts/${alertId}`, {
+      method: 'DELETE', token,
+    })
+  }
+
+  // ── Discount Codes ───────────────────────────────────────────────────
+
+  async validateDiscountCode(code: string, token?: string): Promise<CommerceDiscountCode> {
+    return this.request<CommerceDiscountCode>('/api/v1/billing/discount/validate', {
+      params: { code }, token,
+    })
   }
 }

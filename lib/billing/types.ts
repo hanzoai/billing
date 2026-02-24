@@ -26,6 +26,18 @@ export interface Subscription {
   cancelAt?: Date
   cancelAtPeriodEnd?: boolean
   nextPlanId?: string | null
+  discount?: SubscriptionDiscount | null
+}
+
+export interface SubscriptionDiscount {
+  id: string
+  code: string | null
+  name: string | null
+  kind: "percent" | "amount"
+  value: number
+  currency: string | null
+  duration: "forever" | "once" | "repeating" | null
+  durationInMonths: number | null
 }
 
 export interface RetentionOffer {
@@ -118,9 +130,13 @@ export interface ComplianceItem {
 }
 
 // Payment types
+export type PaymentMethodType = "card" | "paypal" | "apple_pay" | "google_pay" | "bank_account" | "sepa_debit" | "crypto" | "wire"
+
+export type CryptoNetwork = "bitcoin" | "ethereum" | "solana" | "usdc"
+
 export interface PaymentMethod {
   id: string
-  type: "card" | "paypal" | "apple_pay" | "google_pay" | "bank_account" | "sepa_debit"
+  type: PaymentMethodType
   is_default: boolean
   created_at: string
   isDefault?: boolean
@@ -139,6 +155,20 @@ export interface PaymentMethod {
     last4?: string
     country?: string
     currency?: string
+  }
+  crypto?: {
+    network: CryptoNetwork
+    walletAddress: string
+    label?: string
+  }
+  wire?: {
+    bankName: string
+    accountHolder: string
+    routingNumber?: string
+    accountLast4?: string
+    swift?: string
+    iban?: string
+    country?: string
   }
   billing_details?: {
     name?: string
@@ -195,4 +225,52 @@ export interface InvoiceFilters {
   minAmount?: number
   maxAmount?: number
   search?: string
+}
+
+// Spend alert types
+export interface SpendAlert {
+  id: string
+  title: string
+  threshold: number
+  currency: string
+  triggeredAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// Usage tracking types
+export type UsageMeterType = "ai" | "storage" | "network" | "network_egress" | "gpu" | "api_calls"
+
+export interface UsageRecord {
+  meterId: UsageMeterType
+  label: string
+  current: number
+  limit: number | null
+  unit: string
+  cost: number
+  periodStart: string
+  periodEnd: string
+}
+
+export interface UsageSummary {
+  totalCost: number
+  currency: string
+  period: {
+    start: string
+    end: string
+  }
+  records: UsageRecord[]
+}
+
+// Discount / promotion code
+export interface DiscountCode {
+  id: string
+  code: string
+  name: string | null
+  kind: "percent" | "amount"
+  value: number
+  currency: string | null
+  duration: "forever" | "once" | "repeating" | null
+  durationInMonths: number | null
+  valid: boolean
 }
