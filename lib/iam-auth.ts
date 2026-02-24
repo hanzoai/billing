@@ -2,6 +2,7 @@
  * Minimal IAM auth module for the billing portal.
  *
  * Handles OIDC/PKCE login via Casdoor (hanzo.id) and token storage.
+ * Uses OIDC discovery for endpoint URLs (matching @hanzo/iam pattern).
  * Self-contained — no external auth package dependency.
  */
 
@@ -27,10 +28,32 @@ export interface IamAuthConfig {
   appName: string
 }
 
+interface OidcDiscovery {
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  end_session_endpoint: string
+}
+
+let discoveryCache: OidcDiscovery | null = null
+
+async function getDiscovery(serverUrl: string): Promise<OidcDiscovery> {
+  if (discoveryCache) return discoveryCache
+  const base = serverUrl.replace(/\/+$/, '')
+  const res = await fetch(`${base}/.well-known/openid-configuration`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) throw new Error(`OIDC discovery failed: ${res.status}`)
+  discoveryCache = (await res.json()) as OidcDiscovery
+  return discoveryCache
+}
+
 function generateRandom(length: number): string {
   const array = new Uint8Array(length)
   crypto.getRandomValues(array)
-  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('')
+  return Array.from(array, (b) => b.toString(36).padStart(2, '0'))
+    .join('')
+    .slice(0, length)
 }
 
 async function sha256(message: string): Promise<ArrayBuffer> {
@@ -79,25 +102,25 @@ export function getCurrentUser(): IamUser | null {
 
 /** Start OIDC/PKCE login flow — redirects to IAM server. */
 export async function startLogin(config: IamAuthConfig): Promise<void> {
-  const state = generateRandom(16)
-  const codeVerifier = generateRandom(32)
+  const discovery = await getDiscovery(config.iamServerUrl)
+  const state = generateRandom(32)
+  const codeVerifier = generateRandom(64)
   const challengeBuffer = await sha256(codeVerifier)
   const codeChallenge = base64UrlEncode(challengeBuffer)
 
   sessionStorage.setItem(KEY_STATE, state)
   sessionStorage.setItem(KEY_CODE_VERIFIER, codeVerifier)
 
-  const params = new URLSearchParams({
-    client_id: config.clientId,
-    response_type: 'code',
-    redirect_uri: config.redirectUri,
-    scope: 'openid profile email',
-    state,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
-  })
+  const url = new URL(discovery.authorization_endpoint)
+  url.searchParams.set('client_id', config.clientId)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('redirect_uri', config.redirectUri)
+  url.searchParams.set('scope', 'openid profile email')
+  url.searchParams.set('state', state)
+  url.searchParams.set('code_challenge', codeChallenge)
+  url.searchParams.set('code_challenge_method', 'S256')
 
-  window.location.href = `${config.iamServerUrl}/login/oauth/authorize?${params}`
+  window.location.href = url.toString()
 }
 
 /** Handle the OAuth callback — exchange code for tokens. */
@@ -105,19 +128,28 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
   const url = new URL(window.location.href)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
-  const savedState = sessionStorage.getItem(KEY_STATE)
-  const codeVerifier = sessionStorage.getItem(KEY_CODE_VERIFIER)
+  const error = url.searchParams.get('error')
+
+  if (error) {
+    const desc = url.searchParams.get('error_description') ?? error
+    throw new Error(`OAuth error: ${desc}`)
+  }
 
   if (!code) throw new Error('No authorization code in callback')
-  if (state !== savedState) throw new Error('State mismatch — possible CSRF')
+
+  const savedState = sessionStorage.getItem(KEY_STATE)
+  if (!savedState || savedState !== state) throw new Error('State mismatch — possible CSRF')
+
+  const codeVerifier = sessionStorage.getItem(KEY_CODE_VERIFIER)
   if (!codeVerifier) throw new Error('Missing code verifier')
 
   // Clean up state
   sessionStorage.removeItem(KEY_STATE)
   sessionStorage.removeItem(KEY_CODE_VERIFIER)
 
-  // Exchange code for tokens
-  const tokenRes = await fetch(`${config.iamServerUrl}/api/login/oauth/access_token`, {
+  // Exchange code for tokens via OIDC token endpoint
+  const discovery = await getDiscovery(config.iamServerUrl)
+  const tokenRes = await fetch(discovery.token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
