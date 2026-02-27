@@ -676,6 +676,8 @@ export function BillingShell({ org, user }: BillingShellProps) {
           </div>
         )}
 
+        <h1 className="text-[28px] font-bold text-white tracking-tight mb-8">Billing</h1>
+
         <BillingWorkspace
             balance={balance}
             isAdmin={admin}

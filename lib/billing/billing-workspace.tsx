@@ -4,10 +4,7 @@ import * as React from 'react'
 
 import { AccountSwitcher } from './account-switcher'
 import { OverviewDashboard } from './overview-dashboard'
-import { CostExplorer } from './cost-explorer'
 import { InvoicesPayments } from './invoices-payments'
-import { BillingSettings } from './billing-settings'
-import { GuidedSetup } from './guided-setup'
 import type { BillingSection } from './status-bar'
 import type {
   BillingAccount,
@@ -52,7 +49,6 @@ export interface BillingWorkspaceProps {
   currentSupportTier?: string
   defaultTab?: BillingSection
 
-  // Overview-specific (moved from shell)
   balance?: Balance | null
   isAdmin?: boolean
   userEmail?: string
@@ -60,7 +56,6 @@ export interface BillingWorkspaceProps {
   onAddFunds?: (amount: number) => Promise<void>
   onGrantCredit?: (email: string, amount: number) => Promise<void>
 
-  // Multi-billing-account
   billingAccounts?: BillingAccount[]
   activeBillingAccountId?: string | null
   onSwitchAccount?: (accountId: string) => void
@@ -95,9 +90,7 @@ export interface BillingWorkspaceProps {
 
 const sections: Array<{ id: BillingSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
-  { id: 'usage', label: 'Usage & Costs' },
-  { id: 'invoices', label: 'Invoices & Payments' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'invoices', label: 'Invoices' },
 ]
 
 export function BillingWorkspace(props: BillingWorkspaceProps) {
@@ -107,16 +100,11 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     paymentMethods = [],
     invoices = [],
     businessProfile,
-    taxSettings,
-    complianceItems,
     spendAlerts = [],
     usage = null,
     usageLoading = false,
     creditGrants = [],
     creditBalance = 0,
-    transactions = [],
-    transactionsLoading = false,
-    currentSupportTier,
     defaultTab = 'overview',
 
     balance = null,
@@ -130,11 +118,6 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     activeBillingAccountId = null,
     onSwitchAccount,
     onCreateBillingAccount,
-    userRole = 'owner',
-    accountMembers = [],
-    onInviteMember,
-    onChangeMemberRole,
-    onRemoveMember,
 
     onUpgrade,
     onDowngrade,
@@ -147,35 +130,30 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
 
     onDownloadInvoice,
     onSaveBusinessProfile,
-    onToggleAutomaticTax,
-
-    onCreateSpendAlert,
-    onUpdateSpendAlert,
-    onDeleteSpendAlert,
-
-    onClaimStarterCredit,
-    onSubscribeSupport,
   } = props
 
   const [activeSection, setActiveSection] = React.useState<BillingSection>(defaultTab)
-  const [invoicesSubTab, setInvoicesSubTab] = React.useState<'invoices' | 'payment-methods' | 'transactions'>('invoices')
-  const [dismissedSetup, setDismissedSetup] = React.useState(false)
+  const tabIndicatorRef = React.useRef<HTMLSpanElement>(null)
+  const tabsRef = React.useRef<(HTMLButtonElement | null)[]>([])
 
-  // Navigate with optional sub-tab hint (e.g. 'invoices:payment-methods')
-  const navigate = React.useCallback((target: string) => {
-    const [section, subTab] = target.split(':') as [BillingSection, string?]
-    setActiveSection(section)
-    setDismissedSetup(true)
-    if (section === 'invoices' && subTab) {
-      setInvoicesSubTab(subTab as 'invoices' | 'payment-methods' | 'transactions')
+  // Animated underline indicator (useLayoutEffect for sync layout read)
+  React.useLayoutEffect(() => {
+    const activeIdx = sections.findIndex(s => s.id === activeSection)
+    const activeTab = tabsRef.current[activeIdx]
+    const indicator = tabIndicatorRef.current
+    if (activeTab && indicator) {
+      indicator.style.width = `${activeTab.offsetWidth}px`
+      indicator.style.transform = `translateX(${activeTab.offsetLeft}px)`
     }
+  }, [activeSection])
+
+  const navigate = React.useCallback((target: string) => {
+    const section = target.split(':')[0] as BillingSection
+    setActiveSection(section)
   }, [])
 
-  // Show guided setup when no plan AND no payment methods (unless dismissed)
-  const needsSetup = !subscription.id && paymentMethods.length === 0 && !dismissedSetup
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {billingAccounts.length > 0 && onSwitchAccount && (
         <AccountSwitcher
           accounts={billingAccounts}
@@ -185,106 +163,69 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
         />
       )}
 
-      {/* Section nav */}
-      <div className="flex gap-1 rounded-xl bg-bg-card p-1 border border-border">
-        {sections.map(s => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => navigate(s.id)}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              activeSection === s.id && !needsSetup
-                ? 'bg-bg-elevated text-text'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+      {/* ── Underline tab nav ── */}
+      <div className="relative border-b border-white/[0.08]">
+        <div className="flex gap-8">
+          {sections.map((s, i) => (
+            <button
+              key={s.id}
+              ref={el => { tabsRef.current[i] = el }}
+              type="button"
+              onClick={() => setActiveSection(s.id)}
+              className={`relative pb-3 text-sm font-medium transition-colors duration-200 ${
+                activeSection === s.id
+                  ? 'text-white'
+                  : 'text-white/40 hover:text-white/60'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {/* Animated underline */}
+        <span
+          ref={tabIndicatorRef}
+          className="absolute bottom-0 left-0 h-[2px] bg-blue-500 rounded-full transition-all duration-300 ease-out"
+        />
       </div>
 
-      {/* Guided setup (empty state) */}
-      {needsSetup ? (
-        <GuidedSetup
-          hasPaymentMethod={paymentMethods.length > 0}
-          hasSubscription={!!subscription.id}
-          hasSpendAlert={spendAlerts.length > 0}
-          hasCredits={creditBalance > 0}
-          onAddPaymentMethod={() => navigate('invoices:payment-methods')}
-          onPickPlan={() => navigate('overview')}
-          onSetSpendLimit={() => navigate('settings')}
-          onBuyCredits={() => navigate('overview')}
-          onDismiss={() => setDismissedSetup(true)}
+      {/* ── Tab content ── */}
+      {activeSection === 'overview' && (
+        <OverviewDashboard
+          subscription={subscription}
+          plans={plans}
+          paymentMethods={paymentMethods}
+          usage={usage}
+          usageLoading={usageLoading}
+          balance={balance}
+          creditGrants={creditGrants}
+          creditBalance={creditBalance}
+          starterCredit={starterCredit}
+          onAddFunds={onAddFunds ?? (async () => {})}
+          onClaimStarterCredit={props.onClaimStarterCredit}
+          isAdmin={isAdmin}
+          onGrantCredit={onGrantCredit}
+          userEmail={userEmail}
+          invoices={invoices}
+          spendAlerts={spendAlerts}
+          onNavigate={navigate}
+          onUpgrade={onUpgrade}
+          onDowngrade={onDowngrade}
+          onCancel={onCancel}
+          onApplyDiscount={onApplyDiscount}
+          businessProfile={businessProfile}
+          onSaveBusinessProfile={onSaveBusinessProfile}
+          onAddPaymentMethod={onAddPaymentMethod}
+          onRemovePaymentMethod={onRemovePaymentMethod}
+          onSetDefaultPaymentMethod={onSetDefaultPaymentMethod}
         />
-      ) : (
-        <>
-          {activeSection === 'overview' && (
-            <OverviewDashboard
-              subscription={subscription}
-              plans={plans}
-              paymentMethods={paymentMethods}
-              usage={usage}
-              usageLoading={usageLoading}
-              balance={balance}
-              creditGrants={creditGrants}
-              creditBalance={creditBalance}
-              starterCredit={starterCredit}
-              onAddFunds={onAddFunds ?? (async () => {})}
-              onClaimStarterCredit={onClaimStarterCredit}
-              isAdmin={isAdmin}
-              onGrantCredit={onGrantCredit}
-              userEmail={userEmail}
-              invoices={invoices}
-              spendAlerts={spendAlerts}
-              onNavigate={navigate}
-              onUpgrade={onUpgrade}
-              onDowngrade={onDowngrade}
-              onCancel={onCancel}
-              onApplyDiscount={onApplyDiscount}
-            />
-          )}
+      )}
 
-          {activeSection === 'usage' && (
-            <CostExplorer usage={usage} usageLoading={usageLoading} />
-          )}
-
-          {activeSection === 'invoices' && (
-            <InvoicesPayments
-              invoices={invoices}
-              onDownloadInvoice={onDownloadInvoice}
-              paymentMethods={paymentMethods}
-              onAddPaymentMethod={onAddPaymentMethod}
-              onRemovePaymentMethod={onRemovePaymentMethod}
-              onSetDefaultPaymentMethod={onSetDefaultPaymentMethod}
-              transactions={transactions}
-              transactionsLoading={transactionsLoading}
-              defaultSubTab={invoicesSubTab}
-            />
-          )}
-
-          {activeSection === 'settings' && (
-            <BillingSettings
-              spendAlerts={spendAlerts}
-              onCreateSpendAlert={onCreateSpendAlert}
-              onUpdateSpendAlert={onUpdateSpendAlert}
-              onDeleteSpendAlert={onDeleteSpendAlert}
-              accountMembers={accountMembers}
-              userRole={userRole}
-              onInviteMember={onInviteMember}
-              onChangeMemberRole={onChangeMemberRole}
-              onRemoveMember={onRemoveMember}
-              businessProfile={businessProfile}
-              onSaveBusinessProfile={onSaveBusinessProfile}
-              taxSettings={taxSettings}
-              complianceItems={complianceItems}
-              onToggleAutomaticTax={onToggleAutomaticTax}
-              currentSupportTier={currentSupportTier}
-              onSubscribeSupport={onSubscribeSupport}
-              discount={subscription.discount}
-              onApplyDiscount={onApplyDiscount}
-            />
-          )}
-        </>
+      {activeSection === 'invoices' && (
+        <InvoicesPayments
+          invoices={invoices}
+          onDownloadInvoice={onDownloadInvoice}
+        />
       )}
     </div>
   )

@@ -2,7 +2,7 @@
 
 import type { Subscription, SubscriptionPlan, PaymentMethod } from './types'
 
-export type BillingSection = 'overview' | 'usage' | 'invoices' | 'settings'
+export type BillingSection = 'overview' | 'invoices'
 
 export interface StatusBarProps {
   subscription: Subscription
