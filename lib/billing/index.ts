@@ -41,3 +41,21 @@ export type { AccountMembersProps } from './account-members'
 
 export { BillingWorkspace } from './billing-workspace'
 export type { BillingWorkspaceProps } from './billing-workspace'
+
+export { StatusBar } from './status-bar'
+export type { StatusBarProps, BillingSection } from './status-bar'
+
+export { OverviewDashboard } from './overview-dashboard'
+export type { OverviewDashboardProps } from './overview-dashboard'
+
+export { CostExplorer } from './cost-explorer'
+export type { CostExplorerProps } from './cost-explorer'
+
+export { InvoicesPayments } from './invoices-payments'
+export type { InvoicesPaymentsProps } from './invoices-payments'
+
+export { BillingSettings } from './billing-settings'
+export type { BillingSettingsProps } from './billing-settings'
+
+export { GuidedSetup } from './guided-setup'
+export type { GuidedSetupProps } from './guided-setup'

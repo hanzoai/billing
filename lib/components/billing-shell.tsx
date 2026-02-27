@@ -24,7 +24,6 @@ import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
-import { BalancePanel } from './balance-panel'
 import { ThemeToggle } from '@/lib/theme/theme-toggle'
 
 interface BillingShellProps {
@@ -648,17 +647,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
           </div>
         )}
 
-        <BalancePanel
-          balance={balance}
-          isAdmin={admin}
-          userEmail={user.email}
-          starterCredit={creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null}
-          onAddFunds={handleAddFunds}
-          onGrantCredit={admin ? handleGrantCredit : undefined}
-        />
-
-        <div className="mt-6">
-          <BillingWorkspace
+        <BillingWorkspace
+            balance={balance}
+            isAdmin={admin}
+            userEmail={user.email}
+            starterCredit={creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null}
+            onAddFunds={handleAddFunds}
+            onGrantCredit={admin ? handleGrantCredit : undefined}
             subscription={subscription}
             plans={plans}
             paymentMethods={paymentMethods}
@@ -698,7 +693,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onClaimStarterCredit={handleClaimStarterCredit}
             onSubscribeSupport={handleSubscribeSupport}
           />
-        </div>
       </div>
 
       {/* Footer */}

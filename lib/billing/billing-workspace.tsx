@@ -2,19 +2,13 @@
 
 import * as React from 'react'
 
-import { InvoiceManager } from './invoice-manager'
-import { PaymentMethodManager } from './payment-manager'
-import { SubscriptionPortal } from './subscription-portal'
-import { BusinessProfilePanel } from './business-profile-panel'
-import { TaxCompliancePanel } from './tax-compliance-panel'
-import { SpendAlertsPanel } from './spend-alerts'
-import { UsagePanel } from './usage-panel'
-import { CreditsPanel } from './credits-panel'
-import { TransactionsPanel } from './transactions-panel'
-import { PromotionsPanel } from './promotions-panel'
-import { SupportTiersPanel } from './support-tiers-panel'
 import { AccountSwitcher } from './account-switcher'
-import { AccountMembers } from './account-members'
+import { OverviewDashboard } from './overview-dashboard'
+import { CostExplorer } from './cost-explorer'
+import { InvoicesPayments } from './invoices-payments'
+import { BillingSettings } from './billing-settings'
+import { GuidedSetup } from './guided-setup'
+import type { BillingSection } from './status-bar'
 import type {
   BillingAccount,
   BillingAccountMember,
@@ -35,20 +29,7 @@ import type {
   RetentionOffer,
   UsageSummary,
 } from './types'
-
-type WorkspaceTab =
-  | 'overview'
-  | 'usage'
-  | 'credits'
-  | 'payment'
-  | 'invoices'
-  | 'transactions'
-  | 'alerts'
-  | 'promotions'
-  | 'support'
-  | 'business'
-  | 'compliance'
-  | 'team'
+import type { Balance } from '../commerce-client'
 
 export interface BillingWorkspaceProps {
   subscription: Subscription
@@ -69,9 +50,17 @@ export interface BillingWorkspaceProps {
   transactions?: TransactionRecord[]
   transactionsLoading?: boolean
   currentSupportTier?: string
-  defaultTab?: WorkspaceTab
+  defaultTab?: BillingSection
 
-  // Multi-billing-account props
+  // Overview-specific (moved from shell)
+  balance?: Balance | null
+  isAdmin?: boolean
+  userEmail?: string
+  starterCredit?: CreditGrant | null
+  onAddFunds?: (amount: number) => Promise<void>
+  onGrantCredit?: (email: string, amount: number) => Promise<void>
+
+  // Multi-billing-account
   billingAccounts?: BillingAccount[]
   activeBillingAccountId?: string | null
   onSwitchAccount?: (accountId: string) => void
@@ -104,30 +93,19 @@ export interface BillingWorkspaceProps {
   onSubscribeSupport?: (tierId: string) => Promise<void>
 }
 
-const tabs: Array<{ id: WorkspaceTab; label: string }> = [
+const sections: Array<{ id: BillingSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
-  { id: 'usage', label: 'Usage' },
-  { id: 'credits', label: 'Credits' },
-  { id: 'payment', label: 'Payment methods' },
-  { id: 'invoices', label: 'Invoices' },
-  { id: 'transactions', label: 'Transactions' },
-  { id: 'alerts', label: 'Spend alerts' },
-  { id: 'promotions', label: 'Promotions' },
-  { id: 'support', label: 'Support' },
-  { id: 'business', label: 'Business info' },
-  { id: 'compliance', label: 'Tax & compliance' },
-  { id: 'team', label: 'Team' },
+  { id: 'usage', label: 'Usage & Costs' },
+  { id: 'invoices', label: 'Invoices & Payments' },
+  { id: 'settings', label: 'Settings' },
 ]
 
 export function BillingWorkspace(props: BillingWorkspaceProps) {
   const {
     subscription,
     plans,
-    usageMetrics,
-    retentionOffers,
-    subscriptionHistory,
-    paymentMethods,
-    invoices,
+    paymentMethods = [],
+    invoices = [],
     businessProfile,
     taxSettings,
     complianceItems,
@@ -140,6 +118,13 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     transactionsLoading = false,
     currentSupportTier,
     defaultTab = 'overview',
+
+    balance = null,
+    isAdmin = false,
+    userEmail = '',
+    starterCredit = null,
+    onAddFunds,
+    onGrantCredit,
 
     billingAccounts = [],
     activeBillingAccountId = null,
@@ -154,7 +139,6 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     onUpgrade,
     onDowngrade,
     onCancel,
-    onAcceptOffer,
     onApplyDiscount,
 
     onAddPaymentMethod,
@@ -173,10 +157,14 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     onSubscribeSupport,
   } = props
 
-  const [activeTab, setActiveTab] = React.useState<WorkspaceTab>(defaultTab)
+  const [activeSection, setActiveSection] = React.useState<BillingSection>(defaultTab)
+  const [dismissedSetup, setDismissedSetup] = React.useState(false)
+
+  // Show guided setup when no plan AND no payment methods (unless dismissed)
+  const needsSetup = !subscription.id && paymentMethods.length === 0 && !dismissedSetup
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {billingAccounts.length > 0 && onSwitchAccount && (
         <AccountSwitcher
           accounts={billingAccounts}
@@ -186,122 +174,106 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
         />
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-bg-card">
-        <div className="border-b border-border px-4 py-4">
-          <h2 className="text-2xl font-semibold text-text">Billing</h2>
-          <p className="text-sm text-text-muted">
-            Manage your subscription, payments, usage, invoices, and compliance from one place.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 p-3">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                activeTab === tab.id
-                  ? 'bg-text text-bg'
-                  : 'text-text-muted hover:bg-bg-elevated hover:text-text'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* Section nav */}
+      <div className="flex gap-1 rounded-xl bg-bg-card p-1 border border-border">
+        {sections.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => { setActiveSection(s.id); setDismissedSetup(true) }}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              activeSection === s.id && !needsSetup
+                ? 'bg-bg-elevated text-text'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'overview' ? (
-        <SubscriptionPortal
-          subscription={subscription}
-          availablePlans={plans}
-          usageMetrics={usageMetrics}
-          retentionOffers={retentionOffers}
-          subscriptionHistory={subscriptionHistory}
-          onUpgrade={onUpgrade}
-          onDowngrade={onDowngrade}
-          onCancel={onCancel}
-          onAcceptOffer={onAcceptOffer}
-          onApplyDiscount={onApplyDiscount}
+      {/* Guided setup (empty state) */}
+      {needsSetup ? (
+        <GuidedSetup
+          hasPaymentMethod={paymentMethods.length > 0}
+          hasSubscription={!!subscription.id}
+          hasSpendAlert={spendAlerts.length > 0}
+          hasCredits={creditBalance > 0}
+          onAddPaymentMethod={() => { setActiveSection('invoices'); setDismissedSetup(true) }}
+          onPickPlan={() => { setActiveSection('overview'); setDismissedSetup(true) }}
+          onSetSpendLimit={() => { setActiveSection('settings'); setDismissedSetup(true) }}
+          onBuyCredits={() => { setActiveSection('overview'); setDismissedSetup(true) }}
+          onDismiss={() => setDismissedSetup(true)}
         />
-      ) : null}
+      ) : (
+        <>
+          {activeSection === 'overview' && (
+            <OverviewDashboard
+              subscription={subscription}
+              plans={plans}
+              paymentMethods={paymentMethods}
+              usage={usage}
+              usageLoading={usageLoading}
+              balance={balance}
+              creditGrants={creditGrants}
+              creditBalance={creditBalance}
+              starterCredit={starterCredit}
+              onAddFunds={onAddFunds ?? (async () => {})}
+              onClaimStarterCredit={onClaimStarterCredit}
+              isAdmin={isAdmin}
+              onGrantCredit={onGrantCredit}
+              userEmail={userEmail}
+              invoices={invoices}
+              spendAlerts={spendAlerts}
+              onNavigate={setActiveSection}
+              onUpgrade={onUpgrade}
+              onDowngrade={onDowngrade}
+              onCancel={onCancel}
+              onApplyDiscount={onApplyDiscount}
+            />
+          )}
 
-      {activeTab === 'usage' ? (
-        <UsagePanel usage={usage} loading={usageLoading} />
-      ) : null}
+          {activeSection === 'usage' && (
+            <CostExplorer usage={usage} usageLoading={usageLoading} />
+          )}
 
-      {activeTab === 'credits' ? (
-        <CreditsPanel
-          creditGrants={creditGrants}
-          creditBalance={creditBalance}
-          onClaimStarterCredit={onClaimStarterCredit}
-        />
-      ) : null}
+          {activeSection === 'invoices' && (
+            <InvoicesPayments
+              invoices={invoices}
+              onDownloadInvoice={onDownloadInvoice}
+              paymentMethods={paymentMethods}
+              onAddPaymentMethod={onAddPaymentMethod}
+              onRemovePaymentMethod={onRemovePaymentMethod}
+              onSetDefaultPaymentMethod={onSetDefaultPaymentMethod}
+              transactions={transactions}
+              transactionsLoading={transactionsLoading}
+            />
+          )}
 
-      {activeTab === 'payment' ? (
-        <PaymentMethodManager
-          paymentMethods={paymentMethods}
-          onAdd={onAddPaymentMethod}
-          onRemove={onRemovePaymentMethod}
-          onSetDefault={onSetDefaultPaymentMethod}
-        />
-      ) : null}
-
-      {activeTab === 'invoices' ? (
-        <InvoiceManager invoices={invoices} onDownload={onDownloadInvoice} />
-      ) : null}
-
-      {activeTab === 'transactions' ? (
-        <TransactionsPanel
-          transactions={transactions}
-          loading={transactionsLoading}
-        />
-      ) : null}
-
-      {activeTab === 'alerts' ? (
-        <SpendAlertsPanel
-          alerts={spendAlerts}
-          onCreateAlert={onCreateSpendAlert}
-          onUpdateAlert={onUpdateSpendAlert}
-          onDeleteAlert={onDeleteSpendAlert}
-        />
-      ) : null}
-
-      {activeTab === 'promotions' ? (
-        <PromotionsPanel
-          discount={subscription.discount}
-          onApplyDiscount={onApplyDiscount}
-        />
-      ) : null}
-
-      {activeTab === 'support' ? (
-        <SupportTiersPanel
-          currentTier={currentSupportTier}
-          onSubscribe={onSubscribeSupport}
-        />
-      ) : null}
-
-      {activeTab === 'business' ? (
-        <BusinessProfilePanel profile={businessProfile} onSave={onSaveBusinessProfile} />
-      ) : null}
-
-      {activeTab === 'compliance' ? (
-        <TaxCompliancePanel
-          taxSettings={taxSettings}
-          complianceItems={complianceItems}
-          onToggleAutomaticTax={onToggleAutomaticTax}
-        />
-      ) : null}
-
-      {activeTab === 'team' ? (
-        <AccountMembers
-          members={accountMembers}
-          userRole={userRole}
-          onInvite={onInviteMember}
-          onChangeRole={onChangeMemberRole}
-          onRemove={onRemoveMember}
-        />
-      ) : null}
+          {activeSection === 'settings' && (
+            <BillingSettings
+              spendAlerts={spendAlerts}
+              onCreateSpendAlert={onCreateSpendAlert}
+              onUpdateSpendAlert={onUpdateSpendAlert}
+              onDeleteSpendAlert={onDeleteSpendAlert}
+              accountMembers={accountMembers}
+              userRole={userRole}
+              onInviteMember={onInviteMember}
+              onChangeMemberRole={onChangeMemberRole}
+              onRemoveMember={onRemoveMember}
+              businessProfile={businessProfile}
+              onSaveBusinessProfile={onSaveBusinessProfile}
+              taxSettings={taxSettings}
+              complianceItems={complianceItems}
+              onToggleAutomaticTax={onToggleAutomaticTax}
+              currentSupportTier={currentSupportTier}
+              onSubscribeSupport={onSubscribeSupport}
+              discount={subscription.discount}
+              onApplyDiscount={onApplyDiscount}
+            />
+          )}
+        </>
+      )}
     </div>
   )
 }
