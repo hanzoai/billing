@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { InvoiceManager } from './invoice-manager'
 import { PaymentMethodManager } from './payment-manager'
 import { TransactionsPanel } from './transactions-panel'
@@ -28,6 +28,11 @@ const subTabs: Array<{ id: SubTab; label: string }> = [
 
 export function InvoicesPayments(props: InvoicesPaymentsProps) {
   const [active, setActive] = useState<SubTab>(props.defaultSubTab ?? 'invoices')
+
+  // Sync when parent changes the default sub-tab
+  useEffect(() => {
+    if (props.defaultSubTab) setActive(props.defaultSubTab)
+  }, [props.defaultSubTab])
 
   return (
     <div>

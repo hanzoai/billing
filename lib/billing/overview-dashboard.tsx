@@ -33,7 +33,7 @@ export interface OverviewDashboardProps {
   userEmail: string
   invoices: Invoice[]
   spendAlerts: SpendAlert[]
-  onNavigate: (section: BillingSection) => void
+  onNavigate: (target: string) => void
   onUpgrade?: (planId: string) => Promise<void>
   onDowngrade?: (planId: string) => Promise<void>
   onCancel?: (reason: string, feedback?: string) => Promise<void>

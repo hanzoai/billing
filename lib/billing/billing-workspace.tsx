@@ -158,7 +158,18 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
   } = props
 
   const [activeSection, setActiveSection] = React.useState<BillingSection>(defaultTab)
+  const [invoicesSubTab, setInvoicesSubTab] = React.useState<'invoices' | 'payment-methods' | 'transactions'>('invoices')
   const [dismissedSetup, setDismissedSetup] = React.useState(false)
+
+  // Navigate with optional sub-tab hint (e.g. 'invoices:payment-methods')
+  const navigate = React.useCallback((target: string) => {
+    const [section, subTab] = target.split(':') as [BillingSection, string?]
+    setActiveSection(section)
+    setDismissedSetup(true)
+    if (section === 'invoices' && subTab) {
+      setInvoicesSubTab(subTab as 'invoices' | 'payment-methods' | 'transactions')
+    }
+  }, [])
 
   // Show guided setup when no plan AND no payment methods (unless dismissed)
   const needsSetup = !subscription.id && paymentMethods.length === 0 && !dismissedSetup
@@ -180,7 +191,7 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
           <button
             key={s.id}
             type="button"
-            onClick={() => { setActiveSection(s.id); setDismissedSetup(true) }}
+            onClick={() => navigate(s.id)}
             className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
               activeSection === s.id && !needsSetup
                 ? 'bg-bg-elevated text-text'
@@ -199,10 +210,10 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
           hasSubscription={!!subscription.id}
           hasSpendAlert={spendAlerts.length > 0}
           hasCredits={creditBalance > 0}
-          onAddPaymentMethod={() => { setActiveSection('invoices'); setDismissedSetup(true) }}
-          onPickPlan={() => { setActiveSection('overview'); setDismissedSetup(true) }}
-          onSetSpendLimit={() => { setActiveSection('settings'); setDismissedSetup(true) }}
-          onBuyCredits={() => { setActiveSection('overview'); setDismissedSetup(true) }}
+          onAddPaymentMethod={() => navigate('invoices:payment-methods')}
+          onPickPlan={() => navigate('overview')}
+          onSetSpendLimit={() => navigate('settings')}
+          onBuyCredits={() => navigate('overview')}
           onDismiss={() => setDismissedSetup(true)}
         />
       ) : (
@@ -225,7 +236,7 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
               userEmail={userEmail}
               invoices={invoices}
               spendAlerts={spendAlerts}
-              onNavigate={setActiveSection}
+              onNavigate={navigate}
               onUpgrade={onUpgrade}
               onDowngrade={onDowngrade}
               onCancel={onCancel}
@@ -247,6 +258,7 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
               onSetDefaultPaymentMethod={onSetDefaultPaymentMethod}
               transactions={transactions}
               transactionsLoading={transactionsLoading}
+              defaultSubTab={invoicesSubTab}
             />
           )}
 

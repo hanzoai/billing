@@ -10,7 +10,7 @@ export interface StatusBarProps {
   mtdSpend: number
   currency: string
   paymentMethods: PaymentMethod[]
-  onNavigate: (section: BillingSection) => void
+  onNavigate: (target: string) => void
 }
 
 function fmt(amount: number, currency = 'usd') {
@@ -31,10 +31,10 @@ export function StatusBar({ subscription, currentPlan, mtdSpend, currency, payme
 
   // Dynamic CTA
   let ctaLabel: string
-  let ctaSection: BillingSection
+  let ctaSection: string
   if (!hasPm) {
     ctaLabel = 'Add payment method'
-    ctaSection = 'invoices'
+    ctaSection = 'invoices:payment-methods'
   } else if (!hasActivePlan) {
     ctaLabel = 'Choose a plan'
     ctaSection = 'overview'
