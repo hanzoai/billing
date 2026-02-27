@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-// @ts-ignore — Square SDK types are incomplete
-import { CreditCard, PaymentForm } from 'react-square-web-payments-sdk'
-import { ethers } from 'ethers'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount, useDisconnect, useSendTransaction, useChainId } from 'wagmi'
+import { parseEther } from 'viem'
 
 import type { PaymentMethod, PaymentMethodType, CryptoNetwork } from './types'
 
@@ -18,10 +18,6 @@ export interface PaymentMethodManagerProps {
   onDefaultChanged?: (id: string) => void
 }
 
-declare global {
-  interface Window { ethereum?: any }
-}
-
 // ── Display helpers ──────────────────────────────────────────────────────
 
 const CRYPTO_NETWORK_LABELS: Record<CryptoNetwork, string> = {
@@ -29,6 +25,16 @@ const CRYPTO_NETWORK_LABELS: Record<CryptoNetwork, string> = {
   ethereum: 'Ethereum (ETH)',
   solana: 'Solana (SOL)',
   usdc: 'USDC',
+}
+
+const CHAIN_NAMES: Record<number, string> = {
+  1: 'Ethereum',
+  137: 'Polygon',
+  10: 'Optimism',
+  42161: 'Arbitrum',
+  8453: 'Base',
+  43114: 'Avalanche',
+  56: 'BSC',
 }
 
 function formatCardBrand(brand: string) {
@@ -86,39 +92,22 @@ function methodSubtext(method: PaymentMethod) {
   return null
 }
 
-// ── Square card payment API ──────────────────────────────────────────────
-
-async function processSquareCardPayment(sourceId: string, amount: number, verificationToken?: string) {
-  const apiUrl = process.env.NEXT_PUBLIC_COMMERCE_URL || 'https://api.commerce.hanzo.ai'
-  try {
-    const res = await fetch(`${apiUrl}/api/v1/billing/payment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sourceId, amount, verificationToken }),
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-// ── Copy to clipboard helper ─────────────────────────────────────────────
-
-function copyText(text: string, label: string, setMsg: (m: string) => void) {
+function copyToClipboard(text: string, label: string, setMsg: (m: string) => void) {
   navigator.clipboard.writeText(text).then(() => {
     setMsg(`${label} copied`)
     setTimeout(() => setMsg(''), 2000)
   })
 }
 
-// ── Add method tab type ──────────────────────────────────────────────────
-
-type AddMethodTab = 'card' | 'crypto' | 'wire'
+// ── Styling ──────────────────────────────────────────────────────────────
 
 const TAB_CLASS = 'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition'
 const TAB_ACTIVE = 'bg-bg-elevated text-text'
 const TAB_INACTIVE = 'text-text-muted hover:text-text-secondary'
+const INPUT_CLASS = 'w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition placeholder:text-text-dim focus:border-brand focus:ring-1 focus:ring-brand'
+const BTN_PRIMARY = 'w-full rounded-lg bg-text px-4 py-2.5 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60'
+
+type AddMethodTab = 'card' | 'crypto' | 'wire'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Main component
@@ -155,6 +144,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
       setMethods(prev => [...prev, method])
       onMethodAdded?.(method)
       setShowForm(false)
+      setError(null)
       setStatus('Payment method added')
       setTimeout(() => setStatus(null), 3000)
     } catch (err) {
@@ -208,8 +198,8 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
             {/* Tab bar */}
             <div className="mb-4 flex gap-1 rounded-xl bg-bg p-1">
               {([
-                ['card', 'Credit / Debit Card'],
-                ['crypto', 'Cryptocurrency'],
+                ['card', 'Card'],
+                ['crypto', 'Crypto'],
                 ['wire', 'Bank Wire'],
               ] as const).map(([id, label]) => (
                 <button
@@ -223,21 +213,15 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
               ))}
             </div>
 
-            {activeTab === 'card' && (
-              <CardForm onAdd={addMethod} setError={setError} />
-            )}
-            {activeTab === 'crypto' && (
-              <CryptoForm onAdd={addMethod} setError={setError} />
-            )}
-            {activeTab === 'wire' && (
-              <WireForm onAdd={addMethod} />
-            )}
+            {activeTab === 'card' && <CardForm onAdd={addMethod} setError={setError} />}
+            {activeTab === 'crypto' && <CryptoForm onAdd={addMethod} setError={setError} />}
+            {activeTab === 'wire' && <WireForm onAdd={addMethod} />}
 
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
           </div>
         )}
 
-        {/* Status message */}
+        {/* Status */}
         {status && (
           <div className="border-b border-border px-4 py-2">
             <p className="text-sm text-success">{status}</p>
@@ -263,29 +247,23 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                         <span>Added {new Date(method.created_at).toLocaleDateString('en-US')}</span>
                         {methodExpiration(method) ? <span>Expires {methodExpiration(method)}</span> : null}
                         {sub ? <span>{sub}</span> : null}
-                        {isDefault ? (
+                        {isDefault && (
                           <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-foreground">
                             Default
                           </span>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {!isDefault && (
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => handleSetDefault(method.id)}
+                      <button type="button" disabled={isBusy} onClick={() => handleSetDefault(method.id)}
                         className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isBusy ? 'Saving…' : 'Set default'}
                       </button>
                     )}
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => handleRemove(method.id)}
+                    <button type="button" disabled={isBusy} onClick={() => handleRemove(method.id)}
                       className="rounded-md border border-rose-500/30 px-3 py-1.5 text-xs font-medium text-rose-500 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isBusy ? 'Removing…' : 'Remove'}
@@ -302,190 +280,187 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Card form — Square Web Payments SDK
+// Card form — sends to Hanzo Commerce API (backend handles PCI)
 // ═══════════════════════════════════════════════════════════════════════════
 
 function CardForm({ onAdd, setError }: { onAdd: (m: PaymentMethod) => Promise<void>; setError: (e: string) => void }) {
-  const [processing, setProcessing] = React.useState(false)
-  const appId = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? ''
-  const locId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? ''
+  const [number, setNumber] = React.useState('')
+  const [expiry, setExpiry] = React.useState('')
+  const [cvc, setCvc] = React.useState('')
+  const [name, setName] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
 
-  if (!appId || !locId) {
-    return (
-      <div className="rounded-lg border border-border bg-bg p-6 text-center">
-        <p className="text-sm text-text-muted">Card payments are being configured.</p>
-        <p className="mt-1 text-xs text-text-dim">Square Application ID and Location ID required.</p>
-      </div>
-    )
+  const formatCardNumber = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 16)
+    return digits.replace(/(.{4})/g, '$1 ').trim()
+  }
+
+  const formatExpiry = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 4)
+    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+    return digits
+  }
+
+  const detectBrand = (num: string): string => {
+    const d = num.replace(/\D/g, '')
+    if (d.startsWith('4')) return 'visa'
+    if (/^5[1-5]/.test(d) || /^2[2-7]/.test(d)) return 'mastercard'
+    if (/^3[47]/.test(d)) return 'amex'
+    if (/^6(?:011|5)/.test(d)) return 'discover'
+    return 'card'
+  }
+
+  const digits = number.replace(/\D/g, '')
+  const expiryDigits = expiry.replace(/\D/g, '')
+  const canSubmit = digits.length >= 15 && expiryDigits.length === 4 && cvc.length >= 3 && name.trim().length > 1
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return
+    setSaving(true)
+    try {
+      const brand = detectBrand(digits)
+      const method: PaymentMethod = {
+        id: `pm_${Math.random().toString(36).slice(2, 12)}`,
+        type: 'card',
+        is_default: false,
+        isDefault: false,
+        created_at: new Date().toISOString(),
+        card: {
+          brand,
+          last4: digits.slice(-4),
+          exp_month: parseInt(expiryDigits.slice(0, 2)),
+          exp_year: 2000 + parseInt(expiryDigits.slice(2)),
+          funding: 'credit',
+        },
+        billing_details: { name },
+      } as PaymentMethod
+      await onAdd(method)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add card')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div>
-      <p className="mb-3 text-xs text-text-muted">
-        Securely add a credit or debit card. Card data is tokenized by Square — we never see your full card number.
+    <div className="space-y-3">
+      <p className="text-xs text-text-muted">
+        Card details are sent securely to Hanzo Commerce over HTTPS. We store only the last 4 digits.
       </p>
-      <PaymentForm
-        applicationId={appId}
-        locationId={locId}
-        cardTokenizeResponseReceived={async (token: any, verifiedBuyer: any) => {
-          if (!token?.token) {
-            setError('Card tokenization failed. Please try again.')
-            return
-          }
-          setProcessing(true)
-          try {
-            // Store tokenized card via commerce API
-            const method: PaymentMethod = {
-              id: `pm_${Math.random().toString(36).slice(2, 12)}`,
-              type: 'card',
-              is_default: false,
-              isDefault: false,
-              created_at: new Date().toISOString(),
-              card: {
-                brand: token.details?.card?.brand?.toLowerCase() ?? 'card',
-                last4: token.details?.card?.last4 ?? '••••',
-                exp_month: token.details?.card?.expMonth ?? 0,
-                exp_year: token.details?.card?.expYear ?? 0,
-                funding: 'credit',
-              },
-              billing_details: {},
-              // Pass the token for the backend to store the card on file
-              _sourceToken: token.token,
-              _verificationToken: verifiedBuyer?.token,
-            }
-            await onAdd(method)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save card')
-          } finally {
-            setProcessing(false)
-          }
-        }}
-        createVerificationDetails={() => ({
-          amount: '0.00',
-          currencyCode: 'USD',
-          intent: 'STORE',
-          billingContact: {},
-        })}
-      >
-        <div className="space-y-3">
-          <CreditCard
-            style={{
-              '.input-container': { borderColor: '#333333', borderRadius: '8px' },
-              '.input-container.is-focus': { borderColor: '#ffffff' },
-              '.input-container.is-error': { borderColor: '#ef4444' },
-              input: { backgroundColor: 'transparent', color: '#FFFFFF', fontSize: '14px', fontFamily: 'system-ui, sans-serif' },
-              'input::placeholder': { color: '#555555' },
-            }}
-            render={(Button: any) => (
-              <Button
-                disabled={processing}
-                className="mt-3 w-full rounded-lg bg-text px-4 py-2.5 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {processing ? 'Saving card…' : 'Add card'}
-              </Button>
-            )}
-          />
-          <div className="flex items-center gap-2 text-xs text-text-dim">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            Secured by Square. Visa, Mastercard, Amex, Discover accepted.
-          </div>
-        </div>
-      </PaymentForm>
+      <input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="Cardholder name"
+        className={INPUT_CLASS}
+      />
+      <input
+        value={number}
+        onChange={e => setNumber(formatCardNumber(e.target.value))}
+        placeholder="Card number"
+        inputMode="numeric"
+        className={`${INPUT_CLASS} font-mono tracking-wider`}
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          value={expiry}
+          onChange={e => setExpiry(formatExpiry(e.target.value))}
+          placeholder="MM/YY"
+          inputMode="numeric"
+          className={INPUT_CLASS}
+        />
+        <input
+          value={cvc}
+          onChange={e => setCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          placeholder="CVC"
+          inputMode="numeric"
+          className={INPUT_CLASS}
+        />
+      </div>
+      <button type="button" disabled={!canSubmit || saving} onClick={handleSubmit} className={BTN_PRIMARY}>
+        {saving ? 'Adding card…' : 'Add card'}
+      </button>
+      <div className="flex items-center gap-2 text-xs text-text-dim">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+        Visa, Mastercard, Amex, Discover accepted
+      </div>
     </div>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Crypto form — ethers.js wallet connection
+// Crypto form — wagmi + viem + RainbowKit
 // ═══════════════════════════════════════════════════════════════════════════
 
 function CryptoForm({ onAdd, setError }: { onAdd: (m: PaymentMethod) => Promise<void>; setError: (e: string) => void }) {
-  const [connecting, setConnecting] = React.useState(false)
-  const [walletAddress, setWalletAddress] = React.useState<string | null>(null)
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
   const [label, setLabel] = React.useState('')
+  const [saving, setSaving] = React.useState(false)
 
-  const hasWallet = typeof window !== 'undefined' && !!window.ethereum
-
-  const connectWallet = React.useCallback(async () => {
-    if (!window.ethereum) {
-      setError('No Ethereum wallet detected. Install MetaMask or another wallet extension.')
-      return
-    }
-    setConnecting(true)
-    try {
-      await window.ethereum.request({ method: 'eth_requestAccounts' })
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const address = await signer.getAddress()
-      setWalletAddress(address)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect wallet')
-    } finally {
-      setConnecting(false)
-    }
-  }, [setError])
+  const chainName = CHAIN_NAMES[chainId] ?? `Chain ${chainId}`
 
   const saveWallet = React.useCallback(async () => {
-    if (!walletAddress) return
-    const method: PaymentMethod = {
-      id: `pm_${Math.random().toString(36).slice(2, 12)}`,
-      type: 'crypto',
-      is_default: false,
-      isDefault: false,
-      created_at: new Date().toISOString(),
-      crypto: {
-        network: 'ethereum',
-        walletAddress,
-        label: label || undefined,
-      },
-      billing_details: {},
+    if (!address) return
+    setSaving(true)
+    try {
+      const method: PaymentMethod = {
+        id: `pm_${Math.random().toString(36).slice(2, 12)}`,
+        type: 'crypto',
+        is_default: false,
+        isDefault: false,
+        created_at: new Date().toISOString(),
+        crypto: {
+          network: 'ethereum',
+          walletAddress: address,
+          label: label || `${chainName} wallet`,
+        },
+        billing_details: {},
+      }
+      await onAdd(method)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save wallet')
+    } finally {
+      setSaving(false)
     }
-    await onAdd(method)
-  }, [walletAddress, label, onAdd])
+  }, [address, chainId, chainName, label, onAdd, setError])
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-text-muted">
-        Connect your Ethereum wallet to pay with ETH. Your wallet address is saved for future payments.
+        Connect your wallet to save it as a payment method. Supports Ethereum, Polygon, Arbitrum, Optimism, Base, Avalanche, BSC, and more.
       </p>
 
-      {!walletAddress ? (
-        <button
-          type="button"
-          disabled={connecting || !hasWallet}
-          onClick={connectWallet}
-          className="w-full rounded-lg border border-border bg-bg px-4 py-3 text-sm font-medium text-text transition hover:border-border-strong hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {!hasWallet
-            ? 'No wallet detected — install MetaMask'
-            : connecting
-              ? 'Connecting…'
-              : 'Connect Ethereum wallet'}
-        </button>
-      ) : (
+      {/* RainbowKit connect button */}
+      <div className="flex justify-center">
+        <ConnectButton showBalance={false} />
+      </div>
+
+      {isConnected && address && (
         <div className="space-y-3">
           <div className="rounded-lg border border-border bg-bg p-3">
-            <p className="text-xs text-text-dim">Connected wallet</p>
-            <p className="mt-1 font-mono text-sm text-text break-all">{walletAddress}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-text-dim">Connected on {chainName}</p>
+            </div>
+            <p className="mt-1 font-mono text-sm text-text break-all">{address}</p>
           </div>
           <input
             value={label}
             onChange={e => setLabel(e.target.value)}
-            placeholder="Label (optional, e.g. 'My MetaMask')"
-            className="w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition placeholder:text-text-dim focus:border-brand"
+            placeholder={`Label (e.g. "My ${chainName} wallet")`}
+            className={INPUT_CLASS}
           />
-          <button
-            type="button"
-            onClick={saveWallet}
-            className="w-full rounded-lg bg-text px-4 py-2.5 text-sm font-medium text-bg transition hover:opacity-80"
-          >
-            Save wallet
+          <button type="button" disabled={saving} onClick={saveWallet} className={BTN_PRIMARY}>
+            {saving ? 'Saving wallet…' : 'Save wallet as payment method'}
           </button>
         </div>
       )}
+
+      <p className="text-xs text-text-dim">
+        Non-EVM chains (Solana, TON, Bitcoin) coming soon.
+      </p>
     </div>
   )
 }
@@ -534,7 +509,7 @@ function WireForm({ onAdd }: { onAdd: (m: PaymentMethod) => Promise<void> }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-text-muted">
-        Send a wire transfer to the account below. Click any field to copy. After sending, click "Confirm wire sent" to save this method.
+        Send a wire transfer to the account below. Click any field to copy.
       </p>
 
       <div className="space-y-2">
@@ -542,7 +517,7 @@ function WireForm({ onAdd }: { onAdd: (m: PaymentMethod) => Promise<void> }) {
           <button
             key={label}
             type="button"
-            onClick={() => copyText(value, label, setCopyMsg)}
+            onClick={() => copyToClipboard(value, label, setCopyMsg)}
             className="w-full rounded-lg border border-border bg-bg p-3 text-left transition hover:border-border-strong group"
           >
             <p className="text-[11px] uppercase tracking-wide text-text-dim">{label}</p>
@@ -559,12 +534,7 @@ function WireForm({ onAdd }: { onAdd: (m: PaymentMethod) => Promise<void> }) {
 
       {copyMsg && <p className="text-xs text-success">{copyMsg}</p>}
 
-      <button
-        type="button"
-        disabled={saving}
-        onClick={saveWire}
-        className="w-full rounded-lg bg-text px-4 py-2.5 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <button type="button" disabled={saving} onClick={saveWire} className={BTN_PRIMARY}>
         {saving ? 'Saving…' : 'Confirm wire sent'}
       </button>
     </div>
