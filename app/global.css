@@ -1,23 +1,23 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Brand (constant in both modes) */
-  --color-brand: #fd4444;
-  --color-brand-foreground: #ffffff;
-  --color-brand-hover: #e03e3e;
-  --color-brand-muted: rgba(253, 68, 68, 0.1);
+  /* Brand — white in dark mode, dark in light mode (overridden below) */
+  --color-brand: #ffffff;
+  --color-brand-foreground: #000000;
+  --color-brand-hover: #d4d4d4;
+  --color-brand-muted: rgba(255, 255, 255, 0.1);
 
-  /* Semantic tokens — dark mode default (matches docs site) */
-  --color-bg: hsl(0, 0%, 2%);
-  --color-bg-card: hsl(0, 0%, 4%);
-  --color-bg-elevated: hsl(0, 0%, 7%);
-  --color-bg-input: hsl(0, 0%, 6%);
-  --color-border: hsla(0, 0%, 40%, 0.2);
-  --color-border-strong: hsla(0, 0%, 40%, 0.4);
-  --color-text: hsl(0, 0%, 96%);
-  --color-text-secondary: hsl(0, 0%, 70%);
-  --color-text-muted: hsl(0, 0%, 55%);
-  --color-text-dim: hsl(0, 0%, 40%);
+  /* Semantic tokens — dark mode default (matches hanzo.id) */
+  --color-bg: #0a0a0f;
+  --color-bg-card: #141419;
+  --color-bg-elevated: #1a1a22;
+  --color-bg-input: #0a0a0f;
+  --color-border: #333333;
+  --color-border-strong: #555555;
+  --color-text: #ffffff;
+  --color-text-secondary: #aaaaaa;
+  --color-text-muted: #888888;
+  --color-text-dim: #555555;
 
   /* Status colors */
   --color-success: #22c55e;
@@ -48,6 +48,12 @@ html.light {
   --color-text-muted: hsl(0, 0%, 45%);
   --color-text-dim: hsl(0, 0%, 60%);
 
+  /* Brand inverts to dark in light mode so logo/buttons remain visible */
+  --color-brand: #171717;
+  --color-brand-foreground: #ffffff;
+  --color-brand-hover: #404040;
+  --color-brand-muted: rgba(23, 23, 23, 0.1);
+
   color-scheme: light;
 }
 
@@ -57,7 +63,12 @@ body {
 }
 
 ::selection {
-  background-color: rgba(253, 68, 68, 0.3);
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+html.light ::selection {
+  background-color: rgba(23, 23, 23, 0.15);
   color: white;
 }
 

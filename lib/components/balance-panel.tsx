@@ -107,7 +107,7 @@ export function BalancePanel({
               Account Balance
             </p>
             <p className="mt-2 text-4xl font-bold text-text">
-              {balance ? formatCurrency(balance.available / 100, currency) : '—'}
+              {formatCurrency((balance?.available ?? 0) / 100, currency)}
             </p>
             {balance && balance.holds > 0 && (
               <p className="mt-1 text-sm text-text-muted">
@@ -126,12 +126,10 @@ export function BalancePanel({
             )}
           </div>
           <div className="flex items-center gap-3">
-            {balance && (
-              <div className="text-right text-sm text-text-muted">
-                <p>Total: {formatCurrency(balance.balance / 100, currency)}</p>
-                <p>Available: {formatCurrency(balance.available / 100, currency)}</p>
-              </div>
-            )}
+            <div className="text-right text-sm text-text-muted">
+              <p>Total: {formatCurrency((balance?.balance ?? 0) / 100, currency)}</p>
+              <p>Available: {formatCurrency((balance?.available ?? 0) / 100, currency)}</p>
+            </div>
             <button
               type="button"
               onClick={() => setShowAddFunds(!showAddFunds)}
