@@ -232,6 +232,27 @@ export type CommerceMeterEventsSummary = {
   period?: { start?: string; end?: string }
 }
 
+export type CommerceBillingAccount = {
+  id?: string
+  name?: string
+  orgId?: string
+  orgName?: string
+  balance?: number
+  currency?: string
+  plan?: string
+  role?: string
+  createdAt?: string
+}
+
+export type CommerceBillingAccountMember = {
+  id?: string
+  userId?: string
+  email?: string
+  name?: string
+  role?: string
+  addedAt?: string
+}
+
 export type CommercePortalOverview = {
   customerId?: string
   balance?: Balance
@@ -532,5 +553,49 @@ export class Commerce {
         params: { userId }, token,
       })
     } catch { return { userId, meters: [], period: {} } }
+  }
+
+  // ── Billing Accounts ──────────────────────────────────────────────────
+
+  async listBillingAccounts(token?: string): Promise<CommerceBillingAccount[]> {
+    try {
+      return await this.request<CommerceBillingAccount[]>('/api/v1/billing-accounts', { token })
+    } catch { return [] }
+  }
+
+  async getBillingAccount(id: string, token?: string): Promise<CommerceBillingAccount | null> {
+    try {
+      return await this.request<CommerceBillingAccount>(`/api/v1/billing-accounts/${id}`, { token })
+    } catch { return null }
+  }
+
+  async createBillingAccount(data: { name: string; orgId: string }, token?: string): Promise<CommerceBillingAccount> {
+    return this.request<CommerceBillingAccount>('/api/v1/billing-accounts', {
+      method: 'POST', body: data, token,
+    })
+  }
+
+  async listAccountMembers(accountId: string, token?: string): Promise<CommerceBillingAccountMember[]> {
+    try {
+      return await this.request<CommerceBillingAccountMember[]>(`/api/v1/billing-accounts/${accountId}/members`, { token })
+    } catch { return [] }
+  }
+
+  async addAccountMember(accountId: string, data: { email: string; role: string }, token?: string): Promise<CommerceBillingAccountMember> {
+    return this.request<CommerceBillingAccountMember>(`/api/v1/billing-accounts/${accountId}/members`, {
+      method: 'POST', body: data, token,
+    })
+  }
+
+  async updateMemberRole(accountId: string, memberId: string, role: string, token?: string): Promise<CommerceBillingAccountMember> {
+    return this.request<CommerceBillingAccountMember>(`/api/v1/billing-accounts/${accountId}/members/${memberId}`, {
+      method: 'PATCH', body: { role }, token,
+    })
+  }
+
+  async removeAccountMember(accountId: string, memberId: string, token?: string): Promise<void> {
+    await this.request<void>(`/api/v1/billing-accounts/${accountId}/members/${memberId}`, {
+      method: 'DELETE', token,
+    })
   }
 }

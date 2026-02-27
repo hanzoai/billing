@@ -13,8 +13,13 @@ import { CreditsPanel } from './credits-panel'
 import { TransactionsPanel } from './transactions-panel'
 import { PromotionsPanel } from './promotions-panel'
 import { SupportTiersPanel } from './support-tiers-panel'
+import { AccountSwitcher } from './account-switcher'
+import { AccountMembers } from './account-members'
 import type {
+  BillingAccount,
+  BillingAccountMember,
   BillingMetric,
+  BillingRole,
   BusinessProfile,
   ComplianceItem,
   CreditGrant,
@@ -43,6 +48,7 @@ type WorkspaceTab =
   | 'support'
   | 'business'
   | 'compliance'
+  | 'team'
 
 export interface BillingWorkspaceProps {
   subscription: Subscription
@@ -64,6 +70,17 @@ export interface BillingWorkspaceProps {
   transactionsLoading?: boolean
   currentSupportTier?: string
   defaultTab?: WorkspaceTab
+
+  // Multi-billing-account props
+  billingAccounts?: BillingAccount[]
+  activeBillingAccountId?: string | null
+  onSwitchAccount?: (accountId: string) => void
+  onCreateBillingAccount?: () => void
+  userRole?: BillingRole
+  accountMembers?: BillingAccountMember[]
+  onInviteMember?: (email: string, role: BillingRole) => Promise<void>
+  onChangeMemberRole?: (memberId: string, role: BillingRole) => Promise<void>
+  onRemoveMember?: (memberId: string) => Promise<void>
 
   onUpgrade?: (planId: string) => Promise<void>
   onDowngrade?: (planId: string) => Promise<void>
@@ -99,6 +116,7 @@ const tabs: Array<{ id: WorkspaceTab; label: string }> = [
   { id: 'support', label: 'Support' },
   { id: 'business', label: 'Business info' },
   { id: 'compliance', label: 'Tax & compliance' },
+  { id: 'team', label: 'Team' },
 ]
 
 export function BillingWorkspace(props: BillingWorkspaceProps) {
@@ -122,6 +140,16 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
     transactionsLoading = false,
     currentSupportTier,
     defaultTab = 'overview',
+
+    billingAccounts = [],
+    activeBillingAccountId = null,
+    onSwitchAccount,
+    onCreateBillingAccount,
+    userRole = 'owner',
+    accountMembers = [],
+    onInviteMember,
+    onChangeMemberRole,
+    onRemoveMember,
 
     onUpgrade,
     onDowngrade,
@@ -149,6 +177,15 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
 
   return (
     <div className="space-y-4">
+      {billingAccounts.length > 0 && onSwitchAccount && (
+        <AccountSwitcher
+          accounts={billingAccounts}
+          activeAccountId={activeBillingAccountId}
+          onSwitch={onSwitchAccount}
+          onCreate={onCreateBillingAccount}
+        />
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-border bg-bg-card">
         <div className="border-b border-border px-4 py-4">
           <h2 className="text-2xl font-semibold text-text">Billing</h2>
@@ -253,6 +290,16 @@ export function BillingWorkspace(props: BillingWorkspaceProps) {
           taxSettings={taxSettings}
           complianceItems={complianceItems}
           onToggleAutomaticTax={onToggleAutomaticTax}
+        />
+      ) : null}
+
+      {activeTab === 'team' ? (
+        <AccountMembers
+          members={accountMembers}
+          userRole={userRole}
+          onInvite={onInviteMember}
+          onChangeRole={onChangeMemberRole}
+          onRemove={onRemoveMember}
         />
       ) : null}
     </div>

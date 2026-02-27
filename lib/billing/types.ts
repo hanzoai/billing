@@ -314,3 +314,27 @@ export interface DiscountCode {
   durationInMonths: number | null
   valid: boolean
 }
+
+// Multi-billing-account types
+export type BillingRole = 'owner' | 'admin' | 'viewer'
+
+export interface BillingAccount {
+  id: string
+  name: string
+  orgId: string
+  orgName: string
+  balance: number
+  currency: string
+  plan: string
+  role: BillingRole
+  createdAt: string
+}
+
+export interface BillingAccountMember {
+  id: string
+  userId: string
+  email: string
+  name: string
+  role: BillingRole
+  addedAt: string
+}

@@ -33,5 +33,11 @@ export type { PromotionsPanelProps } from './promotions-panel'
 export { SupportTiersPanel } from './support-tiers-panel'
 export type { SupportTiersPanelProps } from './support-tiers-panel'
 
+export { AccountSwitcher } from './account-switcher'
+export type { AccountSwitcherProps } from './account-switcher'
+
+export { AccountMembers } from './account-members'
+export type { AccountMembersProps } from './account-members'
+
 export { BillingWorkspace } from './billing-workspace'
 export type { BillingWorkspaceProps } from './billing-workspace'

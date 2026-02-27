@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BillingWorkspace } from '@/lib/billing'
 import type {
+  BillingAccount,
+  BillingAccountMember,
+  BillingRole,
   Subscription,
   SubscriptionPlan,
   PaymentMethod,
@@ -16,7 +19,7 @@ import type {
   CreditGrant,
   TransactionRecord,
 } from '@/lib/billing'
-import type { Balance, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction } from '@/lib/commerce-client'
+import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
@@ -144,6 +147,31 @@ function mapCommerceTransaction(tx: Transaction): TransactionRecord {
   }
 }
 
+function mapCommerceBillingAccount(cba: CommerceBillingAccount): BillingAccount {
+  return {
+    id: cba.id ?? '',
+    name: cba.name ?? '',
+    orgId: cba.orgId ?? '',
+    orgName: cba.orgName ?? '',
+    balance: cba.balance ?? 0,
+    currency: cba.currency ?? 'usd',
+    plan: cba.plan ?? 'free',
+    role: (cba.role as BillingRole) ?? 'viewer',
+    createdAt: cba.createdAt ?? new Date().toISOString(),
+  }
+}
+
+function mapCommerceBillingAccountMember(cbm: CommerceBillingAccountMember): BillingAccountMember {
+  return {
+    id: cbm.id ?? '',
+    userId: cbm.userId ?? '',
+    email: cbm.email ?? '',
+    name: cbm.name ?? '',
+    role: (cbm.role as BillingRole) ?? 'viewer',
+    addedAt: cbm.addedAt ?? new Date().toISOString(),
+  }
+}
+
 function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
   return {
     id: csa.id ?? '',
@@ -172,6 +200,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [creditBalance, setCreditBalance] = useState(0)
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
+  const [billingAccounts, setBillingAccounts] = useState<BillingAccount[]>([])
+  const [activeBillingAccountId, setActiveBillingAccountId] = useState<string | null>(null)
+  const [accountMembers, setAccountMembers] = useState<BillingAccountMember[]>([])
+  const [userRole, setUserRole] = useState<BillingRole>('owner')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -183,7 +215,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.email || user.sub
 
-      const [bal, planList, subs, invList, pmList, alertList, cgList, cBal, txList] = await Promise.allSettled([
+      const [bal, planList, subs, invList, pmList, alertList, cgList, cBal, txList, acctList] = await Promise.allSettled([
         commerce.getBalance(userId),
         commerce.getPlans(),
         commerce.getUserSubscriptions(userId),
@@ -193,6 +225,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
         commerce.getCreditGrants(userId),
         commerce.getCreditBalance(userId),
         commerce.getTransactions(userId, { limit: 100 }),
+        commerce.listBillingAccounts(),
       ])
 
       if (bal.status === 'fulfilled') setBalance(bal.value)
@@ -247,6 +280,23 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
       if (txList.status === 'fulfilled') {
         setTransactions(txList.value.map(mapCommerceTransaction))
+      }
+
+      if (acctList.status === 'fulfilled' && acctList.value.length > 0) {
+        const mapped = acctList.value.map(mapCommerceBillingAccount)
+        setBillingAccounts(mapped)
+        // Set active to first account if none selected
+        setActiveBillingAccountId((prev) => prev ?? mapped[0].id)
+        // Set user role from active (or first) account
+        const active = mapped.find((a) => a.id === activeBillingAccountId) ?? mapped[0]
+        setUserRole(active.role)
+        // Load members for active account
+        try {
+          const members = await commerce.listAccountMembers(active.id)
+          setAccountMembers(members.map(mapCommerceBillingAccountMember))
+        } catch {
+          // Members endpoint optional
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load billing data')
@@ -476,6 +526,63 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await loadBillingData()
   }, [org, user, loadBillingData])
 
+  const handleSwitchAccount = useCallback(async (accountId: string) => {
+    setActiveBillingAccountId(accountId)
+    const account = billingAccounts.find((a) => a.id === accountId)
+    if (account) setUserRole(account.role)
+    // Reload members for new account
+    try {
+      const token = getAccessToken()
+      if (!token) return
+      const commerce = getCommerce(org.commerceUrl, token)
+      const members = await commerce.listAccountMembers(accountId)
+      setAccountMembers(members.map(mapCommerceBillingAccountMember))
+    } catch {
+      setAccountMembers([])
+    }
+    // Reload billing data
+    await loadBillingData()
+  }, [billingAccounts, org, loadBillingData])
+
+  const handleCreateBillingAccount = useCallback(async () => {
+    const name = window.prompt('Billing account name:')
+    if (!name) return
+    const token = getAccessToken()
+    if (!token) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    const result = await commerce.createBillingAccount({ name, orgId: org.id })
+    const mapped = mapCommerceBillingAccount(result)
+    setBillingAccounts((prev) => [...prev, mapped])
+    setActiveBillingAccountId(mapped.id)
+    setUserRole(mapped.role)
+  }, [org])
+
+  const handleInviteMember = useCallback(async (email: string, role: BillingRole) => {
+    const token = getAccessToken()
+    if (!token || !activeBillingAccountId) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    const result = await commerce.addAccountMember(activeBillingAccountId, { email, role })
+    setAccountMembers((prev) => [...prev, mapCommerceBillingAccountMember(result)])
+  }, [org, activeBillingAccountId])
+
+  const handleChangeMemberRole = useCallback(async (memberId: string, role: BillingRole) => {
+    const token = getAccessToken()
+    if (!token || !activeBillingAccountId) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    const result = await commerce.updateMemberRole(activeBillingAccountId, memberId, role)
+    setAccountMembers((prev) =>
+      prev.map((m) => m.id === memberId ? mapCommerceBillingAccountMember(result) : m)
+    )
+  }, [org, activeBillingAccountId])
+
+  const handleRemoveMember = useCallback(async (memberId: string) => {
+    const token = getAccessToken()
+    if (!token || !activeBillingAccountId) return
+    const commerce = getCommerce(org.commerceUrl, token)
+    await commerce.removeAccountMember(activeBillingAccountId, memberId)
+    setAccountMembers((prev) => prev.filter((m) => m.id !== memberId))
+  }, [org, activeBillingAccountId])
+
   const handleLogout = useCallback(() => {
     logout()
     window.location.href = '/'
@@ -562,6 +669,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
             spendAlerts={spendAlerts}
             usage={usage}
             usageLoading={usageLoading}
+            billingAccounts={billingAccounts}
+            activeBillingAccountId={activeBillingAccountId}
+            onSwitchAccount={handleSwitchAccount}
+            onCreateBillingAccount={handleCreateBillingAccount}
+            userRole={userRole}
+            accountMembers={accountMembers}
+            onInviteMember={handleInviteMember}
+            onChangeMemberRole={handleChangeMemberRole}
+            onRemoveMember={handleRemoveMember}
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}

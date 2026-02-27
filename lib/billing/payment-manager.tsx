@@ -308,9 +308,9 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
             {/* Method type selector */}
             <div className="mb-4 flex flex-wrap gap-2">
               {([
-                ['card', 'Card'],
-                ['crypto', 'Crypto wallet'],
-                ['wire', 'Wire transfer'],
+                ['card', 'Credit & Debit Cards'],
+                ['crypto', 'Cryptocurrency'],
+                ['wire', 'Wire & Bank Transfer'],
                 ['paypal', 'PayPal'],
                 ['bank_account', 'Bank account'],
                 ['apple_pay', 'Apple Pay'],
