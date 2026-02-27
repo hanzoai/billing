@@ -183,6 +183,9 @@ export interface PaymentMethod {
       country?: string
     }
   }
+  // Transient fields for card tokenization (not persisted, used in onAdd flow)
+  _sourceToken?: string
+  _verificationToken?: string
 }
 
 // Invoice types
