@@ -295,16 +295,11 @@ export class Commerce {
       params?: Record<string, string>
     },
   ): Promise<T> {
-    let urlStr: string
-    if (this.baseUrl) {
-      const url = new URL(path, this.baseUrl)
-      if (opts?.params) {
-        for (const [k, v] of Object.entries(opts.params)) url.searchParams.set(k, v)
+    const url = new URL(path, this.baseUrl)
+    if (opts?.params) {
+      for (const [k, v] of Object.entries(opts.params)) {
+        url.searchParams.set(k, v)
       }
-      urlStr = url.toString()
-    } else {
-      const qs = opts?.params ? '?' + new URLSearchParams(opts.params).toString() : ''
-      urlStr = path + qs
     }
 
     const controller = new AbortController()
@@ -316,7 +311,7 @@ export class Commerce {
     if (opts?.body) headers['Content-Type'] = 'application/json'
 
     try {
-      const res = await fetch(urlStr, {
+      const res = await fetch(url.toString(), {
         method: opts?.method ?? 'GET',
         headers,
         body: opts?.body ? JSON.stringify(opts.body) : undefined,
