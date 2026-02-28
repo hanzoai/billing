@@ -18,7 +18,7 @@ const hanzo: BillingOrgConfig = {
   displayName: 'Hanzo',
   iamServerUrl: 'https://hanzo.id',
   iamClientId: 'app-hanzo',
-  commerceUrl: 'https://commerce.hanzo.ai',
+  commerceUrl: '',
   logo: '/logos/hanzo.svg',
   theme: {
     brand: '#ffffff',
