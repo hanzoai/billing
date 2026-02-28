@@ -398,7 +398,18 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
             const isFree = plan.price === 0
+            const hasTrial = (plan.trialDays ?? 0) > 0
             const periodPrice = isFree ? 'Free' : `${formatCurrency(plan.price)}/${plan.billingPeriod}`
+
+            const buttonLabel = isCurrent
+              ? 'Current plan'
+              : isBusy
+                ? 'Applying…'
+                : hasTrial && !subscription.id
+                  ? `Start ${plan.trialDays}-day free trial`
+                  : currentPlan && plan.price < currentPlan.price
+                    ? 'Downgrade'
+                    : 'Upgrade'
 
             return (
               <div
@@ -421,7 +432,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   {plan.badge ? (
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        isCurrent ? 'bg-brand/20 text-brand' : 'bg-bg-elevated text-text-secondary'
+                        isCurrent ? 'bg-brand/20 text-brand' : hasTrial ? 'bg-sky-500/15 text-sky-400' : 'bg-bg-elevated text-text-secondary'
                       }`}
                     >
                       {plan.badge}
@@ -429,7 +440,20 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   ) : null}
                 </div>
 
-                <p className="mt-4 text-2xl font-semibold">{periodPrice}</p>
+                <p className="mt-4 text-2xl font-semibold">
+                  {periodPrice}
+                  {hasTrial && !isCurrent && (
+                    <span className="ml-2 text-sm font-normal text-sky-400">
+                      Free for {plan.trialDays} days
+                    </span>
+                  )}
+                </p>
+
+                {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
+                  <p className="mt-1 text-sm text-emerald-400">
+                    + ${(plan.trialCreditCents! / 100).toFixed(0)} API credit included
+                  </p>
+                )}
 
                 <ul className="mt-4 space-y-2 text-sm text-text-secondary">
                   {plan.features.map((feature) => (
@@ -444,21 +468,17 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   type="button"
                   disabled={isCurrent || isBusy}
                   onClick={() => handlePlanChange(plan)}
-                  className={`mt-5 w-full rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  className={`mt-5 w-full rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                     isCurrent
                       ? 'cursor-not-allowed bg-bg-elevated text-text-dim'
                       : isBusy
                         ? 'cursor-wait bg-bg-elevated text-text-muted'
-                        : 'bg-text text-bg hover:opacity-80'
+                        : hasTrial && !subscription.id
+                          ? 'bg-sky-500 text-white hover:bg-sky-400'
+                          : 'bg-text text-bg hover:opacity-80'
                   }`}
                 >
-                  {isCurrent
-                    ? 'Current plan'
-                    : isBusy
-                      ? 'Applying…'
-                      : currentPlan && plan.price < currentPlan.price
-                        ? 'Downgrade'
-                        : 'Upgrade'}
+                  {buttonLabel}
                 </button>
               </div>
             )

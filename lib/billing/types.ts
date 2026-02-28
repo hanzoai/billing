@@ -13,6 +13,8 @@ export interface SubscriptionPlan {
   badge?: string
   priceId?: string
   currency?: string
+  trialDays?: number
+  trialCreditCents?: number
 }
 
 export interface Subscription {

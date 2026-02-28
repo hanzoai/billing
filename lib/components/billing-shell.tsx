@@ -346,6 +346,24 @@ export function BillingShell({ org, user }: BillingShellProps) {
     loadUsage()
   }, [loadBillingData, loadUsage])
 
+  // Auto-grant $5 starter credit for new users on first visit
+  useEffect(() => {
+    if (loading || creditGrants.length > 0) return
+    const autoGrant = async () => {
+      try {
+        const token = getAccessToken()
+        if (!token) return
+        const commerce = getCommerce(org.commerceUrl, token)
+        const userId = user.email || user.sub
+        await commerce.grantStarterCredit(userId)
+        await loadBillingData()
+      } catch {
+        // Starter credit may already exist or endpoint unavailable
+      }
+    }
+    autoGrant()
+  }, [loading, creditGrants.length, org, user, loadBillingData])
+
   const admin = isAdminUser(user.email)
 
   // ── Handlers ──────────────────────────────────────────────────────────

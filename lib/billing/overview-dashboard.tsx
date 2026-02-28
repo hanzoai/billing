@@ -269,8 +269,57 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     ),
   [mtdSpend])
 
+  // Trial status
+  const isTrialing = props.subscription.status === 'trialing'
+  const trialEnd = props.subscription.currentPeriodEnd
+  const trialDaysLeft = isTrialing ? daysUntil(trialEnd) : 0
+
   return (
     <div className="space-y-6">
+      {/* ── Trial banner ── */}
+      {isTrialing && (
+        <FadeIn delay={0}>
+          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-sky-400">Free trial active</p>
+              <p className="text-[13px] text-white/50 mt-1">
+                {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining — add a payment method to continue after your trial.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => props.onNavigate('overview:payment')}
+              className="rounded-full bg-sky-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 active:scale-[0.97] flex-shrink-0"
+            >
+              Add payment method
+            </button>
+          </div>
+        </FadeIn>
+      )}
+
+      {/* ── Welcome banner for new users with no usage ── */}
+      {!isTrialing && mtdSpend === 0 && totalCreditsRemaining > 0 && !props.subscription.id && (
+        <FadeIn delay={0}>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-emerald-400">{Icons.sparkles}</div>
+              <p className="text-sm font-semibold text-emerald-400">Welcome to Hanzo</p>
+            </div>
+            <p className="text-[13px] text-white/50">
+              You have <span className="text-emerald-400 font-semibold">{fmt(totalCreditsRemaining)} in free credits</span> to get started.
+              Explore the API, build something, or start a 7-day free trial on any plan.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowPlanPicker(true)}
+              className="mt-3 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black transition hover:bg-white/90 active:scale-[0.97]"
+            >
+              Start 7-day free trial
+            </button>
+          </div>
+        </FadeIn>
+      )}
+
       {/* ── Card 1: Current billing cycle ── */}
       <FadeIn delay={0}>
         <div className="rounded-2xl border border-white/[0.08] bg-[#141419] overflow-hidden transition-colors duration-200 hover:border-white/[0.12]">
@@ -457,21 +506,32 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       <FadeIn delay={180}>
         <div className="rounded-2xl border border-white/[0.08] bg-[#141419] overflow-hidden transition-colors duration-200 hover:border-white/[0.12]">
           <div className="p-6">
-            <h3 className="text-[15px] font-semibold text-white mb-5">Subscriptions</h3>
+            <div className="flex items-center gap-3 mb-5">
+              <h3 className="text-[15px] font-semibold text-white">Subscriptions</h3>
+              {isTrialing && (
+                <span className="rounded-full bg-sky-500/15 px-3 py-1 text-[11px] font-semibold text-sky-400">
+                  Trial · {trialDaysLeft}d left
+                </span>
+              )}
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-base font-semibold text-white">
-                  {currentPlan?.name ?? 'Hanzo Business'}
+                  {currentPlan?.name ?? 'No plan selected'}
                 </p>
                 <p className="text-[13px] text-white/40 mt-1 max-w-sm">
-                  {currentPlan?.description ?? "Give your team access to Hanzo's most powerful features."}
+                  {currentPlan?.description ?? 'Start a 7-day free trial on any plan. $5 API credit included.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowPlanPicker(!showPlanPicker)}
-                  className="mt-4 rounded-full border border-white/[0.15] px-4 py-1.5 text-[13px] font-medium text-white/80 transition-all hover:bg-white/[0.06] hover:border-white/[0.25] active:scale-[0.97]"
+                  className={`mt-4 rounded-full px-5 py-2 text-[13px] font-semibold transition-all active:scale-[0.97] ${
+                    currentPlan
+                      ? 'border border-white/[0.15] text-white/80 hover:bg-white/[0.06] hover:border-white/[0.25]'
+                      : 'bg-white text-black hover:bg-white/90'
+                  }`}
                 >
-                  {currentPlan ? 'Manage subscription' : 'Enable Hanzo Business'}
+                  {currentPlan ? 'Manage subscription' : 'Start free trial'}
                 </button>
               </div>
               {/* Decorative icon */}
