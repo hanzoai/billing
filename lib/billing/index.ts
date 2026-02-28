@@ -39,9 +39,6 @@ export type { AccountSwitcherProps } from './account-switcher'
 export { AccountMembers } from './account-members'
 export type { AccountMembersProps } from './account-members'
 
-export { BillingWorkspace } from './billing-workspace'
-export type { BillingWorkspaceProps } from './billing-workspace'
-
 export { StatusBar } from './status-bar'
 export type { StatusBarProps, BillingSection } from './status-bar'
 

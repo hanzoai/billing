@@ -1,7 +1,21 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { BillingWorkspace } from '@/lib/billing'
+import {
+  OverviewDashboard,
+  UsagePanel,
+  CostExplorer,
+  InvoicesPayments,
+  SubscriptionPortal,
+  CreditsPanel,
+  TransactionsPanel,
+  SpendAlertsPanel,
+  PaymentMethodManager,
+  AccountMembers,
+  BusinessProfilePanel,
+  TaxCompliancePanel,
+} from '@/lib/billing'
+import type { BillingSection } from '@/lib/billing'
 import type {
   BillingAccount,
   BillingAccountMember,
@@ -24,7 +38,40 @@ import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
-import { ThemeToggle } from '@/lib/theme/theme-toggle'
+
+/* ── Sidebar section config ───────────────────────────────────── */
+const SIDEBAR_SECTIONS: Array<{ id: BillingSection; label: string; icon: React.ReactNode; group: 'main' | 'manage' }> = [
+  { id: 'overview', label: 'Overview', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+  { id: 'usage', label: 'Usage', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 5-9" /></svg> },
+  { id: 'invoices', label: 'Invoices', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h4" /></svg> },
+  { id: 'pricing', label: 'Pricing', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /></svg> },
+  { id: 'credits', label: 'Credits', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><path d="M7 6h1v4" /><path d="M16.71 13.88l.7.71-2.82 2.82" /></svg> },
+  { id: 'transactions', label: 'Transactions', group: 'main', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3l4 4-4 4" /><path d="M3 11h18" /><path d="M7 21l-4-4 4-4" /><path d="M21 13H3" /></svg> },
+  { id: 'alerts', label: 'Budgets & Alerts', group: 'manage', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg> },
+  { id: 'payment', label: 'Payment Methods', group: 'manage', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg> },
+  { id: 'team', label: 'Team', group: 'manage', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+  { id: 'settings', label: 'Settings', group: 'manage', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg> },
+]
+
+const SECTION_TITLES: Record<BillingSection, string> = {
+  overview: 'Overview',
+  usage: 'Usage & Cost Analysis',
+  invoices: 'Invoices',
+  pricing: 'Pricing & Plans',
+  credits: 'Credits',
+  transactions: 'Transactions',
+  alerts: 'Budgets & Alerts',
+  payment: 'Payment Methods',
+  team: 'Team',
+  settings: 'Settings',
+}
+
+function getInitialSection(): BillingSection {
+  if (typeof window === 'undefined') return 'overview'
+  const hash = window.location.hash.replace('#', '') as BillingSection
+  if (hash && hash in SECTION_TITLES) return hash
+  return 'overview'
+}
 
 interface BillingShellProps {
   org: BillingOrgConfig
@@ -605,155 +652,261 @@ export function BillingShell({ org, user }: BillingShellProps) {
     window.location.href = '/'
   }, [])
 
+  // ── Section routing ─────────────────────────────────────────────────
+  const [activeSection, setActiveSection] = useState<BillingSection>(getInitialSection)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const navigate = useCallback((section: BillingSection) => {
+    setActiveSection(section)
+    setMobileMenuOpen(false)
+    window.history.replaceState(null, '', `#${section}`)
+  }, [])
+
+  // Sync hash changes (back/forward buttons)
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '') as BillingSection
+      if (hash && hash in SECTION_TITLES) setActiveSection(hash)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  const starterCredit = creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null
+
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-bg">
+      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
         <div className="text-center">
-          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-text-dim border-t-brand" />
-          <p className="mt-4 text-sm text-text-muted">Loading billing...</p>
+          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+          <p className="mt-4 text-sm text-white/40">Loading billing...</p>
         </div>
       </main>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-bg">
-      {/* Header */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-bg/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <a href="https://hanzo.id" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-                <svg width="24" height="24" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg" className="text-brand">
-                  <path d="M22.21 67V44.6369H0V67H22.21Z" fill="currentColor" />
-                  <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="currentColor" />
-                  <path d="M22.21 0H0V22.3184H22.21V0Z" fill="currentColor" />
-                  <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="currentColor" />
-                  <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="currentColor" />
-                </svg>
-                <span className="text-sm font-semibold text-text">{org.displayName}</span>
-              </a>
-              <span className="text-text-dim">/</span>
-              <span className="text-sm text-text-muted">Billing</span>
-            </div>
-
-            {/* Cross-nav tabs */}
-            <div className="hidden md:flex items-center gap-1">
-              <a
-                href="https://hanzo.id/account"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted hover:text-text hover:bg-bg-elevated transition-colors"
-              >
-                Account
-              </a>
-              <span
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-text bg-bg-elevated"
-              >
-                Billing
-              </span>
-              <a
-                href="https://hanzo.app"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted hover:text-text hover:bg-bg-elevated transition-colors"
-              >
-                App
-              </a>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-text-muted">
-              {user.displayName ?? user.email}
-            </span>
-            <a
-              href="https://hanzo.id/account"
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-bg-elevated hover:text-text"
-            >
-              Account
-            </a>
-            <a
-              href="https://hanzo.app"
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-bg-elevated hover:text-text"
-            >
-              App
-            </a>
-            <ThemeToggle />
+  /* ── Sidebar nav content (shared by desktop + mobile) ──────── */
+  const sidebarNav = (
+    <nav className="flex flex-col gap-0.5 px-3 py-4">
+      {SIDEBAR_SECTIONS.map((s, i) => {
+        const prev = SIDEBAR_SECTIONS[i - 1]
+        const showSeparator = prev && prev.group !== s.group
+        return (
+          <div key={s.id}>
+            {showSeparator && <div className="my-2 border-t border-white/[0.08]" />}
             <button
               type="button"
-              onClick={handleLogout}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-bg-elevated hover:text-text"
+              onClick={() => navigate(s.id)}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                activeSection === s.id
+                  ? 'bg-white/[0.08] text-white'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+              }`}
             >
-              Sign out
+              <span className="flex-shrink-0">{s.icon}</span>
+              {s.label}
             </button>
           </div>
-        </div>
-      </nav>
+        )
+      })}
+    </nav>
+  )
 
-      {/* Content */}
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        <h1 className="text-[28px] font-bold text-white tracking-tight mb-8">Billing</h1>
-
-        <BillingWorkspace
-            balance={balance}
-            isAdmin={admin}
-            userEmail={user.email}
-            starterCredit={creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null}
-            onAddFunds={handleAddFunds}
-            onGrantCredit={admin ? handleGrantCredit : undefined}
+  /* ── Section content ────────────────────────────────────────── */
+  const renderSection = () => {
+    switch (activeSection) {
+      case 'overview':
+        return (
+          <OverviewDashboard
             subscription={subscription}
             plans={plans}
             paymentMethods={paymentMethods}
-            invoices={invoices}
-            businessProfile={businessProfile}
-            taxSettings={taxSettings}
-            complianceItems={complianceItems}
-            spendAlerts={spendAlerts}
             usage={usage}
             usageLoading={usageLoading}
-            billingAccounts={billingAccounts}
-            activeBillingAccountId={activeBillingAccountId}
-            onSwitchAccount={handleSwitchAccount}
-            onCreateBillingAccount={handleCreateBillingAccount}
-            userRole={userRole}
-            accountMembers={accountMembers}
-            onInviteMember={handleInviteMember}
-            onChangeMemberRole={handleChangeMemberRole}
-            onRemoveMember={handleRemoveMember}
+            balance={balance}
+            creditGrants={creditGrants}
+            creditBalance={creditBalance}
+            starterCredit={starterCredit}
+            onAddFunds={handleAddFunds}
+            onClaimStarterCredit={handleClaimStarterCredit}
+            isAdmin={admin}
+            onGrantCredit={admin ? handleGrantCredit : undefined}
+            userEmail={user.email}
+            invoices={invoices}
+            spendAlerts={spendAlerts}
+            onNavigate={(target: string) => navigate(target.split(':')[0] as BillingSection)}
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
             onApplyDiscount={handleApplyDiscount}
+            businessProfile={businessProfile}
+            onSaveBusinessProfile={handleSaveBusinessProfile}
             onAddPaymentMethod={handleAddPaymentMethod}
             onRemovePaymentMethod={handleRemovePaymentMethod}
             onSetDefaultPaymentMethod={handleSetDefaultPaymentMethod}
-            onDownloadInvoice={handleDownloadInvoice}
-            onSaveBusinessProfile={handleSaveBusinessProfile}
-            onToggleAutomaticTax={handleToggleAutomaticTax}
-            onCreateSpendAlert={handleCreateSpendAlert}
-            onUpdateSpendAlert={handleUpdateSpendAlert}
-            onDeleteSpendAlert={handleDeleteSpendAlert}
+          />
+        )
+      case 'usage':
+        return (
+          <div className="space-y-6">
+            <UsagePanel usage={usage} loading={usageLoading} />
+            <CostExplorer usage={usage} usageLoading={usageLoading} />
+          </div>
+        )
+      case 'invoices':
+        return <InvoicesPayments invoices={invoices} onDownloadInvoice={handleDownloadInvoice} />
+      case 'pricing':
+        return (
+          <SubscriptionPortal
+            subscription={subscription}
+            availablePlans={plans}
+            onUpgrade={handleUpgrade}
+            onDowngrade={handleDowngrade}
+            onCancel={handleCancel}
+            onApplyDiscount={handleApplyDiscount}
+          />
+        )
+      case 'credits':
+        return (
+          <CreditsPanel
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            transactions={transactions}
-            transactionsLoading={transactionsLoading}
             onClaimStarterCredit={handleClaimStarterCredit}
-            onSubscribeSupport={handleSubscribeSupport}
           />
-      </div>
-
-      {/* Footer */}
-      <footer className="border-t border-border py-6">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 text-xs text-text-dim">
-          <span>{org.displayName} Billing</span>
-          <div className="flex gap-4">
-            <a href="https://docs.hanzo.ai" target="_blank" rel="noreferrer" className="transition hover:text-text-muted">Docs</a>
-            <a href="https://hanzo.ai" target="_blank" rel="noreferrer" className="transition hover:text-text-muted">Hanzo</a>
+        )
+      case 'transactions':
+        return <TransactionsPanel transactions={transactions} loading={transactionsLoading} />
+      case 'alerts':
+        return (
+          <SpendAlertsPanel
+            alerts={spendAlerts}
+            onCreateAlert={handleCreateSpendAlert}
+            onUpdateAlert={handleUpdateSpendAlert}
+            onDeleteAlert={handleDeleteSpendAlert}
+          />
+        )
+      case 'payment':
+        return (
+          <PaymentMethodManager
+            paymentMethods={paymentMethods}
+            onAdd={handleAddPaymentMethod}
+            onRemove={handleRemovePaymentMethod}
+            onSetDefault={handleSetDefaultPaymentMethod}
+          />
+        )
+      case 'team':
+        return (
+          <AccountMembers
+            members={accountMembers}
+            userRole={userRole}
+            onInvite={handleInviteMember}
+            onChangeRole={handleChangeMemberRole}
+            onRemove={handleRemoveMember}
+          />
+        )
+      case 'settings':
+        return (
+          <div className="space-y-6">
+            <BusinessProfilePanel profile={businessProfile} onSave={handleSaveBusinessProfile} />
+            <TaxCompliancePanel
+              taxSettings={taxSettings}
+              complianceItems={complianceItems}
+              onToggleAutomaticTax={handleToggleAutomaticTax}
+            />
           </div>
+        )
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#0a0a0f]">
+      {/* ── Header ──────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-white/[0.08] bg-[#0a0a0f]/80 px-4 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="rounded-lg p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white md:hidden"
+            aria-label="Toggle menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {mobileMenuOpen ? (
+                <><path d="M18 6L6 18" /><path d="M6 6l12 12" /></>
+              ) : (
+                <><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></>
+              )}
+            </svg>
+          </button>
+
+          <a href="https://hanzo.id" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <svg width="22" height="22" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg" className="text-white">
+              <path d="M22.21 67V44.6369H0V67H22.21Z" fill="currentColor" />
+              <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="currentColor" />
+              <path d="M22.21 0H0V22.3184H22.21V0Z" fill="currentColor" />
+              <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="currentColor" />
+              <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="currentColor" />
+            </svg>
+            <span className="text-sm font-semibold text-white">{org.displayName}</span>
+          </a>
+          <span className="text-white/20">/</span>
+          <span className="text-sm font-medium text-white/50">Billing</span>
         </div>
-      </footer>
+
+        <div className="flex items-center gap-3">
+          <span className="hidden text-sm text-white/40 sm:inline">
+            {user.email}
+          </span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/40 transition hover:bg-white/[0.06] hover:text-white/70"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <div className="flex flex-1">
+        {/* ── Desktop sidebar ──────────────────────────────── */}
+        <aside className="hidden w-60 flex-shrink-0 border-r border-white/[0.08] bg-[#0e0e13] md:block">
+          {sidebarNav}
+        </aside>
+
+        {/* ── Mobile sidebar drawer ────────────────────────── */}
+        {mobileMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/60 md:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-white/[0.08] bg-[#0e0e13] pt-14 md:hidden">
+              {sidebarNav}
+            </aside>
+          </>
+        )}
+
+        {/* ── Main content ─────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-4xl px-8 py-8">
+            {error && (
+              <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            {activeSection !== 'overview' && (
+              <h1 className="mb-6 text-2xl font-bold tracking-tight text-white">
+                {SECTION_TITLES[activeSection]}
+              </h1>
+            )}
+
+            {renderSection()}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
