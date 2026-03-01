@@ -1,0 +1,187 @@
+'use client'
+
+export interface PricingPlan {
+  id: string
+  name: string
+  description: string
+  priceMonthly: number
+  priceAnnual?: number
+  category?: string
+  popular?: boolean
+  features: string[]
+  payouts?: { idleResalePercent?: number }
+  contactSales?: boolean
+}
+
+interface PlanCardProps {
+  plan: PricingPlan
+  billingInterval: 'monthly' | 'annual'
+}
+
+const BILLING_URL = 'https://billing.hanzo.ai'
+const CAL_URL = 'https://cal.com/hanzo'
+
+function price(plan: PricingPlan, interval: 'monthly' | 'annual'): string {
+  if (plan.priceMonthly === 0) return 'Free'
+  if (plan.contactSales || plan.priceMonthly >= 9999) return 'Contact sales'
+  const amt = interval === 'annual' && plan.priceAnnual ? plan.priceAnnual : plan.priceMonthly
+  return `$${amt}/mo`
+}
+
+function annualSavings(plan: PricingPlan): string | null {
+  if (!plan.priceAnnual || plan.priceMonthly <= 0) return null
+  const saved = (plan.priceMonthly - plan.priceAnnual) * 12
+  if (saved <= 0) return null
+  return `Save $${saved}/yr`
+}
+
+function ctaLabel(plan: PricingPlan): string {
+  if (plan.priceMonthly === 0) return 'Start free'
+  if (plan.contactSales || plan.priceMonthly >= 9999) return 'Talk to sales'
+  return 'Get started'
+}
+
+function ctaHref(plan: PricingPlan): string {
+  if (plan.contactSales || plan.priceMonthly >= 9999) return CAL_URL
+  return `${BILLING_URL}#pricing`
+}
+
+export function PlanCard({ plan, billingInterval }: PlanCardProps) {
+  const isPopular = plan.popular
+  const isFree = plan.priceMonthly === 0
+  const isSales = plan.contactSales || plan.priceMonthly >= 9999
+  const savings = annualSavings(plan)
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        background: isPopular ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
+        border: isPopular ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '16px',
+        padding: '28px 24px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      {/* Popular badge */}
+      {isPopular && (
+        <div style={{
+          position: 'absolute',
+          top: '-12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#ffffff',
+          color: '#09090b',
+          fontSize: '11px',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          padding: '3px 12px',
+          borderRadius: '99px',
+          whiteSpace: 'nowrap',
+        }}>
+          Most Popular
+        </div>
+      )}
+
+      {/* Header */}
+      <div>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#fafafa', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+          {plan.name}
+        </h3>
+        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5 }}>
+          {plan.description}
+        </p>
+      </div>
+
+      {/* Price */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+        <span style={{ fontSize: isFree || isSales ? '28px' : '36px', fontWeight: 700, color: '#fafafa', letterSpacing: '-0.03em', lineHeight: 1 }}>
+          {price(plan, billingInterval)}
+        </span>
+        {!isFree && !isSales && (
+          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', marginBottom: '4px' }}>
+            {billingInterval === 'annual' ? 'billed annually' : 'billed monthly'}
+          </span>
+        )}
+      </div>
+
+      {/* Annual savings badge */}
+      {billingInterval === 'annual' && savings && (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          background: 'rgba(74,222,128,0.1)',
+          border: '1px solid rgba(74,222,128,0.2)',
+          borderRadius: '6px',
+          padding: '3px 8px',
+          fontSize: '12px',
+          color: '#4ade80',
+          fontWeight: 500,
+          marginTop: '-12px',
+          width: 'fit-content',
+        }}>
+          {savings}
+        </div>
+      )}
+
+      {/* CTA */}
+      <a
+        href={ctaHref(plan)}
+        style={{
+          display: 'block',
+          textAlign: 'center',
+          background: isPopular ? '#ffffff' : 'rgba(255,255,255,0.06)',
+          color: isPopular ? '#09090b' : '#fafafa',
+          border: isPopular ? 'none' : '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '8px',
+          padding: '10px 16px',
+          fontSize: '14px',
+          fontWeight: 600,
+          textDecoration: 'none',
+          transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85' }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = '1' }}
+      >
+        {ctaLabel(plan)}
+      </a>
+
+      {/* Features */}
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {plan.features.map((f, i) => (
+          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px', color: '#4ade80' }}>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {f}
+          </li>
+        ))}
+      </ul>
+
+      {/* Payout badge */}
+      {plan.payouts?.idleResalePercent && (
+        <div style={{
+          marginTop: 'auto',
+          background: 'rgba(251,191,36,0.08)',
+          border: '1px solid rgba(251,191,36,0.15)',
+          borderRadius: '8px',
+          padding: '10px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '12px',
+          color: 'rgba(251,191,36,0.85)',
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+          </svg>
+          Earn {plan.payouts.idleResalePercent}% on idle compute resale
+        </div>
+      )}
+    </div>
+  )
+}

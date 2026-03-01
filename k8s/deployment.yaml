@@ -70,9 +70,20 @@ spec:
   tls:
     - hosts:
         - billing.hanzo.ai
+        - commerce.hanzo.ai
       secretName: billing-tls
   rules:
     - host: billing.hanzo.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: billing
+                port:
+                  number: 80
+    - host: commerce.hanzo.ai
       http:
         paths:
           - path: /

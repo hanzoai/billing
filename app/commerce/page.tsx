@@ -1,0 +1,344 @@
+import type { Metadata } from 'next'
+import { CouponInput } from './components/coupon-input'
+import { ReferralSection } from './components/referral-section'
+import { BillingToggle } from './components/billing-toggle'
+import type { PricingPlan } from './components/plan-card'
+
+export const metadata: Metadata = {
+  title: 'Hanzo Commerce — Pricing & Plans',
+  description: 'Transparent AI compute pricing. Start free, scale infinitely. Earn 20% on idle compute resale.',
+  metadataBase: new URL('https://commerce.hanzo.ai'),
+  openGraph: {
+    title: 'Hanzo Commerce — Pricing & Plans',
+    description: 'Transparent AI compute pricing. Start free, scale infinitely.',
+    url: 'https://commerce.hanzo.ai',
+    siteName: 'Hanzo',
+  },
+}
+
+const FALLBACK_PLANS: PricingPlan[] = [
+  {
+    id: 'developer',
+    name: 'Developer',
+    description: 'Get started for free. Explore the API with generous included credits.',
+    priceMonthly: 0,
+    priceAnnual: 0,
+    features: ['$5 free credit', '60 requests/min', '100K tokens/min', 'Community support', 'API access', 'Earn up to 20% on idle compute & LLM resale'],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    description: 'For developers shipping real products. Higher limits and priority support.',
+    priceMonthly: 49,
+    priceAnnual: 39,
+    popular: true,
+    features: ['500 requests/min', '1M tokens/min', 'Email support', 'Analytics dashboard', 'Priority inference', 'Earn up to 20% on idle compute & LLM resale'],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: 'team',
+    name: 'Team',
+    description: 'For teams building together. SSO, shared billing, and custom training.',
+    priceMonthly: 199,
+    priceAnnual: 159,
+    features: ['Up to 10 members', 'SSO / SAML', 'Priority support', 'Custom model training', 'Shared billing', 'Usage analytics', 'Earn up to 20% on idle compute & LLM resale'],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    description: 'Full-scale AI infrastructure. Dedicated support, SLA, and on-prem deployment.',
+    priceMonthly: 9999,
+    priceAnnual: 7999,
+    contactSales: true,
+    features: ['Unlimited members', '99.99% SLA', 'Dedicated account manager', 'Custom rate limits', 'On-premise deployment', 'SOC 2 compliance'],
+  },
+]
+
+async function getPlans(): Promise<PricingPlan[]> {
+  try {
+    const res = await fetch('https://pricing.hanzo.ai/v1/pricing/subscriptions', {
+      next: { revalidate: 3600 },
+    })
+    if (!res.ok) return FALLBACK_PLANS
+    const data = await res.json()
+    const plans: PricingPlan[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.plans)
+        ? data.plans
+        : []
+    return plans.length > 0 ? plans : FALLBACK_PLANS
+  } catch {
+    return FALLBACK_PLANS
+  }
+}
+
+/* ── Static stat cards ─────────────────────────────────────────── */
+const STATS = [
+  { value: '14+', label: 'Zen AI models' },
+  { value: '1M', label: 'Max context window' },
+  { value: '99.99%', label: 'Uptime SLA' },
+  { value: '20%', label: 'Idle compute payout' },
+]
+
+/* ── Hanzo H-mark SVG (inline, no external deps) ───────────────── */
+function HMark() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M22.21 67V44.6369H0V67H22.21Z" fill="#ffffff" />
+      <path d="M0 44.6369L22.21 46.8285V44.6369H0Z" fill="#DDDDDD" />
+      <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="#ffffff" />
+      <path d="M22.21 0H0V22.3184H22.21V0Z" fill="#ffffff" />
+      <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="#ffffff" />
+      <path d="M66.6753 22.3185L44.5098 20.0822V22.3185H66.6753Z" fill="#DDDDDD" />
+      <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="#ffffff" />
+    </svg>
+  )
+}
+
+export default async function CommercePage() {
+  const plans = await getPlans()
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#09090b', color: '#fafafa', fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)' }}>
+
+      {/* ── Nav bar ──────────────────────────────────────────────── */}
+      <header style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: '56px',
+        padding: '0 24px',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: 'rgba(9,9,11,0.9)',
+        backdropFilter: 'blur(16px)',
+      }}>
+        <a href="https://hanzo.ai" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+          <HMark />
+          <span style={{ fontSize: '14px', fontWeight: 600, color: '#fafafa', letterSpacing: '-0.01em' }}>Hanzo</span>
+        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {[
+            { label: 'Docs', href: 'https://docs.hanzo.ai' },
+            { label: 'Chat', href: 'https://chat.hanzo.ai' },
+            { label: 'Console', href: 'https://console.hanzo.ai' },
+          ].map((link) => (
+            <a key={link.label} href={link.href} style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: 'rgba(255,255,255,0.4)',
+              textDecoration: 'none',
+              borderRadius: '7px',
+              transition: 'color 0.15s',
+            }}>
+              {link.label}
+            </a>
+          ))}
+          <a href="https://billing.hanzo.ai" style={{
+            marginLeft: '8px',
+            padding: '7px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: '#09090b',
+            background: '#ffffff',
+            textDecoration: 'none',
+            borderRadius: '8px',
+            transition: 'opacity 0.15s',
+          }}>
+            Sign in
+          </a>
+        </div>
+      </header>
+
+      {/* ── Hero ─────────────────────────────────────────────────── */}
+      <section style={{ textAlign: 'center', padding: '80px 24px 56px' }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '99px',
+          padding: '4px 14px',
+          marginBottom: '28px',
+          fontSize: '12px',
+          fontWeight: 500,
+          color: 'rgba(255,255,255,0.5)',
+        }}>
+          <span style={{ width: '6px', height: '6px', background: '#22c55e', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
+          All services operational · 20% idle compute resale program active
+        </div>
+
+        <h1 style={{
+          fontSize: 'clamp(40px, 7vw, 76px)',
+          fontWeight: 700,
+          lineHeight: 1.05,
+          margin: '0 0 20px',
+          letterSpacing: '-0.035em',
+          maxWidth: '820px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        }}>
+          Transparent AI pricing.<br />
+          <span style={{ color: 'rgba(255,255,255,0.35)' }}>Scale from zero.</span>
+        </h1>
+
+        <p style={{
+          fontSize: '18px',
+          color: 'rgba(255,255,255,0.45)',
+          maxWidth: '540px',
+          margin: '0 auto 44px',
+          lineHeight: 1.65,
+        }}>
+          Full-stack AI commerce infrastructure — billing, payments, subscriptions, usage metering, and analytics. Start free, no card required.
+        </p>
+
+        {/* Coupon input (client component) */}
+        <CouponInput />
+      </section>
+
+      {/* ── Stats row ────────────────────────────────────────────── */}
+      <section style={{
+        maxWidth: '900px',
+        margin: '0 auto',
+        padding: '0 24px 56px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: '1px',
+        background: 'rgba(255,255,255,0.06)',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        {STATS.map((s) => (
+          <div key={s.value} style={{
+            background: '#09090b',
+            padding: '28px 24px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '32px', fontWeight: 700, letterSpacing: '-0.03em', color: '#fafafa', marginBottom: '4px' }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>{s.label}</div>
+          </div>
+        ))}
+      </section>
+
+      {/* ── Plans ────────────────────────────────────────────────── */}
+      <section style={{ maxWidth: '1100px', margin: '40px auto 0', padding: '0 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.025em', color: '#fafafa', margin: '0 0 8px' }}>
+            Choose your plan
+          </h2>
+          <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+            All plans include $5 free credit to start. No card required on free tier.
+          </p>
+        </div>
+
+        {/* BillingToggle handles monthly/annual switch + renders plan cards */}
+        <BillingToggle plans={plans} />
+      </section>
+
+      {/* ── Feature comparison callout ───────────────────────────── */}
+      <section style={{ maxWidth: '1100px', margin: '64px auto 0', padding: '0 24px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: '1px',
+          background: 'rgba(255,255,255,0.06)',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          {[
+            {
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+                </svg>
+              ),
+              title: 'All Zen models included',
+              body: 'Access the full Zen model family — from 600M to 480B params — across all plans.',
+            },
+            {
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+                </svg>
+              ),
+              title: 'Crypto, card & wire',
+              body: 'Pay with credit card, crypto wallet, or bank wire. All payment methods supported.',
+            },
+            {
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" />
+                </svg>
+              ),
+              title: 'Real-time usage metering',
+              body: 'Per-request cost tracking, spend alerts, and detailed invoices available on all plans.',
+            },
+            {
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              ),
+              title: 'Team & org billing',
+              body: 'Shared billing accounts, role-based access, and multi-org support on Team and above.',
+            },
+          ].map((item, i) => (
+            <div key={i} style={{ background: '#09090b', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)' }}>{item.icon}</div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#fafafa', margin: 0, letterSpacing: '-0.01em' }}>{item.title}</h3>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.55 }}>{item.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Referral / affiliate section ─────────────────────────── */}
+      <div style={{ marginTop: '80px' }}>
+        <ReferralSection />
+      </div>
+
+      {/* ── Footer ───────────────────────────────────────────────── */}
+      <footer style={{
+        borderTop: '1px solid rgba(255,255,255,0.07)',
+        padding: '40px 24px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px',
+        maxWidth: '1100px',
+        margin: '0 auto',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <HMark />
+          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)' }}>
+            © {new Date().getFullYear()} Hanzo AI Inc.
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+          {[
+            { label: 'Privacy', href: 'https://hanzo.ai/legal/privacy' },
+            { label: 'Terms', href: 'https://hanzo.ai/legal/terms' },
+            { label: 'Affiliate Terms', href: 'https://hanzo.ai/legal/affiliate' },
+            { label: 'Status', href: 'https://status.hanzo.ai' },
+            { label: 'Docs', href: 'https://docs.hanzo.ai' },
+          ].map((link) => (
+            <a key={link.label} href={link.href} style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}>
+              {link.label}
+            </a>
+          ))}
+        </div>
+      </footer>
+    </div>
+  )
+}
