@@ -15,6 +15,12 @@ export interface SubscriptionPlan {
   currency?: string
   trialDays?: number
   trialCreditCents?: number
+  /** If true, clicking this plan opens an external URL instead of subscribing */
+  contactSales?: boolean
+  /** External URL to redirect to (for agency/enterprise contact flows) */
+  externalUrl?: string
+  /** Annual price alternative shown on the card */
+  annualPrice?: number
 }
 
 export interface Subscription {

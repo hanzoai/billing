@@ -105,11 +105,16 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
   const handlePlanChange = React.useCallback(
     async (plan: SubscriptionPlan) => {
-      if (!currentPlan || plan.id === currentPlan.id) return
+      // External / contact-sales plans
+      if (plan.externalUrl) {
+        window.open(plan.externalUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (plan.id === currentPlan?.id) return
       setBusyPlanId(plan.id)
 
       try {
-        if (plan.price >= currentPlan.price) {
+        if (!currentPlan || plan.price >= (currentPlan?.price ?? 0)) {
           await onUpgrade?.(plan.id)
         } else {
           await onDowngrade?.(plan.id)
@@ -393,72 +398,82 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       )}
 
       {view === 'plans' && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {availablePlans.map((plan) => {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
             const isFree = plan.price === 0
             const hasTrial = (plan.trialDays ?? 0) > 0
-            const periodPrice = isFree ? 'Free' : `${formatCurrency(plan.price)}/${plan.billingPeriod}`
+            const isExternal = !!plan.externalUrl || plan.contactSales
+            const periodPrice = isFree ? 'Free' : `$${plan.price}/mo`
 
             const buttonLabel = isCurrent
               ? 'Current plan'
               : isBusy
                 ? 'Applying…'
-                : hasTrial && !subscription.id
-                  ? `Start ${plan.trialDays}-day free trial`
-                  : currentPlan && plan.price < currentPlan.price
-                    ? 'Downgrade'
-                    : 'Upgrade'
+                : isExternal
+                  ? plan.contactSales ? 'Contact Sales →' : 'Get started →'
+                  : hasTrial && !subscription.id
+                    ? `Start ${plan.trialDays}-day free trial`
+                    : currentPlan && plan.price < (currentPlan?.price ?? 0)
+                      ? 'Downgrade'
+                      : 'Upgrade'
 
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-xl border p-5 transition ${
+                className={`relative flex flex-col rounded-2xl border p-5 transition ${
                   plan.highlighted && !isCurrent
-                    ? 'border-2 border-brand bg-bg-card text-text'
+                    ? 'border-white/[0.2] bg-[#141419]'
                     : isCurrent
-                      ? 'border-brand bg-brand/10 text-text'
-                      : 'border-border bg-bg-card text-text'
+                      ? 'border-white/[0.25] bg-[#141419]'
+                      : 'border-white/[0.08] bg-[#141419]'
                 }`}
               >
+                {plan.highlighted && !isCurrent && (
+                  <div className="absolute -top-px left-0 right-0 h-px rounded-t-2xl bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                )}
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-lg font-semibold">{plan.name}</p>
-                    <p className="text-sm text-text-secondary">
-                      {plan.description}
-                    </p>
-                  </div>
+                  <p className="text-[15px] font-semibold text-white">{plan.name}</p>
                   {plan.badge ? (
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        isCurrent ? 'bg-brand/20 text-brand' : hasTrial ? 'bg-sky-500/15 text-sky-400' : 'bg-bg-elevated text-text-secondary'
-                      }`}
-                    >
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-semibold flex-shrink-0 ${
+                      isCurrent
+                        ? 'bg-white/10 text-white/60'
+                        : plan.contactSales
+                          ? 'bg-amber-500/15 text-amber-400'
+                          : hasTrial
+                            ? 'bg-sky-500/15 text-sky-400'
+                            : 'bg-white/[0.07] text-white/40'
+                    }`}>
                       {plan.badge}
                     </span>
                   ) : null}
                 </div>
 
-                <p className="mt-4 text-2xl font-semibold">
-                  {periodPrice}
-                  {hasTrial && !isCurrent && (
-                    <span className="ml-2 text-sm font-normal text-sky-400">
-                      Free for {plan.trialDays} days
-                    </span>
-                  )}
-                </p>
-
-                {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
-                  <p className="mt-1 text-sm text-emerald-400">
-                    + ${(plan.trialCreditCents! / 100).toFixed(0)} API credit included
+                <div className="mt-4">
+                  <p className="text-2xl font-bold text-white">
+                    {isExternal && !isFree ? `$${formatCurrency(plan.price).replace('$', '').split('.')[0]}` : periodPrice}
+                    {!isFree && !isExternal && <span className="text-sm font-normal text-white/40">/mo</span>}
+                    {isExternal && !isFree && <span className="text-sm font-normal text-white/40">/mo+</span>}
                   </p>
-                )}
+                  {plan.annualPrice && !isCurrent && (
+                    <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}/yr — save ${plan.price * 12 - plan.annualPrice}</p>
+                  )}
+                  {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
+                    <p className="mt-0.5 text-[12px] text-emerald-400">+${(plan.trialCreditCents! / 100).toFixed(0)} credit included</p>
+                  )}
+                </div>
 
-                <ul className="mt-4 space-y-2 text-sm text-text-secondary">
+                <p className="mt-3 text-[13px] leading-relaxed text-white/40">{plan.description}</p>
+
+                <ul className="mt-4 flex-1 space-y-1.5">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2">
-                      <span className="mt-0.5 text-emerald-500">✓</span>
+                    <li key={feature} className="flex items-start gap-2 text-[13px] text-white/50">
+                      <span className="mt-0.5 flex-shrink-0 text-white/30">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      </span>
                       {feature}
                     </li>
                   ))}
@@ -468,14 +483,18 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   type="button"
                   disabled={isCurrent || isBusy}
                   onClick={() => handlePlanChange(plan)}
-                  className={`mt-5 w-full rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  className={`mt-5 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
                     isCurrent
-                      ? 'cursor-not-allowed bg-bg-elevated text-text-dim'
+                      ? 'cursor-not-allowed bg-white/[0.06] text-white/30'
                       : isBusy
-                        ? 'cursor-wait bg-bg-elevated text-text-muted'
-                        : hasTrial && !subscription.id
-                          ? 'bg-sky-500 text-white hover:bg-sky-400'
-                          : 'bg-text text-bg hover:opacity-80'
+                        ? 'cursor-wait bg-white/[0.06] text-white/30'
+                        : plan.highlighted
+                          ? 'bg-white text-black hover:bg-white/90'
+                          : isExternal
+                            ? 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                            : hasTrial && !subscription.id
+                              ? 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30'
+                              : 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
                   }`}
                 >
                   {buttonLabel}

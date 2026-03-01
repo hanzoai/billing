@@ -51,14 +51,17 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
         </div>
         <div className="border-t border-white/[0.06]">
           {invoices.length === 0 ? (
-            <div className="py-16 text-center">
-              <div className="mx-auto mb-3 text-white/20">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <div className="py-20 flex flex-col items-center justify-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] text-white/20">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
                   <path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h4" />
                 </svg>
               </div>
-              <p className="text-sm text-white/30">No invoices yet</p>
+              <div className="text-center">
+                <p className="text-sm font-medium text-white/40">No invoices yet</p>
+                <p className="mt-1 text-[13px] text-white/25">Invoices appear here once you subscribe or make a purchase.</p>
+              </div>
             </div>
           ) : (
             <>
