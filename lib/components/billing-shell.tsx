@@ -33,7 +33,7 @@ import type {
   CreditGrant,
   TransactionRecord,
 } from '@/lib/billing'
-import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction } from '@/lib/commerce-client'
+import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
@@ -230,6 +230,18 @@ function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
   }
 }
 
+/** Normalise any API envelope (array / {data:[]} / {items:[]} etc.) to a plain array. */
+function asList<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[]
+  if (v !== null && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    for (const key of ['data', 'items', 'records', 'results', 'list']) {
+      if (Array.isArray(o[key])) return o[key] as T[]
+    }
+  }
+  return []
+}
+
 export function BillingShell({ org, user }: BillingShellProps) {
   const [balance, setBalance] = useState<Balance | null>(null)
   const [subscription, setSubscription] = useState<Subscription>(EMPTY_SUBSCRIPTION)
@@ -277,7 +289,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
       if (planList.status === 'fulfilled') {
-        const remotePlans: SubscriptionPlan[] = planList.value.map((p) => ({
+        const remotePlans: SubscriptionPlan[] = asList<Plan>(planList.value).map((p) => ({
           id: p.slug ?? '',
           name: p.name ?? '',
           description: p.description ?? '',
@@ -289,8 +301,9 @@ export function BillingShell({ org, user }: BillingShellProps) {
         setPlans(mergePlans(remotePlans))
       }
 
-      if (subs.status === 'fulfilled' && subs.value.length > 0) {
-        const activeSub = subs.value.find((s) => s.status === 'active' || s.status === 'trialing') ?? subs.value[0]
+      if (subs.status === 'fulfilled' && asList<CommerceSubscription>(subs.value).length > 0) {
+        const subsList = asList<CommerceSubscription>(subs.value)
+        const activeSub = subsList.find((s) => s.status === 'active' || s.status === 'trialing') ?? subsList[0]
         setSubscription({
           id: activeSub.id ?? '',
           customerId: activeSub.userId ?? userId,
@@ -303,19 +316,19 @@ export function BillingShell({ org, user }: BillingShellProps) {
       }
 
       if (invList.status === 'fulfilled') {
-        setInvoices(invList.value.map(mapCommerceInvoice))
+        setInvoices(asList<CommerceInvoice>(invList.value).map(mapCommerceInvoice))
       }
 
       if (pmList.status === 'fulfilled') {
-        setPaymentMethods(pmList.value.map(mapCommercePaymentMethod))
+        setPaymentMethods(asList<CommercePaymentMethod>(pmList.value).map(mapCommercePaymentMethod))
       }
 
       if (alertList.status === 'fulfilled') {
-        setSpendAlerts(alertList.value.map(mapCommerceSpendAlert))
+        setSpendAlerts(asList<CommerceSpendAlert>(alertList.value).map(mapCommerceSpendAlert))
       }
 
       if (cgList.status === 'fulfilled') {
-        setCreditGrants(cgList.value.map(mapCommerceCreditGrant))
+        setCreditGrants(asList<CommerceCreditGrant>(cgList.value).map(mapCommerceCreditGrant))
       }
 
       if (cBal.status === 'fulfilled') {
@@ -325,11 +338,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
       }
 
       if (txList.status === 'fulfilled') {
-        setTransactions(txList.value.map(mapCommerceTransaction))
+        setTransactions(asList<Transaction>(txList.value).map(mapCommerceTransaction))
       }
 
-      if (acctList.status === 'fulfilled' && acctList.value.length > 0) {
-        const mapped = acctList.value.map(mapCommerceBillingAccount)
+      if (acctList.status === 'fulfilled' && asList<CommerceBillingAccount>(acctList.value).length > 0) {
+        const mapped = asList<CommerceBillingAccount>(acctList.value).map(mapCommerceBillingAccount)
         setBillingAccounts(mapped)
         // Set active to first account if none selected
         setActiveBillingAccountId((prev) => prev ?? mapped[0].id)
@@ -676,10 +689,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
+      <main className="flex min-h-screen items-center justify-center bg-[#09090b]">
         <div className="text-center">
-          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-          <p className="mt-4 text-sm text-white/40">Loading billing...</p>
+          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+          <p className="mt-4 text-[13px] text-white/30">Loading billing…</p>
         </div>
       </main>
     )
@@ -821,48 +834,82 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0a0a0f]">
-      {/* ── Header ──────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-white/[0.08] bg-[#0a0a0f]/80 px-4 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
+    <div className="flex min-h-screen flex-col bg-[#09090b]">
+      {/* ── Header (shared HanzoHeader design) ──────────────────────── */}
+      <header className="sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b border-white/[0.07] bg-[#09090b]/90 px-4 backdrop-blur-xl">
+        {/* Left: logo / breadcrumb / app switcher / mobile hamburger */}
+        <div className="flex min-w-0 items-center gap-2.5">
           {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="rounded-lg p-1.5 text-white/50 hover:bg-white/[0.06] hover:text-white md:hidden"
+            className="flex-shrink-0 rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/70 md:hidden"
             aria-label="Toggle menu"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {mobileMenuOpen ? (
-                <><path d="M18 6L6 18" /><path d="M6 6l12 12" /></>
-              ) : (
-                <><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></>
-              )}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {mobileMenuOpen
+                ? <><path d="M18 6L6 18" /><path d="M6 6l12 12" /></>
+                : <><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></>}
             </svg>
           </button>
 
-          <a href="https://hanzo.id" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <svg width="22" height="22" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg" className="text-white">
-              <path d="M22.21 67V44.6369H0V67H22.21Z" fill="currentColor" />
-              <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="currentColor" />
-              <path d="M22.21 0H0V22.3184H22.21V0Z" fill="currentColor" />
-              <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="currentColor" />
-              <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="currentColor" />
+          {/* Official Hanzo H-mark (with shadow paths + hover animation) */}
+          <a
+            href="https://hanzo.id/account"
+            className="flex-shrink-0 rounded transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            aria-label="Hanzo Account"
+          >
+            <svg width="22" height="22" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.21 67V44.6369H0V67H22.21Z" fill="#ffffff" />
+              <path d="M0 44.6369L22.21 46.8285V44.6369H0Z" fill="#DDDDDD" />
+              <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="#ffffff" />
+              <path d="M22.21 0H0V22.3184H22.21V0Z" fill="#ffffff" />
+              <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="#ffffff" />
+              <path d="M66.6753 22.3185L44.5098 20.0822V22.3185H66.6753Z" fill="#DDDDDD" />
+              <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="#ffffff" />
             </svg>
-            <span className="text-sm font-semibold text-white">{org.displayName}</span>
           </a>
-          <span className="text-white/20">/</span>
-          <span className="text-sm font-medium text-white/50">Billing</span>
+
+          <span className="select-none text-white/[0.15]">/</span>
+          <span className="truncate text-[13px] font-medium text-white/50">Billing</span>
+
+          {/* App switcher */}
+          <div className="relative hidden md:block" id="billing-app-switcher">
+            <div className="ml-1 flex items-center gap-0.5">
+              {([
+                { label: 'Account', href: 'https://hanzo.id/account' },
+                { label: 'Console', href: 'https://console.hanzo.ai' },
+                { label: 'Chat', href: 'https://chat.hanzo.ai' },
+                { label: 'Platform', href: 'https://platform.hanzo.ai' },
+              ] as { label: string; href: string }[]).map((app) => (
+                <a
+                  key={app.label}
+                  href={app.href}
+                  className="rounded-md px-2.5 py-1 text-[11px] font-medium text-white/25 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+                >
+                  {app.label}
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="hidden text-sm text-white/40 sm:inline">
-            {user.email}
-          </span>
+        {/* Right: user email + sign out */}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <span className="hidden text-[11px] text-white/30 sm:inline">{user.email}</span>
+          <a
+            href="https://hanzo.id/account"
+            className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/60 sm:flex"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7" />
+            </svg>
+            Account
+          </a>
           <button
             type="button"
             onClick={handleLogout}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/40 transition hover:bg-white/[0.06] hover:text-white/70"
+            className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/60"
           >
             Sign out
           </button>
@@ -871,7 +918,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
       <div className="flex flex-1">
         {/* ── Desktop sidebar ──────────────────────────────── */}
-        <aside className="hidden w-60 flex-shrink-0 border-r border-white/[0.08] bg-[#0e0e13] md:block">
+        <aside className="hidden w-60 flex-shrink-0 border-r border-white/[0.07] bg-[#0d0d10] md:block">
           {sidebarNav}
         </aside>
 
@@ -882,7 +929,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
               className="fixed inset-0 z-40 bg-black/60 md:hidden"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-white/[0.08] bg-[#0e0e13] pt-14 md:hidden">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-white/[0.07] bg-[#0d0d10] pt-14 md:hidden">
               {sidebarNav}
             </aside>
           </>
