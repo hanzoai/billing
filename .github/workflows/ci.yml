@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +23,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: GITHUB_PAGES=true pnpm build
 
       - name: Upload artifact
@@ -32,7 +33,7 @@ jobs:
           path: out
 
   deploy-pages:
-    needs: build
+    needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -47,7 +48,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   deploy-docker:
-    needs: build
+    needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -94,7 +95,7 @@ jobs:
           kubectl rollout status deployment/billing -n hanzo --timeout=120s
 
   deploy-cloudflare:
-    needs: build
+    needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_CLOUDFLARE == 'true'
     runs-on: ubuntu-latest
     permissions:
