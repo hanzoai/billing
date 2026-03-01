@@ -137,7 +137,7 @@ export const HANZO_PLANS: SubscriptionPlan[] = [
     currency: 'usd',
     badge: 'Contact Sales',
     contactSales: true,
-    externalUrl: 'https://hanzo.agency',
+    externalUrl: 'https://cal.com/hanzo',
     features: [
       'Everything in Team',
       'hanzo.agency white-label suite',
