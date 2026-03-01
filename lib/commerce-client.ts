@@ -393,8 +393,8 @@ export class Commerce {
   }
 
   async cancelSubscription(subscriptionId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/subscriptions/${subscriptionId}`, {
-      method: 'DELETE', token,
+    await this.request<void>(`/v1/billing/subscriptions/${subscriptionId}/cancel`, {
+      method: 'POST', token,
     })
   }
 
@@ -460,7 +460,7 @@ export class Commerce {
   }
 
   async setDefaultPaymentMethod(methodId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/payment-methods/${methodId}/default`, {
+    await this.request<void>(`/v1/billing/customers/${methodId}/default-payment-method`, {
       method: 'POST', token,
     })
   }
