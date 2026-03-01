@@ -553,6 +553,15 @@ export class Commerce {
     })
   }
 
+  /** Save a Square-tokenized card as a payment method */
+  async tokenizeAndAddCard(sourceId: string, userId: string, token?: string): Promise<CommercePaymentMethod> {
+    return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
+      method: 'POST',
+      body: { token: sourceId, type: 'card', provider: 'square', userId },
+      token,
+    })
+  }
+
   /** Record a wire transfer (manual, pending verification) */
   async recordWirePayment(
     params: { userId?: string; amount: number; currency?: string; reference?: string },

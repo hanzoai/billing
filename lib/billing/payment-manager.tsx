@@ -2,10 +2,10 @@
 
 import * as React from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount, useDisconnect, useSendTransaction, useChainId } from 'wagmi'
-import { parseEther } from 'viem'
+import { useAccount, useChainId } from 'wagmi'
 
 import type { PaymentMethod, PaymentMethodType, CryptoNetwork } from './types'
+import { AnimatedCard } from '../components/animated-card'
 
 export interface PaymentMethodManagerProps {
   paymentMethods?: PaymentMethod[]
@@ -213,7 +213,12 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
               ))}
             </div>
 
-            {activeTab === 'card' && <CardForm onAdd={addMethod} setError={setError} />}
+            {activeTab === 'card' && (
+              <CardForm
+                onAdd={addMethod}
+                setError={setError}
+              />
+            )}
             {activeTab === 'crypto' && <CryptoForm onAdd={addMethod} setError={setError} />}
             {activeTab === 'wire' && <WireForm onAdd={addMethod} />}
 
@@ -280,45 +285,72 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Card form — sends to Hanzo Commerce API (backend handles PCI)
+// Card form — animated preview + S2S tokenization via commerce API
 // ═══════════════════════════════════════════════════════════════════════════
 
-function CardForm({ onAdd, setError }: { onAdd: (m: PaymentMethod) => Promise<void>; setError: (e: string) => void }) {
-  const [number, setNumber] = React.useState('')
-  const [expiry, setExpiry] = React.useState('')
-  const [cvc, setCvc] = React.useState('')
+interface CardFormProps {
+  onAdd: (m: PaymentMethod) => Promise<void>
+  setError: (e: string) => void
+}
+
+function detectBrandPM(digits: string): string {
+  if (digits.startsWith('4')) return 'visa'
+  if (/^5[1-5]/.test(digits) || /^2[2-7]/.test(digits)) return 'mastercard'
+  if (/^3[47]/.test(digits)) return 'amex'
+  if (/^6(?:011|5)/.test(digits)) return 'discover'
+  return ''
+}
+
+function CardForm({ onAdd, setError }: CardFormProps) {
+  const [number, setNumberRaw] = React.useState('')
   const [name, setName] = React.useState('')
-  const [saving, setSaving] = React.useState(false)
+  const [expiry, setExpiryRaw] = React.useState('')
+  const [cvc, setCvc] = React.useState('')
+  const [zip, setZip] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+  const [cvvFocused, setCvvFocused] = React.useState(false)
 
-  const formatCardNumber = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 16)
-    return digits.replace(/(.{4})/g, '$1 ').trim()
-  }
+  const rawNumber = number.replace(/\D/g, '')
+  const brand = detectBrandPM(rawNumber)
+  const cvcLength = brand === 'amex' ? 4 : 3
 
-  const formatExpiry = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 4)
-    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`
-    return digits
-  }
+  const authToken = React.useMemo(() => {
+    return typeof window !== 'undefined' ? (localStorage.getItem('hanzo-auth-token') ?? undefined) : undefined
+  }, [])
 
-  const detectBrand = (num: string): string => {
-    const d = num.replace(/\D/g, '')
-    if (d.startsWith('4')) return 'visa'
-    if (/^5[1-5]/.test(d) || /^2[2-7]/.test(d)) return 'mastercard'
-    if (/^3[47]/.test(d)) return 'amex'
-    if (/^6(?:011|5)/.test(d)) return 'discover'
-    return 'card'
-  }
+  const handleSubmit = React.useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (rawNumber.length < 13) { setError('Invalid card number'); return }
+    if (!expiry.includes('/')) { setError('Invalid expiry'); return }
+    const [mm, yy] = expiry.split('/')
+    if (!mm || !yy || mm.length !== 2 || yy.length !== 2) { setError('Invalid expiry'); return }
+    if (cvc.length < 3) { setError('Invalid CVC'); return }
+    if (!name.trim()) { setError('Name required'); return }
 
-  const digits = number.replace(/\D/g, '')
-  const expiryDigits = expiry.replace(/\D/g, '')
-  const canSubmit = digits.length >= 15 && expiryDigits.length === 4 && cvc.length >= 3 && name.trim().length > 1
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return
-    setSaving(true)
+    setLoading(true)
     try {
-      const brand = detectBrand(digits)
+      const base = process.env.NEXT_PUBLIC_COMMERCE_API ?? 'https://api.hanzo.ai/api/v1'
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+
+      const res = await fetch(`${base}/billing/card/tokenize`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          number: rawNumber,
+          expiry_month: mm,
+          expiry_year: `20${yy}`,
+          cvc,
+          name: name.trim(),
+          zip: zip.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? `Error ${res.status}`)
+      }
+      const data = await res.json()
       const method: PaymentMethod = {
         id: `pm_${Math.random().toString(36).slice(2, 12)}`,
         type: 'card',
@@ -326,67 +358,112 @@ function CardForm({ onAdd, setError }: { onAdd: (m: PaymentMethod) => Promise<vo
         isDefault: false,
         created_at: new Date().toISOString(),
         card: {
-          brand,
-          last4: digits.slice(-4),
-          exp_month: parseInt(expiryDigits.slice(0, 2)),
-          exp_year: 2000 + parseInt(expiryDigits.slice(2)),
+          brand: data.brand,
+          last4: data.last4,
+          exp_month: parseInt(mm, 10),
+          exp_year: parseInt(`20${yy}`, 10),
           funding: 'credit',
         },
-        billing_details: { name },
+        billing_details: { name: name.trim() },
+        _sourceToken: data.token,
       } as PaymentMethod
       await onAdd(method)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add card')
+      setError(err instanceof Error ? err.message : 'Card error')
     } finally {
-      setSaving(false)
+      setLoading(false)
     }
-  }
+  }, [rawNumber, expiry, cvc, name, zip, authToken, onAdd, setError])
+
+  const canSubmit = !loading && rawNumber.length >= 13 && !!expiry && !!cvc && !!name.trim()
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-text-muted">
-        Card details are sent securely to Hanzo Commerce over HTTPS. We store only the last 4 digits.
-      </p>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Animated card preview */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+        <AnimatedCard
+          number={rawNumber}
+          name={name}
+          expiry={expiry.replace('/', '')}
+          cvv={cvc}
+          cvvFocused={cvvFocused}
+        />
+      </div>
+
       <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="Cardholder name"
+        type="text"
+        inputMode="numeric"
+        autoComplete="cc-number"
+        placeholder="Card number"
+        value={number}
+        onChange={e => {
+          const d = e.target.value.replace(/\D/g, '').slice(0, 16)
+          setNumberRaw(d.replace(/(.{4})/g, '$1 ').trim())
+        }}
         className={INPUT_CLASS}
+        disabled={loading}
+        maxLength={19}
       />
       <input
-        value={number}
-        onChange={e => setNumber(formatCardNumber(e.target.value))}
-        placeholder="Card number"
-        inputMode="numeric"
-        className={`${INPUT_CLASS} font-mono tracking-wider`}
+        type="text"
+        autoComplete="cc-name"
+        placeholder="Cardholder name"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        className={INPUT_CLASS}
+        disabled={loading}
       />
       <div className="grid grid-cols-2 gap-3">
         <input
-          value={expiry}
-          onChange={e => setExpiry(formatExpiry(e.target.value))}
-          placeholder="MM/YY"
+          type="text"
           inputMode="numeric"
+          autoComplete="cc-exp"
+          placeholder="MM/YY"
+          value={expiry}
+          onChange={e => {
+            const d = e.target.value.replace(/\D/g, '').slice(0, 4)
+            setExpiryRaw(d.length >= 3 ? d.slice(0, 2) + '/' + d.slice(2) : d)
+          }}
           className={INPUT_CLASS}
+          disabled={loading}
+          maxLength={5}
         />
         <input
-          value={cvc}
-          onChange={e => setCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
-          placeholder="CVC"
+          type="password"
           inputMode="numeric"
+          autoComplete="cc-csc"
+          placeholder="CVC"
+          value={cvc}
+          onChange={e => setCvc(e.target.value.replace(/\D/g, '').slice(0, cvcLength))}
+          onFocus={() => setCvvFocused(true)}
+          onBlur={() => setCvvFocused(false)}
           className={INPUT_CLASS}
+          disabled={loading}
+          maxLength={cvcLength}
         />
       </div>
-      <button type="button" disabled={!canSubmit || saving} onClick={handleSubmit} className={BTN_PRIMARY}>
-        {saving ? 'Adding card…' : 'Add card'}
+      <input
+        type="text"
+        autoComplete="postal-code"
+        placeholder="ZIP (optional)"
+        value={zip}
+        onChange={e => setZip(e.target.value.slice(0, 10))}
+        className={INPUT_CLASS}
+        disabled={loading}
+      />
+
+      <button type="submit" className={BTN_PRIMARY} disabled={!canSubmit}>
+        {loading ? 'Processing...' : 'Save card'}
       </button>
-      <div className="flex items-center gap-2 text-xs text-text-dim">
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <rect x="3" y="11" width="18" height="11" rx="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
-        Visa, Mastercard, Amex, Discover accepted
+        Secured by Hanzo Commerce · PCI DSS compliant
       </div>
-    </div>
+    </form>
   )
 }
 
