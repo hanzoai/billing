@@ -77,13 +77,25 @@ jobs:
     needs: deploy-docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_K8S == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # required for KMS OIDC auth
     steps:
       - uses: actions/checkout@v4
+
+      - name: Load deploy secrets from Hanzo KMS
+        uses: hanzoai/universe/.github/actions/kms-action@main
+        with:
+          identity-id: ${{ vars.KMS_IDENTITY_ID }}
+          project-id: ${{ vars.KMS_PROJECT_ID }}
+          environment: production
+          secret-path: /github-actions/deploy
+          kms-domain: https://kms.hanzo.ai
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          token: ${{ env.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save do-sfo3-hanzo-k8s
