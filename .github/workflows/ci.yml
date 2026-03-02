@@ -84,13 +84,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Load deploy secrets from Hanzo KMS
-        uses: hanzoai/universe/.github/actions/kms-action@main
+        uses: Infisical/secrets-action@v1.3.1
         with:
+          method: "oidc-auth"
           identity-id: ${{ vars.KMS_IDENTITY_ID }}
           project-id: ${{ vars.KMS_PROJECT_ID }}
-          environment: production
+          env-slug: production
           secret-path: /github-actions/deploy
-          kms-domain: https://kms.hanzo.ai
+          domain: https://kms.hanzo.ai
+          export-type: env
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
