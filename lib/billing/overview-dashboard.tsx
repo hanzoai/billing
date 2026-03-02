@@ -104,15 +104,16 @@ function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: 
 /* ── Plan tier badge ─────────────────────────────────────────── */
 const PLAN_TIERS: Record<string, { label: string; color: string; glow: string }> = {
   'developer': { label: 'Developer', color: 'text-white/50', glow: '' },
-  'unified-ai': { label: 'Unified AI', color: 'text-sky-400', glow: 'shadow-[0_0_20px_rgba(56,189,248,0.15)]' },
+  'pro': { label: 'Pro', color: 'text-sky-400', glow: 'shadow-[0_0_20px_rgba(56,189,248,0.15)]' },
   'team': { label: 'Team', color: 'text-violet-400', glow: 'shadow-[0_0_20px_rgba(167,139,250,0.15)]' },
-  'agency': { label: 'Agency', color: 'text-amber-400', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.15)]' },
+  'enterprise': { label: 'Enterprise', color: 'text-amber-400', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.15)]' },
+  'custom': { label: 'Custom', color: 'text-emerald-400', glow: 'shadow-[0_0_20px_rgba(52,211,153,0.15)]' },
 }
 
 /* ── Main component ─────────────────────────────────────────── */
 export function OverviewDashboard(props: OverviewDashboardProps) {
   const currentPlan = props.plans.find(p => p.id === props.subscription.planId)
-  const recommendedPlan = props.plans.find(p => p.id === 'unified-ai') ?? props.plans[1]
+  const recommendedPlan = props.plans.find(p => p.id === 'pro') ?? props.plans[1]
   const mtdSpend = props.usage?.totalCost ?? 0
   const currency = props.usage?.currency ?? 'usd'
   const periodEnd = props.subscription.currentPeriodEnd
