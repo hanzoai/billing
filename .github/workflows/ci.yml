@@ -98,10 +98,10 @@ jobs:
             exit 1
           fi
 
-          # Fetch secrets for billing project
+          # Fetch deploy secrets from hanzo-iam project
           SECRETS=$(curl -s https://kms.hanzo.ai/api/v3/secrets/raw \
             -H "Authorization: Bearer $TOKEN" \
-            --data-urlencode "workspaceSlug=billing" \
+            --data-urlencode "workspaceSlug=hanzo-iam" \
             --data-urlencode "environment=prod" \
             --data-urlencode "secretPath=/github-actions/deploy" \
             -G)
