@@ -79,20 +79,44 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # required for KMS OIDC auth
     steps:
       - uses: actions/checkout@v4
 
-      - name: Load deploy secrets from Hanzo KMS
-        uses: Infisical/secrets-action@v1.0.15
-        with:
-          method: "oidc"
-          identity-id: ${{ vars.KMS_IDENTITY_ID }}
-          project-slug: ${{ vars.KMS_PROJECT_SLUG }}
-          env-slug: production
-          secret-path: /github-actions/deploy
-          domain: https://kms.hanzo.ai
-          export-type: env
+      - name: Fetch secrets from Hanzo KMS
+        env:
+          KMS_CLIENT_ID: ${{ secrets.KMS_CLIENT_ID }}
+          KMS_CLIENT_SECRET: ${{ secrets.KMS_CLIENT_SECRET }}
+        run: |
+          # Authenticate with Hanzo KMS
+          TOKEN=$(curl -s -X POST https://kms.hanzo.ai/api/v1/auth/universal-auth/login \
+            -H "Content-Type: application/json" \
+            -d "{\"clientId\": \"$KMS_CLIENT_ID\", \"clientSecret\": \"$KMS_CLIENT_SECRET\"}" \
+            | jq -r '.accessToken')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "::error::Failed to authenticate with Hanzo KMS"
+            exit 1
+          fi
+
+          # Fetch secrets for billing project
+          SECRETS=$(curl -s https://kms.hanzo.ai/api/v3/secrets/raw \
+            -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "workspaceSlug=billing" \
+            --data-urlencode "environment=prod" \
+            --data-urlencode "secretPath=/github-actions/deploy" \
+            -G)
+
+          if ! echo "$SECRETS" | jq -e '.secrets' > /dev/null 2>&1; then
+            echo "::error::Failed to fetch secrets from Hanzo KMS"
+            echo "$SECRETS" | jq . 2>/dev/null || echo "$SECRETS"
+            exit 1
+          fi
+
+          # Export each secret as env var (masked in logs)
+          echo "$SECRETS" | jq -r '.secrets[] | "\(.secretKey)=\(.secretValue)"' | while IFS='=' read -r key value; do
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
