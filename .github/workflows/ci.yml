@@ -50,74 +50,14 @@ jobs:
   deploy-docker:
     needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/hanzoai/billing:latest
-            ghcr.io/hanzoai/billing:${{ github.sha }}
-
-  deploy-k8s:
-    needs: deploy-docker
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_K8S == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write    # required for OIDC auth with Hanzo KMS
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Load deploy secrets from Hanzo KMS
-        continue-on-error: true
-        uses: Infisical/secrets-action@v1.0.12
-        with:
-          method: oidc
-          identity-id: ${{ vars.KMS_IDENTITY_ID }}
-          oidc-audience: kms.hanzo.ai
-          domain: https://kms.hanzo.ai
-          env-slug: production
-          project-slug: ${{ vars.KMS_PROJECT_ID }}
-          secret-path: /github-actions/deploy
-          export-type: env
-          include-imports: true
-
-      # Bootstrapping fallback: only used until KMS OIDC identity is configured
-      # for this repo. Remove once KMS_IDENTITY_ID and KMS_PROJECT_ID vars are set.
-      - name: Fall back to GitHub secrets for deploy
-        if: ${{ env.DIGITALOCEAN_ACCESS_TOKEN == '' }}
-        run: |
-          echo "::warning::KMS unavailable, falling back to GitHub secrets"
-          echo "DIGITALOCEAN_ACCESS_TOKEN=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}" >> $GITHUB_ENV
-
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ env.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      - name: Configure kubectl
-        run: doctl kubernetes cluster kubeconfig save do-sfo3-hanzo-k8s
-
-      - name: Deploy to K8s
-        run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl set image deployment/billing billing=ghcr.io/hanzoai/billing:${{ github.sha }} -n hanzo
-          kubectl rollout status deployment/billing -n hanzo --timeout=120s
+    uses: hanzoai/.github/.github/workflows/docker-build.yml@main
+    with:
+      image: ghcr.io/hanzoai/billing
+      platforms: linux/amd64
+      deploy: true
+      deploy-deployment: billing
+      deploy-namespace: hanzo
+    secrets: inherit
 
   deploy-cloudflare:
     needs: test-and-build
