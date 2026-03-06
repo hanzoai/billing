@@ -33,12 +33,51 @@ const ADMIN_EMAILS = [
   'ant@hanzo.ai',
 ]
 
-const organizations: Record<string, BillingOrgConfig> = { hanzo }
+const lux: BillingOrgConfig = {
+  id: 'lux',
+  displayName: 'Lux',
+  iamServerUrl: 'https://lux.id',
+  iamClientId: 'app-lux',
+  commerceUrl: 'https://api.hanzo.ai',
+  logo: '/logos/lux.svg',
+  theme: {
+    brand: '#6366f1',
+    brandHover: '#4f46e5',
+  },
+}
+
+const zoo: BillingOrgConfig = {
+  id: 'zoo',
+  displayName: 'Zoo',
+  iamServerUrl: 'https://id.zoo.network',
+  iamClientId: 'app-zoo',
+  commerceUrl: 'https://api.hanzo.ai',
+  logo: '/logos/zoo.svg',
+  theme: {
+    brand: '#22c55e',
+    brandHover: '#16a34a',
+  },
+}
+
+const pars: BillingOrgConfig = {
+  id: 'pars',
+  displayName: 'Pars',
+  iamServerUrl: 'https://pars.id',
+  iamClientId: 'app-pars',
+  commerceUrl: 'https://api.hanzo.ai',
+  logo: '/logos/pars.svg',
+  theme: {
+    brand: '#f59e0b',
+    brandHover: '#d97706',
+  },
+}
+
+const organizations: Record<string, BillingOrgConfig> = { hanzo, lux, zoo, pars }
 
 export function getOrgByHost(host: string): BillingOrgConfig {
-  for (const [, org] of Object.entries(organizations)) {
-    if (host.includes(org.id)) return org
-  }
+  if (host.includes('lux')) return lux
+  if (host.includes('zoo')) return zoo
+  if (host.includes('pars')) return pars
   return hanzo
 }
 
