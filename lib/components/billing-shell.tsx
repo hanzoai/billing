@@ -14,8 +14,8 @@ import {
   AccountMembers,
   BusinessProfilePanel,
   TaxCompliancePanel,
-} from '@/lib/billing'
-import type { BillingSection } from '@/lib/billing'
+} from '@hanzo/ui/billing'
+import type { BillingSection } from '@hanzo/ui/billing'
 import type {
   BillingAccount,
   BillingAccountMember,
@@ -32,7 +32,7 @@ import type {
   DiscountCode,
   CreditGrant,
   TransactionRecord,
-} from '@/lib/billing'
+} from '@hanzo/ui/billing'
 import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
