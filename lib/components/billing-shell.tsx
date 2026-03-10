@@ -879,8 +879,9 @@ export function BillingShell({ org, user }: BillingShellProps) {
               {([
                 { label: 'Account', href: 'https://hanzo.id/account' },
                 { label: 'Console', href: 'https://console.hanzo.ai' },
-                { label: 'Chat', href: 'https://chat.hanzo.ai' },
+                { label: 'Chat', href: 'https://hanzo.chat' },
                 { label: 'Platform', href: 'https://platform.hanzo.ai' },
+                { label: 'Storage', href: 'https://hanzo.space' },
               ] as { label: string; href: string }[]).map((app) => (
                 <a
                   key={app.label}

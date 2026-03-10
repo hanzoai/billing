@@ -1,4 +1,4 @@
-import type { SubscriptionPlan } from './billing/types'
+import type { SubscriptionPlan } from '@hanzo/ui/billing'
 
 export interface BillingOrgConfig {
   id: string
@@ -49,7 +49,7 @@ const lux: BillingOrgConfig = {
 const zoo: BillingOrgConfig = {
   id: 'zoo',
   displayName: 'Zoo',
-  iamServerUrl: 'https://id.zoo.network',
+  iamServerUrl: 'https://zoo.id',
   iamClientId: 'app-zoo',
   commerceUrl: 'https://api.hanzo.ai',
   logo: '/logos/zoo.svg',

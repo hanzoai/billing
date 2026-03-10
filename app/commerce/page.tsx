@@ -124,7 +124,7 @@ export default async function CommercePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {[
             { label: 'Docs', href: 'https://docs.hanzo.ai' },
-            { label: 'Chat', href: 'https://chat.hanzo.ai' },
+            { label: 'Chat', href: 'https://hanzo.chat' },
             { label: 'Console', href: 'https://console.hanzo.ai' },
           ].map((link) => (
             <a key={link.label} href={link.href} style={{
