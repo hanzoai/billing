@@ -39,7 +39,7 @@ import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 
-import { ORG_DOMAINS } from '@hanzo/ui/navigation/hanzo-shell'
+import { ORG_DOMAINS, HanzoHeader } from '@hanzo/ui/navigation/hanzo-shell'
 type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
 
 /* ── Sidebar section config ───────────────────────────────────── */
@@ -854,11 +854,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#09090b]">
-      {/* ── Header (shared HanzoHeader design) ──────────────────────── */}
-      <header className="sticky top-0 z-50 flex h-14 w-full items-center justify-between border-b border-white/[0.07] bg-[#09090b]/90 px-4 backdrop-blur-xl">
-        {/* Left: logo / breadcrumb / app switcher / mobile hamburger */}
-        <div className="flex min-w-0 items-center gap-2.5">
-          {/* Mobile hamburger */}
+      {/* ── Unified Hanzo Header ──────────────────────── */}
+      <HanzoHeader
+        currentApp="Billing"
+        currentAppId="billing"
+        user={{ id: user.sub, name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
+        onSignOut={handleLogout}
+        headerRight={
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -871,73 +873,8 @@ export function BillingShell({ org, user }: BillingShellProps) {
                 : <><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h16" /></>}
             </svg>
           </button>
-
-          {/* Official Hanzo H-mark (with shadow paths + hover animation) */}
-          <a
-            href={`${(ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo).iam}/account`}
-            className="flex-shrink-0 rounded transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-            aria-label={`${org.displayName} Account`}
-          >
-            <svg width="22" height="22" viewBox="0 0 67 67" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.21 67V44.6369H0V67H22.21Z" fill="#ffffff" />
-              <path d="M0 44.6369L22.21 46.8285V44.6369H0Z" fill="#DDDDDD" />
-              <path d="M66.7038 22.3184H22.2534L0.0878906 44.6367H44.4634L66.7038 22.3184Z" fill="#ffffff" />
-              <path d="M22.21 0H0V22.3184H22.21V0Z" fill="#ffffff" />
-              <path d="M66.7198 0H44.5098V22.3184H66.7198V0Z" fill="#ffffff" />
-              <path d="M66.6753 22.3185L44.5098 20.0822V22.3185H66.6753Z" fill="#DDDDDD" />
-              <path d="M66.7198 67V44.6369H44.5098V67H66.7198Z" fill="#ffffff" />
-            </svg>
-          </a>
-
-          <span className="select-none text-white/[0.15]">/</span>
-          <span className="truncate text-[13px] font-medium text-white/50">Billing</span>
-
-          {/* App switcher */}
-          <div className="relative hidden md:block" id="billing-app-switcher">
-            <div className="ml-1 flex items-center gap-0.5">
-              {((() => {
-                const d = ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo
-                return [
-                  { label: 'Account', href: `${d.iam}/account` },
-                  { label: 'Console', href: d.console },
-                  { label: 'Chat', href: d.chat },
-                  { label: 'Platform', href: d.platform },
-                  { label: 'Storage', href: d.storage },
-                ]
-              })() as { label: string; href: string }[]).map((app) => (
-                <a
-                  key={app.label}
-                  href={app.href}
-                  className="rounded-md px-2.5 py-1 text-[11px] font-medium text-white/25 transition-colors hover:bg-white/[0.05] hover:text-white/60"
-                >
-                  {app.label}
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: user email + sign out */}
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <span className="hidden text-[11px] text-white/30 sm:inline">{user.email}</span>
-          <a
-            href={`${(ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo).iam}/account`}
-            className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/60 sm:flex"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-            Account
-          </a>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/60"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="flex flex-1">
         {/* ── Desktop sidebar ──────────────────────────────── */}
