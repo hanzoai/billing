@@ -37,8 +37,10 @@ import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, Com
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
-import { ORG_DOMAINS, type OrgDomains } from '@hanzo/ui/navigation/hanzo-shell'
 import { getCommerce } from '@/lib/commerce'
+
+import { ORG_DOMAINS } from '@hanzo/ui/navigation/hanzo-shell'
+type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
 
 /* ── Sidebar section config ───────────────────────────────────── */
 const SIDEBAR_SECTIONS: Array<{ id: BillingSection; label: string; icon: React.ReactNode; group: 'main' | 'manage' }> = [
@@ -856,7 +858,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
           {/* Official Hanzo H-mark (with shadow paths + hover animation) */}
           <a
-            href={`${(ORG_DOMAINS[org.id] || ORG_DOMAINS.hanzo).iam}/account`}
+            href={`${(ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo).iam}/account`}
             className="flex-shrink-0 rounded transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
             aria-label={`${org.displayName} Account`}
           >
@@ -878,7 +880,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <div className="relative hidden md:block" id="billing-app-switcher">
             <div className="ml-1 flex items-center gap-0.5">
               {((() => {
-                const d = ORG_DOMAINS[org.id] || ORG_DOMAINS.hanzo
+                const d = ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo
                 return [
                   { label: 'Account', href: `${d.iam}/account` },
                   { label: 'Console', href: d.console },
@@ -903,7 +905,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
         <div className="flex flex-shrink-0 items-center gap-2">
           <span className="hidden text-[11px] text-white/30 sm:inline">{user.email}</span>
           <a
-            href={`${(ORG_DOMAINS[org.id] || ORG_DOMAINS.hanzo).iam}/account`}
+            href={`${(ORG_DOMAINS[org.id as keyof typeof ORG_DOMAINS] || ORG_DOMAINS.hanzo).iam}/account`}
             className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white/35 transition hover:bg-white/[0.05] hover:text-white/60 sm:flex"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
