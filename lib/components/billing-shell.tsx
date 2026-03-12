@@ -67,6 +67,10 @@ const SECTION_TITLES: Record<BillingSection, string> = {
   payment: 'Payment Methods',
   team: 'Team',
   settings: 'Settings',
+  tax: 'Tax & Compliance',
+  members: 'Team Members',
+  cost: 'Cost Explorer',
+  business: 'Business Profile',
 }
 
 function getInitialSection(): BillingSection {
