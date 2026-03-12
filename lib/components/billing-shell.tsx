@@ -414,10 +414,14 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }, [loadBillingData, loadUsage])
 
   // Auto-grant $5 starter credit for new users on first visit
+  // Guard: only attempt if no credits exist AND we haven't already tried this session
+  const starterCreditAttempted = typeof sessionStorage !== 'undefined'
+    && sessionStorage.getItem('hanzo_starter_credit_attempted') === 'true'
   useEffect(() => {
-    if (loading || creditGrants.length > 0) return
+    if (loading || creditGrants.length > 0 || starterCreditAttempted) return
     const autoGrant = async () => {
       try {
+        sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
         const token = getAccessToken()
         if (!token) return
         const commerce = getCommerce(org.commerceUrl, token)
@@ -425,11 +429,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
         await commerce.grantStarterCredit(userId)
         await loadBillingData()
       } catch {
-        // Starter credit may already exist or endpoint unavailable
+        // Starter credit may already exist or endpoint unavailable — idempotent server-side
       }
     }
     autoGrant()
-  }, [loading, creditGrants.length, org, user, loadBillingData])
+  }, [loading, creditGrants.length, starterCreditAttempted, org, user, loadBillingData])
 
   const admin = isAdminUser(user.email)
 
@@ -592,14 +596,22 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setSpendAlerts((prev) => prev.filter((a) => a.id !== id))
   }, [org])
 
+  const [claimingCredit, setClaimingCredit] = useState(false)
   const handleClaimStarterCredit = useCallback(async () => {
-    const token = getAccessToken()
-    if (!token) return
-    const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
-    await commerce.grantStarterCredit(userId)
-    await loadBillingData()
-  }, [org, user, loadBillingData])
+    if (claimingCredit) return // Prevent double-click
+    setClaimingCredit(true)
+    try {
+      const token = getAccessToken()
+      if (!token) return
+      const commerce = getCommerce(org.commerceUrl, token)
+      const userId = user.email || user.sub
+      await commerce.grantStarterCredit(userId)
+      sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
+      await loadBillingData()
+    } finally {
+      setClaimingCredit(false)
+    }
+  }, [org, user, loadBillingData, claimingCredit])
 
   const handleSubscribeSupport = useCallback(async (tierId: string) => {
     const token = getAccessToken()
