@@ -295,7 +295,7 @@ export class Commerce {
       params?: Record<string, string>
     },
   ): Promise<T> {
-    const url = new URL(path, this.baseUrl)
+    const url = new URL(`${this.baseUrl}${path}`)
     if (opts?.params) {
       for (const [k, v] of Object.entries(opts.params)) {
         url.searchParams.set(k, v)
