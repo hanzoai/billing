@@ -29,7 +29,8 @@ export type Transaction = {
   sourceKind?: string
   currency: string
   amount: number
-  tags?: string[]
+  tags?: string | string[]
+  notes?: string
   expiresAt?: string
   metadata?: Record<string, unknown>
   createdAt?: string
@@ -320,7 +321,16 @@ export class Commerce {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        throw new CommerceApiError(res.status, `${res.statusText}: ${text}`.trim())
+        // Try to extract a human-readable message from JSON error responses
+        let message = `${res.statusText}: ${text}`.trim()
+        try {
+          const parsed = JSON.parse(text)
+          const apiMsg = parsed?.error?.message ?? parsed?.message ?? parsed?.error
+          if (typeof apiMsg === 'string') message = apiMsg
+        } catch {
+          // Not JSON — use raw text
+        }
+        throw new CommerceApiError(res.status, message)
       }
 
       return (await res.json()) as T
@@ -359,7 +369,8 @@ export class Commerce {
     params?: { limit?: number; offset?: number; currency?: string },
     token?: string,
   ): Promise<Transaction[]> {
-    return this.request<Transaction[]>('/v1/billing/transactions', {
+    // API returns { transactions: [...], count: N, user: "..." }
+    const result = await this.request<{ transactions?: Transaction[]; count?: number } | Transaction[]>('/v1/billing/transactions', {
       params: {
         user,
         ...(params?.limit ? { limit: String(params.limit) } : {}),
@@ -368,6 +379,12 @@ export class Commerce {
       },
       token,
     })
+    // Unwrap envelope if present
+    if (result && !Array.isArray(result) && Array.isArray((result as Record<string, unknown>).transactions)) {
+      return (result as { transactions: Transaction[] }).transactions
+    }
+    if (Array.isArray(result)) return result
+    return []
   }
 
   // ── Subscriptions ────────────────────────────────────────────────────
@@ -442,14 +459,19 @@ export class Commerce {
   async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
     try {
       return await this.request<CommercePaymentMethod[]>('/v1/billing/payment-methods', {
-        params: { user: userId }, token,
+        params: { customerId: userId }, token,
       })
     } catch { return [] }
   }
 
-  async addPaymentMethod(params: CommercePaymentMethod, token?: string): Promise<CommercePaymentMethod> {
+  async addPaymentMethod(params: CommercePaymentMethod & { customerId?: string }, token?: string): Promise<CommercePaymentMethod> {
+    // Commerce API expects customerId, map userId → customerId if needed
+    const body = { ...params } as Record<string, unknown>
+    if (!body.customerId && params.userId) {
+      body.customerId = params.userId
+    }
     return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
-      method: 'POST', body: params, token,
+      method: 'POST', body, token,
     })
   }
 

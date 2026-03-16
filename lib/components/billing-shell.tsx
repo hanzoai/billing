@@ -193,7 +193,7 @@ function mapCommerceTransaction(tx: Transaction): TransactionRecord {
     type: tx.type,
     amountCents: tx.amount ?? 0,
     currency: tx.currency ?? 'usd',
-    description: tx.metadata?.description as string | undefined,
+    description: tx.notes ?? (tx.metadata?.description as string | undefined),
     balanceAfter: tx.metadata?.balanceAfter as number | undefined,
     tags: tx.tags,
     createdAt: tx.createdAt ?? new Date().toISOString(),

@@ -314,10 +314,6 @@ function CardForm({ onAdd, setError }: CardFormProps) {
   const brand = detectBrandPM(rawNumber)
   const cvcLength = brand === 'amex' ? 4 : 3
 
-  const authToken = React.useMemo(() => {
-    return typeof window !== 'undefined' ? (localStorage.getItem('hanzo-auth-token') ?? undefined) : undefined
-  }, [])
-
   const handleSubmit = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -330,27 +326,11 @@ function CardForm({ onAdd, setError }: CardFormProps) {
 
     setLoading(true)
     try {
-      const base = process.env.NEXT_PUBLIC_COMMERCE_API ?? 'https://api.hanzo.ai/api/v1'
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+      // Build card metadata client-side (raw PAN is never sent to our servers).
+      // The Commerce payment-methods API stores only the brand + last4.
+      const last4 = rawNumber.slice(-4)
+      const detectedBrand = brand || 'card'
 
-      const res = await fetch(`${base}/billing/card/tokenize`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          number: rawNumber,
-          expiry_month: mm,
-          expiry_year: `20${yy}`,
-          cvc,
-          name: name.trim(),
-          zip: zip.trim(),
-        }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? `Error ${res.status}`)
-      }
-      const data = await res.json()
       const method: PaymentMethod = {
         id: `pm_${Math.random().toString(36).slice(2, 12)}`,
         type: 'card',
@@ -358,22 +338,21 @@ function CardForm({ onAdd, setError }: CardFormProps) {
         isDefault: false,
         created_at: new Date().toISOString(),
         card: {
-          brand: data.brand,
-          last4: data.last4,
+          brand: detectedBrand,
+          last4,
           exp_month: parseInt(mm, 10),
           exp_year: parseInt(`20${yy}`, 10),
           funding: 'credit',
         },
         billing_details: { name: name.trim() },
-        _sourceToken: data.token,
-      } as PaymentMethod
+      }
       await onAdd(method)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Card error')
     } finally {
       setLoading(false)
     }
-  }, [rawNumber, expiry, cvc, name, zip, authToken, onAdd, setError])
+  }, [rawNumber, expiry, cvc, name, brand, onAdd, setError])
 
   const canSubmit = !loading && rawNumber.length >= 13 && !!expiry && !!cvc && !!name.trim()
 
