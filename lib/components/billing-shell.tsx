@@ -278,7 +278,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       if (!token) return
 
       const commerce = getCommerce(org.commerceUrl, token)
-      const userId = user.email || user.sub
+      const userId = user.commerceUserId || user.email || user.sub
 
       const [bal, planList, subs, invList, pmList, alertList, cgList, cBal, txList, acctList] = await Promise.allSettled([
         commerce.getBalance(userId),
@@ -378,7 +378,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       setUsageLoading(true)
 
       const commerce = getCommerce(org.commerceUrl, token)
-      const userId = user.email || user.sub
+      const userId = user.commerceUserId || user.email || user.sub
       const usageData = await commerce.getUsage(userId)
 
       if (usageData && usageData.records && usageData.records.length > 0) {
@@ -425,7 +425,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
         const token = getAccessToken()
         if (!token) return
         const commerce = getCommerce(org.commerceUrl, token)
-        const userId = user.email || user.sub
+        const userId = user.commerceUserId || user.email || user.sub
         await commerce.grantStarterCredit(userId)
         await loadBillingData()
       } catch {
@@ -443,7 +443,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
+    const userId = user.commerceUserId || user.email || user.sub
     await commerce.addDeposit({ user: userId, amount: Math.round(amount * 100), currency: 'usd' })
     const newBalance = await commerce.getBalance(userId)
     setBalance(newBalance)
@@ -464,7 +464,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
+    const userId = user.commerceUserId || user.email || user.sub
     if (subscription.id) {
       await commerce.updateSubscription(subscription.id, { planId })
     } else {
@@ -511,7 +511,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
+    const userId = user.commerceUserId || user.email || user.sub
     await commerce.addPaymentMethod({
       userId,
       type: method.type,
@@ -575,7 +575,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
+    const userId = user.commerceUserId || user.email || user.sub
     const result = await commerce.createSpendAlert({ userId, title, threshold, currency: 'usd' })
     setSpendAlerts((prev) => [...prev, mapCommerceSpendAlert(result)])
   }, [org, user])
@@ -604,7 +604,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const token = getAccessToken()
       if (!token) return
       const commerce = getCommerce(org.commerceUrl, token)
-      const userId = user.email || user.sub
+      const userId = user.commerceUserId || user.email || user.sub
       await commerce.grantStarterCredit(userId)
       sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
       await loadBillingData()
@@ -617,7 +617,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.email || user.sub
+    const userId = user.commerceUserId || user.email || user.sub
     await commerce.subscribe({ planId: `support-${tierId}`, userId })
     await loadBillingData()
   }, [org, user, loadBillingData])

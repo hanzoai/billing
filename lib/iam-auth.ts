@@ -18,6 +18,8 @@ export interface IamUser {
   displayName: string | null
   avatar: string | null
   sub: string
+  /** Commerce user ID in owner/name format (e.g. "hanzo/z"). */
+  commerceUserId: string
 }
 
 export interface IamAuthConfig {
@@ -69,11 +71,16 @@ export function getCurrentUser(): IamUser | null {
   if (!token) return null
   try {
     const payload = JSON.parse(atob(token.split('.')[1]))
+    // Commerce stores balances under owner/name format (e.g. "hanzo/z"),
+    // not UUID. IAM JWTs include both owner and name claims.
+    const commerceUserId =
+      (payload.owner && payload.name) ? `${payload.owner}/${payload.name}` : (payload.sub ?? '')
     return {
       email: payload.email ?? payload.name ?? '',
       displayName: payload.displayName ?? payload.name ?? null,
       avatar: payload.avatar ?? null,
       sub: payload.sub ?? payload.name ?? '',
+      commerceUserId,
     }
   } catch {
     return null
