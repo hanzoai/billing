@@ -242,7 +242,7 @@ function asList<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[]
   if (v !== null && typeof v === 'object') {
     const o = v as Record<string, unknown>
-    for (const key of ['data', 'items', 'records', 'results', 'list']) {
+    for (const key of ['data', 'items', 'records', 'results', 'list', 'grants', 'transactions']) {
       if (Array.isArray(o[key])) return o[key] as T[]
     }
   }
