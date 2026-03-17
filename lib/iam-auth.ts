@@ -52,8 +52,8 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
 
 /** Check if user is logged in (has valid token). */
 export function isLoggedIn(): boolean {
-  const token = sessionStorage.getItem(KEY_ACCESS_TOKEN)
-  const expiresAt = sessionStorage.getItem(KEY_EXPIRES_AT)
+  const token = localStorage.getItem(KEY_ACCESS_TOKEN)
+  const expiresAt = localStorage.getItem(KEY_EXPIRES_AT)
   if (!token) return false
   if (expiresAt && Date.now() > Number(expiresAt)) return false
   return true
@@ -62,7 +62,7 @@ export function isLoggedIn(): boolean {
 /** Get the current access token. */
 export function getAccessToken(): string | null {
   if (!isLoggedIn()) return null
-  return sessionStorage.getItem(KEY_ACCESS_TOKEN)
+  return localStorage.getItem(KEY_ACCESS_TOKEN)
 }
 
 /** Parse the JWT payload to extract user info. */
@@ -94,8 +94,8 @@ export async function startLogin(config: IamAuthConfig): Promise<void> {
   const challengeBuffer = await sha256(codeVerifier)
   const codeChallenge = base64UrlEncode(challengeBuffer)
 
-  sessionStorage.setItem(KEY_STATE, state)
-  sessionStorage.setItem(KEY_CODE_VERIFIER, codeVerifier)
+  localStorage.setItem(KEY_STATE, state)
+  localStorage.setItem(KEY_CODE_VERIFIER, codeVerifier)
 
   const base = config.iamServerUrl.replace(/\/+$/, '')
   const params = new URLSearchParams({
@@ -132,24 +132,24 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
   // Implicit flow: IAM returned access_token directly
   if (implicitToken && !code) {
     const expiresIn = Number(url.searchParams.get('expires_in') ?? '3600')
-    sessionStorage.setItem(KEY_ACCESS_TOKEN, implicitToken)
-    sessionStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
-    sessionStorage.removeItem(KEY_STATE)
-    sessionStorage.removeItem(KEY_CODE_VERIFIER)
+    localStorage.setItem(KEY_ACCESS_TOKEN, implicitToken)
+    localStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
+    localStorage.removeItem(KEY_STATE)
+    localStorage.removeItem(KEY_CODE_VERIFIER)
     return getCurrentUser()
   }
 
   if (!code) throw new Error('No authorization code in callback')
 
-  const savedState = sessionStorage.getItem(KEY_STATE)
+  const savedState = localStorage.getItem(KEY_STATE)
   if (!savedState || savedState !== state) throw new Error('State mismatch — possible CSRF')
 
-  const codeVerifier = sessionStorage.getItem(KEY_CODE_VERIFIER)
+  const codeVerifier = localStorage.getItem(KEY_CODE_VERIFIER)
   if (!codeVerifier) throw new Error('Missing code verifier')
 
   // Clean up state
-  sessionStorage.removeItem(KEY_STATE)
-  sessionStorage.removeItem(KEY_CODE_VERIFIER)
+  localStorage.removeItem(KEY_STATE)
+  localStorage.removeItem(KEY_CODE_VERIFIER)
 
   // Exchange code for tokens via Casdoor token endpoint
   const base = config.iamServerUrl.replace(/\/+$/, '')
@@ -178,18 +178,18 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
   if (!accessToken) throw new Error('No access token received')
 
   // Store tokens
-  sessionStorage.setItem(KEY_ACCESS_TOKEN, accessToken)
-  if (refreshToken) sessionStorage.setItem(KEY_REFRESH_TOKEN, refreshToken)
-  sessionStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
+  localStorage.setItem(KEY_ACCESS_TOKEN, accessToken)
+  if (refreshToken) localStorage.setItem(KEY_REFRESH_TOKEN, refreshToken)
+  localStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
 
   return getCurrentUser()
 }
 
 /** Clear all stored tokens. */
 export function logout(): void {
-  sessionStorage.removeItem(KEY_ACCESS_TOKEN)
-  sessionStorage.removeItem(KEY_REFRESH_TOKEN)
-  sessionStorage.removeItem(KEY_EXPIRES_AT)
-  sessionStorage.removeItem(KEY_STATE)
-  sessionStorage.removeItem(KEY_CODE_VERIFIER)
+  localStorage.removeItem(KEY_ACCESS_TOKEN)
+  localStorage.removeItem(KEY_REFRESH_TOKEN)
+  localStorage.removeItem(KEY_EXPIRES_AT)
+  localStorage.removeItem(KEY_STATE)
+  localStorage.removeItem(KEY_CODE_VERIFIER)
 }
