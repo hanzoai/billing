@@ -335,13 +335,40 @@ export function BillingShell({ org, user }: BillingShellProps) {
       }
 
       if (cgList.status === 'fulfilled') {
-        setCreditGrants(asList<CommerceCreditGrant>(cgList.value).map(mapCommerceCreditGrant))
+        const grants = asList<CommerceCreditGrant>(cgList.value).map(mapCommerceCreditGrant)
+        if (grants.length > 0) {
+          setCreditGrants(grants)
+        } else if (txList.status === 'fulfilled') {
+          // Synthesize credit grants from deposit transactions tagged "starter-credit"
+          const txs = asList<Transaction>(txList.value)
+          const creditTxs = txs.filter((tx) => tx.type === 'deposit' && (tx.tags === 'starter-credit' || (Array.isArray(tx.tags) && tx.tags.includes('starter-credit'))))
+          setCreditGrants(creditTxs.map((tx): CreditGrant => ({
+            id: tx.id ?? '',
+            name: tx.notes ?? 'Starter Credit',
+            amountCents: tx.amount ?? 0,
+            remainingCents: tx.amount ?? 0,
+            currency: tx.currency ?? 'usd',
+            active: true,
+            createdAt: tx.createdAt ?? new Date().toISOString(),
+          })))
+        }
       }
 
       if (cBal.status === 'fulfilled') {
         const balances = cBal.value.balances ?? []
         const usdBal = balances.find((b) => (b.currency ?? 'usd').toLowerCase() === 'usd')
-        setCreditBalance(usdBal?.available ?? 0)
+        const creditGrantBalance = usdBal?.available ?? 0
+        // Credit grants are a separate entity from the transaction-based balance.
+        // The starter credit is recorded as a transaction, so prefer the
+        // transaction balance when credit-grant balance is zero.
+        if (creditGrantBalance > 0) {
+          setCreditBalance(creditGrantBalance)
+        } else if (bal.status === 'fulfilled') {
+          setCreditBalance(bal.value.available ?? 0)
+        }
+      } else if (bal.status === 'fulfilled') {
+        // credit-balance endpoint failed — fall back to transaction balance
+        setCreditBalance(bal.value.available ?? 0)
       }
 
       if (txList.status === 'fulfilled') {
