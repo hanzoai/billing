@@ -539,9 +539,15 @@ export class Commerce {
 
   async getCreditGrants(userId: string, token?: string): Promise<CommerceCreditGrant[]> {
     try {
-      return await this.request<CommerceCreditGrant[]>('/v1/billing/credit-grants', {
+      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credit-grants', {
         params: { userId }, token,
       })
+      // Unwrap envelope: Go API returns { grants: [...], count: N }
+      if (result && !Array.isArray(result) && Array.isArray((result as Record<string, unknown>).grants)) {
+        return (result as { grants: CommerceCreditGrant[] }).grants
+      }
+      if (Array.isArray(result)) return result
+      return []
     } catch { return [] }
   }
 
