@@ -24,6 +24,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} ${mono.variable}`}>
+      <head>
+        <script src="/__config.js" />
+      </head>
       <body className="antialiased">
         <ThemeProvider>
           <Providers>{children}</Providers>
