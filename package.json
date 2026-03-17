@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hanzo/ui": "^5.3.41",
+    "@hanzo/ui": "^5.3.43",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.90.21",
     "next": "^16.1.6",
