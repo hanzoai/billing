@@ -215,6 +215,51 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
         </FadeIn>
       )}
 
+      {/* ── Upgrade CTA (top priority when not subscribed) ── */}
+      {!hasActivePlan && !isTrialing && recommendedPlan && (
+        <FadeIn delay={0}>
+          <div className="relative overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-[#1a1a2e] to-[#141419] p-6">
+            <div className="pointer-events-none absolute -top-12 left-1/2 h-32 w-64 -translate-x-1/2 rounded-full bg-sky-500/10 blur-2xl" />
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-sky-400">
+                  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                </svg>
+                <span className="text-sm font-semibold text-sky-400">Unlock the full Hanzo AI suite</span>
+              </div>
+              <p className="text-[22px] font-bold text-white mb-1">
+                All AI models. One plan. <span className="text-sky-400">$20/mo.</span>
+              </p>
+              <p className="text-[13px] text-white/50 mb-5">
+                14+ Zen AI models · 1M+ token context · Unlimited chat · MCP tools · Priority inference
+                {recommendedPlan.trialDays ? ` · ${recommendedPlan.trialDays}-day free trial` : ''}
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => props.onUpgrade?.(recommendedPlan.id)}
+                  className="rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black transition hover:bg-white/90 active:scale-[0.97]"
+                >
+                  {recommendedPlan.trialDays ? `Start ${recommendedPlan.trialDays}-day free trial` : 'Upgrade to Unified AI'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onNavigate('pricing')}
+                  className="text-sm text-white/40 transition hover:text-white/70"
+                >
+                  View all plans →
+                </button>
+              </div>
+              {(recommendedPlan.annualPrice ?? 0) > 0 && (
+                <p className="mt-3 text-[12px] text-emerald-400">
+                  Or go annual for ${recommendedPlan.annualPrice}/yr — save ${(recommendedPlan.price * 12) - recommendedPlan.annualPrice!}
+                </p>
+              )}
+            </div>
+          </div>
+        </FadeIn>
+      )}
+
       {/* ── Hero: AI Power stats ── */}
       <FadeIn delay={0}>
         <div className={`rounded-2xl border border-white/[0.08] bg-[#141419] overflow-hidden transition-all ${tier.glow}`}>
@@ -232,7 +277,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 <h2 className="text-2xl font-bold text-white">
                   {tokensThisPeriod > 0
                     ? <><AnimatedNumber value={tokensThisPeriod} /> tokens</>
-                    : props.usageLoading ? 'Loading…' : '0 tokens'
+                    : props.usageLoading ? 'Loading…' : (
+                      <span className="text-white/40">No usage yet</span>
+                    )
                   }
                 </h2>
                 {zeroUsage ? (
@@ -250,8 +297,10 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 )}
               </div>
               <div className="text-right">
-                <p className="text-[11px] text-white/30 mb-1">API spend</p>
-                <p className="text-xl font-semibold text-white tabular-nums">{fmt(mtdSpend, currency)}</p>
+                <p className="text-[11px] text-white/30 mb-1">{mtdSpend > 0 ? 'API spend' : 'Credits available'}</p>
+                <p className="text-xl font-semibold text-white tabular-nums">
+                  {mtdSpend > 0 ? fmt(mtdSpend, currency) : totalCreditsRemaining > 0 ? fmt(totalCreditsRemaining, currency) : fmt(0, currency)}
+                </p>
                 <p className="text-[12px] text-white/30 mt-1">{daysLeft}d until renewal</p>
               </div>
             </div>
@@ -302,51 +351,6 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
         </div>
       </FadeIn>
 
-      {/* ── Upgrade CTA (when on free plan or no subscription) ── */}
-      {!hasActivePlan && !isTrialing && recommendedPlan && (
-        <FadeIn delay={60}>
-          <div className="relative overflow-hidden rounded-2xl border border-white/[0.12] bg-gradient-to-br from-[#1a1a2e] to-[#141419] p-6">
-            {/* Subtle glow accent */}
-            <div className="pointer-events-none absolute -top-12 left-1/2 h-32 w-64 -translate-x-1/2 rounded-full bg-sky-500/10 blur-2xl" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-sky-400">
-                  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
-                </svg>
-                <span className="text-sm font-semibold text-sky-400">Unlock the full Hanzo AI suite</span>
-              </div>
-              <p className="text-[22px] font-bold text-white mb-1">
-                All AI models. One plan. <span className="text-sky-400">$20/mo.</span>
-              </p>
-              <p className="text-[13px] text-white/50 mb-5">
-                14+ Zen AI models · 1M+ token context · Unlimited chat · MCP tools · Priority inference
-                {recommendedPlan.trialDays ? ` · ${recommendedPlan.trialDays}-day free trial` : ''}
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => props.onUpgrade?.(recommendedPlan.id)}
-                  className="rounded-full bg-white px-6 py-2.5 text-sm font-bold text-black transition hover:bg-white/90 active:scale-[0.97]"
-                >
-                  {recommendedPlan.trialDays ? `Start ${recommendedPlan.trialDays}-day free trial` : 'Upgrade to Unified AI'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onNavigate('pricing')}
-                  className="text-sm text-white/40 transition hover:text-white/70"
-                >
-                  View all plans →
-                </button>
-              </div>
-              {(recommendedPlan.annualPrice ?? 0) > 0 && (
-                <p className="mt-3 text-[12px] text-emerald-400">
-                  Or go annual for ${recommendedPlan.annualPrice}/yr — save ${(recommendedPlan.price * 12) - recommendedPlan.annualPrice!}
-                </p>
-              )}
-            </div>
-          </div>
-        </FadeIn>
-      )}
 
       {/* ── Stats row ── */}
       <FadeIn delay={80}>
