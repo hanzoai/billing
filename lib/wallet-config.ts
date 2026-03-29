@@ -18,9 +18,32 @@ const projectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
   ''
 
-export const walletConfig = getDefaultConfig({
-  appName: 'Hanzo Billing',
-  projectId,
-  chains: [mainnet, polygon, optimism, arbitrum, base, avalanche, bsc],
-  ssr: false,
-})
+// Lazy-init to avoid crashing the entire app when projectId is not yet configured.
+// RainbowKit's getDefaultConfig throws if projectId is empty.
+let _walletConfig: ReturnType<typeof getDefaultConfig> | null = null
+
+export function getWalletConfig() {
+  if (!_walletConfig) {
+    if (!projectId) {
+      console.warn('[wallet-config] WalletConnect projectId not set — crypto payments disabled')
+      return null
+    }
+    _walletConfig = getDefaultConfig({
+      appName: 'Hanzo Billing',
+      projectId,
+      chains: [mainnet, polygon, optimism, arbitrum, base, avalanche, bsc],
+      ssr: false,
+    })
+  }
+  return _walletConfig
+}
+
+// Keep backward compat — will be null if projectId is missing
+export const walletConfig = projectId
+  ? getDefaultConfig({
+      appName: 'Hanzo Billing',
+      projectId,
+      chains: [mainnet, polygon, optimism, arbitrum, base, avalanche, bsc],
+      ssr: false,
+    })
+  : null

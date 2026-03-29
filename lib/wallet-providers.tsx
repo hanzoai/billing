@@ -11,6 +11,16 @@ import { walletConfig } from './wallet-config'
 const queryClient = new QueryClient()
 
 export default function WalletProviders({ children }: { children: React.ReactNode }) {
+  // If walletConfig is null (no WalletConnect projectId), skip wallet providers
+  // and render children directly. Crypto payment features will be unavailable.
+  if (!walletConfig) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    )
+  }
+
   return (
     <WagmiProvider config={walletConfig}>
       <QueryClientProvider client={queryClient}>
