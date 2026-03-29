@@ -356,10 +356,16 @@ export class Commerce {
     })
   }
 
-  async grantStarterCredit(user: string, token?: string): Promise<Transaction> {
-    return this.request<Transaction>('/v1/billing/credit', {
-      method: 'POST', body: { user }, token,
-    })
+  async grantStarterCredit(user: string, token?: string): Promise<Transaction | null> {
+    try {
+      return await this.request<Transaction>('/v1/billing/credit', {
+        method: 'POST', body: { user }, token,
+      })
+    } catch (err) {
+      // 409 = credit already granted — not an error
+      if (err instanceof CommerceApiError && err.status === 409) return null
+      throw err
+    }
   }
 
   // ── Transactions ─────────────────────────────────────────────────────
