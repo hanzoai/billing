@@ -3,6 +3,9 @@ RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+ARG NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=""
+ENV NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+
 COPY . .
 RUN pnpm build
 

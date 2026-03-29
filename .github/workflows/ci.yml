@@ -57,6 +57,8 @@ jobs:
       deploy: true
       deploy-deployment: billing
       deploy-namespace: hanzo
+      build-args: |
+        NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
     secrets: inherit
 
   deploy-cloudflare:
