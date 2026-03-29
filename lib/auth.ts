@@ -19,6 +19,6 @@ export function makeAuthConf(org: BillingOrgConfig): IamAuthConfig {
       ? `${window.location.origin}${basePath}/auth/callback`
       : '',
     orgName: org.id,
-    appName: 'app-hanzo',
+    appName: org.iamClientId,
   }
 }
