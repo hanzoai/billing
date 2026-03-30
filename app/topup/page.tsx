@@ -19,16 +19,58 @@ function fmtUSD(cents: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
 }
 
-function detectBrand(digits: string): string {
-  if (digits.startsWith('4')) return 'visa'
-  if (/^5[1-5]|^2[2-7]/.test(digits)) return 'mastercard'
-  if (/^3[47]/.test(digits)) return 'amex'
-  return ''
+// ── Square Web Payments SDK types (minimal surface) ──────────────────────
+
+interface SquareCard {
+  attach(selector: string): Promise<void>
+  tokenize(): Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>
+  destroy(): Promise<void>
+}
+interface SquarePayments {
+  card(options?: Record<string, unknown>): Promise<SquareCard>
+}
+interface SquareSDK {
+  payments(appId: string, locationId: string): Promise<SquarePayments>
+}
+declare global {
+  interface Window { Square?: SquareSDK }
 }
 
-function brandLabel(brand: string) {
-  const m: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', amex: 'Amex' }
-  return m[brand] ?? 'Card'
+const SQ_APP_ID = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? ''
+const SQ_LOCATION_ID = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? ''
+const SQ_ENV = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox'
+const SQ_SCRIPT =
+  SQ_ENV === 'production'
+    ? 'https://web.squarecdn.com/v1/square.js'
+    : 'https://sandbox.web.squarecdn.com/v1/square.js'
+
+const SQ_CARD_STYLE = {
+  input: {
+    backgroundColor: 'transparent',
+    color: '#fafafa',
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontSize: '13px',
+  },
+  'input::placeholder': { color: '#52525b' },
+  '.message-text': { color: '#f87171' },
+  '.message-icon': { color: '#f87171' },
+}
+
+let sqScriptPromise: Promise<void> | null = null
+function loadSquareScript(): Promise<void> {
+  if (sqScriptPromise) return sqScriptPromise
+  if (typeof window !== 'undefined' && window.Square) return (sqScriptPromise = Promise.resolve())
+  sqScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${SQ_SCRIPT}"]`)
+    if (existing) { existing.addEventListener('load', () => resolve()); return }
+    const s = document.createElement('script')
+    s.src = SQ_SCRIPT
+    s.async = true
+    s.onload = () => resolve()
+    s.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'))
+    document.head.appendChild(s)
+  })
+  return sqScriptPromise
 }
 
 // ── Topup page ───────────────────────────────────────────────────────────────
@@ -91,14 +133,61 @@ export default function TopupPage() {
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Card form state ──────────────────────────────────────────────────────
-  const [cardNumber, setCardNumberRaw] = useState('')
-  const [cardName, setCardName] = useState('')
-  const [cardExpiry, setCardExpiryRaw] = useState('')
-  const [cardCvc, setCardCvc] = useState('')
-  const rawCardNumber = cardNumber.replace(/\D/g, '')
-  const brand = detectBrand(rawCardNumber)
-  const cvcLen = brand === 'amex' ? 4 : 3
+  // ── Square SDK state ─────────────────────────────────────────────────────
+  const sqCardRef = useRef<SquareCard | null>(null)
+  const sqMountedRef = useRef(true)
+  const [sqReady, setSqReady] = useState(false)
+  const [sqLoading, setSqLoading] = useState(false)
+  const [sqError, setSqError] = useState<string | null>(null)
+
+  // Initialize Square card element when card tab is active
+  useEffect(() => {
+    if (tab !== 'card') return
+    sqMountedRef.current = true
+    setSqLoading(true)
+    setSqError(null)
+    setSqReady(false)
+
+    let card: SquareCard | null = null
+
+    async function initSquare() {
+      try {
+        await loadSquareScript()
+        if (!sqMountedRef.current) return
+        if (!window.Square) throw new Error('Square SDK unavailable')
+        if (!SQ_APP_ID) throw new Error('Payment form not configured (missing app ID)')
+        if (!SQ_LOCATION_ID) throw new Error('Payment form not configured (missing location ID)')
+
+        const payments = await window.Square.payments(SQ_APP_ID, SQ_LOCATION_ID)
+        card = await payments.card({ style: SQ_CARD_STYLE })
+        await card.attach('#sq-card-container')
+
+        if (sqMountedRef.current) {
+          sqCardRef.current = card
+          setSqReady(true)
+        } else {
+          await card.destroy()
+        }
+      } catch (err) {
+        if (sqMountedRef.current) {
+          setSqError(err instanceof Error ? err.message : 'Failed to initialize card form')
+        }
+      } finally {
+        if (sqMountedRef.current) setSqLoading(false)
+      }
+    }
+
+    void initSquare()
+
+    return () => {
+      sqMountedRef.current = false
+      sqCardRef.current?.destroy().catch(() => undefined)
+      sqCardRef.current = null
+      setSqReady(false)
+    }
+  // Re-init when tab changes back to card
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   // ── Crypto payment state ─────────────────────────────────────────────────
   const [txHash, setTxHash] = useState('')
@@ -121,7 +210,7 @@ export default function TopupPage() {
     [params.returnUrl],
   )
 
-  // ── Card submit ──────────────────────────────────────────────────────────
+  // ── Card submit (Square tokenize → charge) ───────────────────────────────
   const handleCardSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -129,53 +218,36 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
         return
       }
-
-      if (rawCardNumber.length < 13) {
-        setStatus({ type: 'error', message: 'Invalid card number.' })
-        return
-      }
-      if (!cardExpiry.includes('/')) {
-        setStatus({ type: 'error', message: 'Invalid expiry.' })
-        return
-      }
-      const [mm, yy] = cardExpiry.split('/')
-      if (!mm || !yy || mm.length !== 2 || yy.length !== 2) {
-        setStatus({ type: 'error', message: 'Invalid expiry format. Use MM/YY.' })
-        return
-      }
-      if (cardCvc.length < 3) {
-        setStatus({ type: 'error', message: 'Invalid CVC.' })
+      if (!sqCardRef.current || !sqReady) {
+        setStatus({ type: 'error', message: 'Card form not ready. Please wait.' })
         return
       }
 
       setStatus({ type: 'loading' })
       try {
+        const result = await sqCardRef.current.tokenize()
+        if (result.status !== 'OK' || !result.token) {
+          const msg = result.errors?.map((e) => e.message).join('; ') ?? 'Card tokenization failed'
+          setStatus({ type: 'error', message: msg })
+          return
+        }
+
         const commerce = getCommerce(commerceUrl, params.token)
         const userId = params.userId ?? ''
 
-        const payment = await commerce.processCardPayment({
-          card: {
-            number: rawCardNumber,
-            expMonth: parseInt(mm, 10),
-            expYear: parseInt(`20${yy}`, 10),
-            cvc: cardCvc,
-          },
-          amount: amountCents,
+        const payment = await commerce.topupWithSquareToken({
+          sourceId: result.token,
+          amountCents,
           userId: userId || undefined,
           currency: 'usd',
         })
 
-        if (payment.status === 'paid' || payment.status === 'credit') {
-          const bal = await commerce.getBalance(userId || params.token!)
-          handleSuccess(bal.balance)
-        } else {
-          setStatus({ type: 'error', message: `Payment ${payment.status ?? 'failed'}.` })
-        }
+        handleSuccess(payment.balanceCents)
       } catch (err) {
         setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
       }
     },
-    [params, rawCardNumber, cardExpiry, cardCvc, amountCents, commerceUrl, handleSuccess],
+    [params, sqReady, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────
@@ -358,72 +430,51 @@ export default function TopupPage() {
         {/* ── Card tab ─────────────────────────────────────────────────── */}
         {tab === 'card' && (
           <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="cc-number"
-                placeholder="Card number"
-                value={cardNumber}
-                onChange={(e) => {
-                  const d = e.target.value.replace(/\D/g, '').slice(0, 16)
-                  setCardNumberRaw(d.replace(/(.{4})/g, '$1 ').trim())
-                }}
-                style={INPUT}
-                disabled={isLoading}
-                maxLength={19}
-              />
-              {brand && (
-                <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.05em' }}>
-                  {brandLabel(brand).toUpperCase()}
-                </span>
+            {/* Square card container */}
+            <div
+              id="sq-card-container"
+              style={{
+                minHeight: '96px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: '#0a0a0f',
+                padding: '10px 12px',
+                position: 'relative',
+              }}
+            >
+              {sqLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+                  <div style={{
+                    width: '18px', height: '18px',
+                    border: '2px solid rgba(255,255,255,0.12)',
+                    borderTopColor: 'rgba(255,255,255,0.6)',
+                    borderRadius: '50%',
+                    animation: 'sq-spin 0.8s linear infinite',
+                  }} />
+                  <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+              {sqError && !sqLoading && (
+                <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
+                  {sqError}
+                </div>
               )}
             </div>
-            <input
-              type="text"
-              autoComplete="cc-name"
-              placeholder="Cardholder name"
-              value={cardName}
-              onChange={(e) => setCardName(e.target.value)}
-              style={INPUT}
-              disabled={isLoading}
-            />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="cc-exp"
-                placeholder="MM/YY"
-                value={cardExpiry}
-                onChange={(e) => {
-                  const d = e.target.value.replace(/\D/g, '').slice(0, 4)
-                  setCardExpiryRaw(d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d)
-                }}
-                style={INPUT}
-                disabled={isLoading}
-                maxLength={5}
-              />
-              <input
-                type="password"
-                inputMode="numeric"
-                autoComplete="cc-csc"
-                placeholder="CVC"
-                value={cardCvc}
-                onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, cvcLen))}
-                style={INPUT}
-                disabled={isLoading}
-                maxLength={cvcLen}
-              />
-            </div>
-            <button type="submit" style={submitStyle(isLoading)} disabled={isLoading}>
+
+            <button
+              type="submit"
+              style={submitStyle(isLoading || !sqReady)}
+              disabled={isLoading || !sqReady}
+            >
               {isLoading ? 'Processing...' : `Pay ${fmtUSD(amountCents)}`}
             </button>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              PCI DSS compliant · Secured by Hanzo Commerce
+              Secured by Square — PCI DSS compliant tokenization
             </div>
           </form>
         )}

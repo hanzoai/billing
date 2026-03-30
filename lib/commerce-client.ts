@@ -609,6 +609,17 @@ export class Commerce {
     })
   }
 
+  /** Charge a Square Web Payments SDK nonce and credit user balance (one-time top-up) */
+  async topupWithSquareToken(
+    params: { sourceId: string; amountCents: number; userId?: string; currency?: string },
+    token?: string,
+  ): Promise<{ transactionId: string; balanceCents: number; status: string }> {
+    return this.request<{ transactionId: string; balanceCents: number; status: string }>(
+      '/v1/billing/topup/token',
+      { method: 'POST', body: params, token },
+    )
+  }
+
   /** Record a wire transfer (manual, pending verification) */
   async recordWirePayment(
     params: { userId?: string; amount: number; currency?: string; reference?: string },
