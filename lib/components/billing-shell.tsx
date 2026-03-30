@@ -16,6 +16,7 @@ import {
   TaxCompliancePanel,
 } from '@hanzo/ui/billing'
 import type { BillingSection } from '@hanzo/ui/billing'
+import { GuidedSetup } from '@/lib/billing/guided-setup'
 import type {
   BillingAccount,
   BillingAccountMember,
@@ -733,6 +734,18 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
   const starterCredit = creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null
 
+  // Show guided setup on overview when user hasn't added a payment method yet.
+  // Dismissed via sessionStorage so it doesn't reappear during the same session.
+  const [setupDismissed, setSetupDismissed] = useState(() =>
+    typeof sessionStorage !== 'undefined' && sessionStorage.getItem('hanzo_setup_dismissed') === 'true'
+  )
+  const showGuidedSetup = !setupDismissed && !loading && paymentMethods.length === 0
+
+  const handleDismissSetup = useCallback(() => {
+    sessionStorage.setItem('hanzo_setup_dismissed', 'true')
+    setSetupDismissed(true)
+  }, [])
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#09090b]">
@@ -775,6 +788,21 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const renderSection = () => {
     switch (activeSection) {
       case 'overview':
+        if (showGuidedSetup) {
+          return (
+            <GuidedSetup
+              hasPaymentMethod={paymentMethods.length > 0}
+              hasSubscription={!!subscription.id}
+              hasSpendAlert={spendAlerts.length > 0}
+              hasCredits={creditBalance > 0}
+              onAddPaymentMethod={() => navigate('payment')}
+              onPickPlan={() => navigate('pricing')}
+              onSetSpendLimit={() => navigate('alerts')}
+              onBuyCredits={() => navigate('credits')}
+              onDismiss={handleDismissSetup}
+            />
+          )
+        }
         return (
           <OverviewDashboard
             subscription={subscription}

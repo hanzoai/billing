@@ -368,6 +368,19 @@ export class Commerce {
     }
   }
 
+  // ── Billing status ───────────────────────────────────────────────────
+
+  async getBillingStatus(user: string, token?: string): Promise<{ hasPaymentMethod: boolean; creditBalance: number }> {
+    try {
+      return await this.request<{ hasPaymentMethod: boolean; creditBalance: number }>(
+        `/v1/billing/status?user=${encodeURIComponent(user)}`,
+        { token },
+      )
+    } catch {
+      return { hasPaymentMethod: false, creditBalance: 0 }
+    }
+  }
+
   // ── Transactions ─────────────────────────────────────────────────────
 
   async getTransactions(

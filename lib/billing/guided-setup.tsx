@@ -24,47 +24,52 @@ interface Step {
 export function GuidedSetup(props: GuidedSetupProps) {
   const steps: Step[] = [
     {
-      label: 'Add a payment method',
-      description: 'Required to activate your account and start using Hanzo services.',
-      done: props.hasPaymentMethod,
-      required: true,
-      action: props.onAddPaymentMethod,
-      actionLabel: 'Add payment method',
+      label: '$5 free credit ready',
+      description: 'Your starter credit is active. Use it to explore all Hanzo AI services — no card needed to get started.',
+      done: props.hasCredits,
+      required: false,
+      action: props.onBuyCredits,
+      actionLabel: 'View credits',
     },
     {
-      label: 'Pick a billing mode',
-      description: 'Choose a monthly plan for predictable costs, or pay-as-you-go for flexible usage.',
+      label: 'Add a payment method',
+      description: 'Save a card to keep your account running when free credits are used. Verified securely via Square.',
+      done: props.hasPaymentMethod,
+      required: false,
+      action: props.onAddPaymentMethod,
+      actionLabel: 'Add card',
+    },
+    {
+      label: 'Choose a plan',
+      description: 'Unlock higher rate limits, more models, and team features with a monthly or annual plan.',
       done: props.hasSubscription,
-      required: true,
+      required: false,
       action: props.onPickPlan,
-      actionLabel: 'Choose plan',
+      actionLabel: 'See plans',
     },
     {
       label: 'Set a spend limit',
-      description: 'Prevent surprise bills by setting a monthly budget with automatic alerts.',
+      description: 'Prevent surprise charges by setting a monthly budget with automatic email alerts.',
       done: props.hasSpendAlert,
       required: false,
       action: props.onSetSpendLimit,
       actionLabel: 'Set limit',
     },
-    {
-      label: 'Buy credits',
-      description: 'Pre-pay for usage at a discount. Credits are applied before card charges.',
-      done: props.hasCredits,
-      required: false,
-      action: props.onBuyCredits,
-      actionLabel: 'Buy credits',
-    },
   ]
 
   const completedCount = steps.filter(s => s.done).length
+  const allDone = completedCount === steps.length
 
   return (
     <div className="mx-auto max-w-lg py-8">
       <div className="rounded-2xl border border-border bg-bg-card p-8">
-        <h2 className="text-lg font-semibold text-text mb-1">Get billing ready</h2>
+        <h2 className="text-lg font-semibold text-text mb-1">
+          {allDone ? 'You\'re all set 🎉' : 'Get started with Hanzo'}
+        </h2>
         <p className="text-sm text-text-muted mb-6">
-          Complete these steps to activate your account. {completedCount} of {steps.length} done.
+          {allDone
+            ? 'Your billing account is fully configured.'
+            : `${completedCount} of ${steps.length} steps complete — no steps are required to use your free credits.`}
         </p>
 
         {/* Progress bar */}
