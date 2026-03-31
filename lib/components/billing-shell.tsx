@@ -592,11 +592,12 @@ export function BillingShell({ org, user }: BillingShellProps) {
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
-    await commerce.setDefaultPaymentMethod(id)
+    const userId = user.commerceUserId || user.email || user.sub
+    await commerce.setDefaultPaymentMethod(id, undefined, userId)
     setPaymentMethods((prev: PaymentMethod[]) =>
       prev.map((m) => ({ ...m, is_default: m.id === id, isDefault: m.id === id }))
     )
-  }, [org])
+  }, [org, user])
 
   const handleDownloadInvoice = useCallback(async (invoice: Invoice) => {
     const url = invoice.pdfUrl ?? invoice.invoicePdfUrl

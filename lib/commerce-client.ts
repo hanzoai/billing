@@ -500,9 +500,10 @@ export class Commerce {
     })
   }
 
-  async setDefaultPaymentMethod(methodId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/customers/${methodId}/default-payment-method`, {
-      method: 'POST', token,
+  async setDefaultPaymentMethod(methodId: string, token?: string, customerId?: string): Promise<void> {
+    const custId = customerId || 'default'
+    await this.request<void>(`/v1/billing/customers/${custId}/default-payment-method`, {
+      method: 'POST', body: { paymentMethodId: methodId }, token,
     })
   }
 
