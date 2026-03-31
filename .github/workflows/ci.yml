@@ -50,6 +50,9 @@ jobs:
   deploy-docker:
     needs: test-and-build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     uses: hanzoai/.github/.github/workflows/docker-build.yml@main
     with:
       image: ghcr.io/hanzoai/billing
