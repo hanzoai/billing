@@ -605,7 +605,7 @@ export class Commerce {
   async tokenizeAndAddCard(sourceId: string, userId: string, token?: string): Promise<CommercePaymentMethod> {
     return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
       method: 'POST',
-      body: { token: sourceId, type: 'card', provider: 'square', userId },
+      body: { providerRef: sourceId, type: 'card', providerType: 'square', customerId: userId },
       token,
     })
   }
