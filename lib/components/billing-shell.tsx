@@ -10,11 +10,14 @@ import {
   CreditsPanel,
   TransactionsPanel,
   SpendAlertsPanel,
-  PaymentMethodManager,
+  PaymentMethodManager as _PaymentMethodManager,
   AccountMembers,
   BusinessProfilePanel,
   TaxCompliancePanel,
 } from '@hanzo/ui/billing'
+// Use local PaymentMethodManager with Square Web Payments SDK card form
+// instead of the @hanzo/ui version that calls the server-side /card/tokenize endpoint.
+import { PaymentMethodManager } from '@/lib/billing/payment-manager'
 import type { BillingSection } from '@hanzo/ui/billing'
 import { GuidedSetup } from '@/lib/billing/guided-setup'
 import type {
@@ -540,6 +543,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
     const userId = user.commerceUserId || user.email || user.sub
+
+    // If the method has a Square sourceId token, use the dedicated
+    // tokenizeAndAddCard flow which does real $1 pre-auth verification.
+    if (method._sourceToken && method.type === 'card') {
+      await commerce.tokenizeAndAddCard(method._sourceToken, userId)
+      await loadBillingData()
+      return
+    }
+
     await commerce.addPaymentMethod({
       userId,
       type: method.type,
@@ -875,7 +887,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       case 'payment':
         return (
           <PaymentMethodManager
-            paymentMethods={paymentMethods}
+            paymentMethods={paymentMethods as any}
             onAdd={handleAddPaymentMethod}
             onRemove={handleRemovePaymentMethod}
             onSetDefault={handleSetDefaultPaymentMethod}
