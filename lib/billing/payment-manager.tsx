@@ -223,8 +223,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                     is_default: false,
                     isDefault: false,
                     created_at: new Date().toISOString(),
-                    providerRef: sourceId,
-                    provider: 'square',
+                    _sourceToken: sourceId,
                     card: { brand: 'card', last4: '••••', exp_month: 0, exp_year: 0, funding: 'credit' },
                   }
                   await addMethod(method)
