@@ -72,14 +72,14 @@ function loadSquareScript(): Promise<void> {
 
 // ── Square card appearance (dark theme) ──────────────────────────────────
 
+// Square Web Payments SDK only supports a subset of CSS selectors/properties.
+// Use only the documented selectors: input, input::placeholder, .message-text, .message-icon
+// https://developer.squareup.com/docs/web-payments/customize-the-card-payment-form
 const SQUARE_STYLE = {
-  '.input-wrapper': {
-    backgroundColor: 'transparent',
-  },
   input: {
     backgroundColor: 'transparent',
     color: '#fafafa',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'sans-serif',
     fontSize: '14px',
   },
   'input::placeholder': {
