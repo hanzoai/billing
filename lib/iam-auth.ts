@@ -70,7 +70,10 @@ export function getCurrentUser(): IamUser | null {
   const token = getAccessToken()
   if (!token) return null
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    // JWT uses base64url encoding — convert to standard base64 for atob()
+    let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    while (b64.length % 4) b64 += '='
+    const payload = JSON.parse(atob(b64))
     // Commerce stores balances under owner/name format (e.g. "hanzo/z"),
     // not UUID. IAM JWTs include both owner and name claims.
     const commerceUserId =
