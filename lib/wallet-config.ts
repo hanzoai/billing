@@ -38,7 +38,11 @@ export function getWalletConfig() {
   return _walletConfig
 }
 
-// Keep backward compat — will be null if projectId is missing
+// Keep backward compat — null by default to avoid CORS errors from RPC
+// endpoints (eth.merkle.io) on page load. Only initialized when user
+// explicitly accesses crypto wallet features via getWalletConfig().
+export const walletConfig: ReturnType<typeof getDefaultConfig> | null = null
+/* Previously eagerly initialized:
 export const walletConfig = projectId
   ? getDefaultConfig({
       appName: 'Hanzo Billing',
@@ -47,3 +51,4 @@ export const walletConfig = projectId
       ssr: false,
     })
   : null
+*/
