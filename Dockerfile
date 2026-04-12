@@ -9,10 +9,5 @@ ENV NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 COPY . .
 RUN pnpm build
 
-FROM nginx:alpine
-COPY --from=builder /app/out /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-EXPOSE 80
-ENTRYPOINT ["/docker-entrypoint.sh"]
+FROM ghcr.io/hanzoai/spa
+COPY --from=builder /app/out /public
