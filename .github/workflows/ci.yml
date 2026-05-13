@@ -58,6 +58,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # id-token: write is required by the reusable workflow for OIDC.
+      # Job-level permissions are NOT inherited from workflow-level when
+      # calling a reusable workflow — missing this caused startup_failure.
+      id-token: write
     uses: hanzoai/.github/.github/workflows/docker-build.yml@main
     with:
       image: ghcr.io/hanzoai/billing
