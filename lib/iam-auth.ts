@@ -144,15 +144,19 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
 
   if (!code) throw new Error('No authorization code in callback')
 
-  const savedState = localStorage.getItem(KEY_STATE)
-  if (!savedState || savedState !== state) throw new Error('State mismatch — possible CSRF')
-
+  // PKCE (code_verifier) is the primary CSRF protection here; the `state` param
+  // is only a secondary check. Do NOT hard-fail on a state mismatch — a callback
+  // re-run or a repeated login overwrites localStorage and must not lock the
+  // user out. Require the verifier (needed for the exchange) and only warn on a
+  // state mismatch. State/verifier are cleared after a successful exchange
+  // (below), so a benign re-run still works.
   const codeVerifier = localStorage.getItem(KEY_CODE_VERIFIER)
-  if (!codeVerifier) throw new Error('Missing code verifier')
+  if (!codeVerifier) throw new Error('Missing code verifier — please start sign in again')
 
-  // Clean up state
-  localStorage.removeItem(KEY_STATE)
-  localStorage.removeItem(KEY_CODE_VERIFIER)
+  const savedState = localStorage.getItem(KEY_STATE)
+  if (savedState && state && savedState !== state) {
+    console.warn('OAuth state mismatch — continuing (PKCE protects the exchange)')
+  }
 
   // Exchange code for tokens via IAM token endpoint
   const base = config.iamServerUrl.replace(/\/+$/, '')
@@ -184,6 +188,10 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
   localStorage.setItem(KEY_ACCESS_TOKEN, accessToken)
   if (refreshToken) localStorage.setItem(KEY_REFRESH_TOKEN, refreshToken)
   localStorage.setItem(KEY_EXPIRES_AT, String(Date.now() + expiresIn * 1000))
+
+  // Exchange succeeded — now clear the one-time PKCE/state values.
+  localStorage.removeItem(KEY_STATE)
+  localStorage.removeItem(KEY_CODE_VERIFIER)
 
   return getCurrentUser()
 }
