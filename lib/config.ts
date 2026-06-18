@@ -18,7 +18,7 @@ const hanzo: BillingOrgConfig = {
   displayName: 'Hanzo',
   iamServerUrl: 'https://hanzo.id',
   iamClientId: 'hanzo-billing',
-  commerceUrl: 'https://commerce-api.hanzo.ai/api',
+  commerceUrl: 'https://commerce-api.hanzo.ai',
   logo: '/logos/hanzo.svg',
   theme: {
     brand: '#ffffff',
@@ -38,7 +38,7 @@ const lux: BillingOrgConfig = {
   displayName: 'Lux',
   iamServerUrl: 'https://lux.id',
   iamClientId: 'lux-app',
-  commerceUrl: 'https://commerce-api.hanzo.ai/api',
+  commerceUrl: 'https://commerce-api.hanzo.ai',
   logo: '/logos/lux.svg',
   theme: {
     brand: '#6366f1',
@@ -51,7 +51,7 @@ const zoo: BillingOrgConfig = {
   displayName: 'Zoo',
   iamServerUrl: 'https://zoo.id',
   iamClientId: 'zoo-app',
-  commerceUrl: 'https://commerce-api.hanzo.ai/api',
+  commerceUrl: 'https://commerce-api.hanzo.ai',
   logo: '/logos/zoo.svg',
   theme: {
     brand: '#22c55e',
@@ -64,7 +64,7 @@ const pars: BillingOrgConfig = {
   displayName: 'Pars',
   iamServerUrl: 'https://pars.id',
   iamClientId: 'pars-app',
-  commerceUrl: 'https://commerce-api.hanzo.ai/api',
+  commerceUrl: 'https://commerce-api.hanzo.ai',
   logo: '/logos/pars.svg',
   theme: {
     brand: '#f59e0b',
