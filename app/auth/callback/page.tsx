@@ -1,14 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getOrgByHost } from '@/lib/config'
 import { makeAuthConf } from '@/lib/auth'
 import { handleCallback } from '@/lib/iam-auth'
 
 export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null)
+  // Guard against the effect running more than once (StrictMode double-invoke
+  // or a re-render) — handleCallback consumes the one-time auth code, so a
+  // second run would otherwise fail.
+  const ran = useRef(false)
 
   useEffect(() => {
+    if (ran.current) return
+    ran.current = true
+
     const org = getOrgByHost(window.location.host)
     const conf = makeAuthConf(org)
 

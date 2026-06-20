@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { getOrgByHost } from '@/lib/config'
 
 export function CouponInput() {
   const [code, setCode] = useState('')
@@ -13,21 +14,28 @@ export function CouponInput() {
     setStatus('loading')
     setMessage('')
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_COMMERCE_API ?? 'https://api.hanzo.ai/api/v1'}/coupons/validate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: trimmed }),
-        },
-      )
-      if (res.ok) {
-        const data = await res.json()
+      const { commerceUrl } = getOrgByHost(window.location.host)
+      const res = await fetch(`${commerceUrl}/v1/coupon/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: trimmed }),
+      })
+      // The validate endpoint returns 200 with { valid, coupon, rewards } for
+      // known codes (valid:false for unknown/expired) and a non-2xx only on
+      // transport or auth errors.
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.valid) {
+        const reward = Array.isArray(data.rewards) && data.rewards.length > 0
+          ? data.rewards[0]?.description
+          : undefined
         setStatus('ok')
-        setMessage(data.description ?? `Code applied: ${trimmed}`)
+        setMessage(reward ?? data.coupon?.name ?? `Code applied: ${trimmed}`)
+      } else if (res.ok) {
+        setStatus('error')
+        setMessage(data?.error ?? 'Invalid or expired coupon code.')
       } else {
         setStatus('error')
-        setMessage('Invalid or expired coupon code.')
+        setMessage('Unable to validate coupon right now.')
       }
     } catch {
       setStatus('error')
