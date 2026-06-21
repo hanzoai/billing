@@ -1,4 +1,4 @@
-# LLM.md - Hanzo Billing
+# Hanzo Billing
 
 ## Overview
 Hanzo billing service
