@@ -11,6 +11,16 @@ const DEFAULT_TIMEOUT_MS = 10_000
 export type CommerceClientConfig = {
   commerceUrl: string
   token?: string
+  /**
+   * Test mode. When true, every request carries `X-Hanzo-Test: true`,
+   * which the gateway propagates to commerce (commerce iammiddleware
+   * downgrades org.Live=false -> Square Sandbox / test ledger). Set this
+   * from the build's Square environment so a sandbox-built billing UI
+   * always charges the sandbox processor that issued its Web Payments
+   * nonce. Only ever downgrades to sandbox (strictly less privileged);
+   * a production build leaves it false and bills live.
+   */
+  testMode?: boolean
 }
 
 export type Balance = {
@@ -277,10 +287,12 @@ export class CommerceApiError extends Error {
 export class Commerce {
   private readonly baseUrl: string
   private token: string | undefined
+  private readonly testMode: boolean
 
   constructor(config: CommerceClientConfig) {
     this.baseUrl = config.commerceUrl.replace(/\/+$/, '')
     this.token = config.token
+    this.testMode = config.testMode ?? false
   }
 
   setToken(token: string) {
@@ -310,6 +322,8 @@ export class Commerce {
     const authToken = opts?.token ?? this.token
     if (authToken) headers.Authorization = `Bearer ${authToken}`
     if (opts?.body) headers['Content-Type'] = 'application/json'
+    // Sandbox builds signal test mode; the gateway propagates it to commerce.
+    if (this.testMode) headers['X-Hanzo-Test'] = 'true'
 
     try {
       const res = await fetch(url.toString(), {
