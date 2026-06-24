@@ -12,8 +12,23 @@ ENV NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
+# Square Web Payments config is baked at build time (NEXT_PUBLIC_*, static
+# export). Defaults come from .env.production (live). For a SANDBOX build
+# (investor demo) pass these build-args; when set, they are written to
+# .env.production.local which Next.js loads at higher priority than
+# .env.production — so the committed live default is never mutated and an
+# unset arg leaves the live values intact.
+ARG SQUARE_APPLICATION_ID=""
+ARG SQUARE_LOCATION_ID=""
+ARG SQUARE_ENVIRONMENT=""
+
 COPY . .
-RUN pnpm build
+RUN if [ -n "$SQUARE_APPLICATION_ID" ]; then \
+      printf 'NEXT_PUBLIC_SQUARE_APPLICATION_ID=%s\nNEXT_PUBLIC_SQUARE_LOCATION_ID=%s\nNEXT_PUBLIC_SQUARE_ENVIRONMENT=%s\n' \
+        "$SQUARE_APPLICATION_ID" "$SQUARE_LOCATION_ID" "$SQUARE_ENVIRONMENT" > .env.production.local; \
+      echo "billing: SANDBOX Square build ($SQUARE_ENVIRONMENT / $SQUARE_APPLICATION_ID)"; \
+    fi && \
+    pnpm build
 
 FROM ghcr.io/hanzoai/spa
 COPY --from=builder /app/out /public

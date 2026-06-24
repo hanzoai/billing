@@ -48,7 +48,11 @@ const SQ_CARD_STYLE = {
   input: {
     backgroundColor: 'transparent',
     color: '#fafafa',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    // Square Web Payments SDK rejects CSS-wide keywords / multi-family
+    // stacks (ui-sans-serif, system-ui) for fontFamily — it wants a single
+    // concrete family. A bare stack throws "Invalid style value ... for
+    // property 'fontFamily'" and blocks the card iframe from painting.
+    fontFamily: 'Inter',
     fontSize: '13px',
   },
   'input::placeholder': { color: '#52525b' },
