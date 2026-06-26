@@ -339,8 +339,12 @@ export class Commerce {
     const authToken = opts?.token ?? this.token
     if (authToken) headers.Authorization = `Bearer ${authToken}`
     if (opts?.body) headers['Content-Type'] = 'application/json'
-    // Sandbox builds signal test mode; the gateway propagates it to commerce.
-    if (this.testMode) headers['X-Hanzo-Test'] = 'true'
+    // Sandbox builds signal test mode so top-ups charge the sandbox processor.
+    // But an admin org-view (this.org set) is read-only inspection of LIVE
+    // billing — sending the test flag there makes commerce read the empty
+    // TEST ledger and show $0 instead of the org's real balance/usage. So
+    // suppress it whenever a billing-view org override is active.
+    if (this.testMode && !this.org) headers['X-Hanzo-Test'] = 'true'
 
     try {
       const res = await fetch(url.toString(), {
