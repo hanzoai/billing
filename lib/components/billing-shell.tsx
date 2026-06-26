@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   OverviewDashboard,
   UsagePanel,
@@ -288,14 +288,8 @@ export function BillingShell({ org, user }: BillingShellProps) {
     if (typeof window === 'undefined') return globalAdmin ? 'hanzo' : ownOrg
     return localStorage.getItem('hanzo_billing_view_org') || (globalAdmin ? 'hanzo' : ownOrg)
   })
-  // Monotonic load guards: when the org switches mid-flight, only the latest
-  // load may apply results / clear the spinner — a stale load (the previous
-  // org) must never overwrite the newer org's data.
-  const billSeq = useRef(0)
-  const usageSeq = useRef(0)
 
   const loadBillingData = useCallback(async () => {
-    const seq = ++billSeq.current
     try {
       const token = getAccessToken()
       if (!token) return
@@ -316,9 +310,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
         commerce.getTransactions(userId, { limit: 100 }),
         commerce.listBillingAccounts(),
       ])
-
-      // A newer org switch superseded this load — drop its stale results.
-      if (seq !== billSeq.current) return
 
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
@@ -421,12 +412,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load billing data')
     } finally {
-      if (seq === billSeq.current) setLoading(false)
+      setLoading(false)
     }
   }, [org, user, globalAdmin, viewOrg])
 
   const loadUsage = useCallback(async () => {
-    const seq = ++usageSeq.current
     try {
       const token = getAccessToken()
       if (!token) return
@@ -437,7 +427,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const userId = user.commerceUserId || user.email || user.sub
       const usageData = await commerce.getUsage(userId)
 
-      if (seq !== usageSeq.current) return
       if (usageData && usageData.records && usageData.records.length > 0) {
         setUsage({
           totalCost: usageData.totalCost ?? 0,
@@ -461,7 +450,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     } catch {
       // Usage data is optional — don't block the UI
     } finally {
-      if (seq === usageSeq.current) setUsageLoading(false)
+      setUsageLoading(false)
     }
   }, [org, user, globalAdmin, viewOrg])
 
