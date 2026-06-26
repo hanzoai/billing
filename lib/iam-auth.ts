@@ -158,9 +158,12 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
     console.warn('OAuth state mismatch — continuing (PKCE protects the exchange)')
   }
 
-  // Exchange code for tokens via IAM token endpoint
+  // Exchange code for tokens via the CANONICAL IAM token endpoint. Only
+  // /v1/iam/oauth/access_token returns JSON — bare /oauth/token and
+  // /oauth/access_token hit the SPA catch-all and return HTML ("Unexpected
+  // token '<'"), which also leaves no token stored → bounce back to login.
   const base = config.iamServerUrl.replace(/\/+$/, '')
-  const tokenRes = await fetch(`${base}/oauth/token`, {
+  const tokenRes = await fetch(`${base}/v1/iam/oauth/access_token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
