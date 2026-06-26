@@ -39,9 +39,11 @@ import type {
 } from '@hanzo/ui/billing'
 import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
-import { getAccessToken, logout } from '@/lib/iam-auth'
+import { getAccessToken, logout, isGlobalAdminUser } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
-import { getCommerce } from '@/lib/commerce'
+import { getCommerce, setCommerceViewOrg } from '@/lib/commerce'
+import { fetchViewableOrgs } from '@/lib/iam-orgs'
+import { OrgViewSelector } from '@/lib/billing/org-selector'
 
 import { ORG_DOMAINS, HanzoHeader } from '@hanzo/ui/navigation/hanzo-shell'
 type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
@@ -276,11 +278,23 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // ── Admin org-view selector ───────────────────────────────────────────
+  // Global admins land on their own (empty) org; let them retarget the view
+  // to a real tenant. Non-admins never get a selector and never send ?org.
+  const globalAdmin = isGlobalAdminUser(user)
+  const ownOrg = (user.owner || 'hanzo').toLowerCase()
+  const [viewableOrgs, setViewableOrgs] = useState<string[]>([])
+  const [viewOrg, setViewOrg] = useState<string>(() => {
+    if (typeof window === 'undefined') return globalAdmin ? 'hanzo' : ownOrg
+    return localStorage.getItem('hanzo_billing_view_org') || (globalAdmin ? 'hanzo' : ownOrg)
+  })
+
   const loadBillingData = useCallback(async () => {
     try {
       const token = getAccessToken()
       if (!token) return
 
+      setCommerceViewOrg(globalAdmin ? viewOrg : undefined)
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.commerceUserId || user.email || user.sub
 
@@ -400,7 +414,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     } finally {
       setLoading(false)
     }
-  }, [org, user])
+  }, [org, user, globalAdmin, viewOrg])
 
   const loadUsage = useCallback(async () => {
     try {
@@ -408,6 +422,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       if (!token) return
       setUsageLoading(true)
 
+      setCommerceViewOrg(globalAdmin ? viewOrg : undefined)
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.commerceUserId || user.email || user.sub
       const usageData = await commerce.getUsage(userId)
@@ -437,19 +452,38 @@ export function BillingShell({ org, user }: BillingShellProps) {
     } finally {
       setUsageLoading(false)
     }
-  }, [org, user])
+  }, [org, user, globalAdmin, viewOrg])
 
   useEffect(() => {
     loadBillingData()
     loadUsage()
   }, [loadBillingData, loadUsage])
 
+  // Load the orgs this user may view. Only global admins get more than one,
+  // so only they ever see the selector. UX only — EdgeAuth re-checks server-side.
+  useEffect(() => {
+    if (!globalAdmin) return
+    let cancelled = false
+    const token = getAccessToken()
+    if (!token) return
+    fetchViewableOrgs(org.iamServerUrl, token, user).then((orgs) => {
+      if (cancelled) return
+      setViewableOrgs(orgs)
+      setViewOrg((cur) => (orgs.includes(cur) ? cur : orgs[0] ?? cur))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [globalAdmin, org, user])
+
   // Auto-grant $5 starter credit for new users on first visit
   // Guard: only attempt if no credits exist AND we haven't already tried this session
   const starterCreditAttempted = typeof sessionStorage !== 'undefined'
     && sessionStorage.getItem('hanzo_starter_credit_attempted') === 'true'
   useEffect(() => {
-    if (loading || creditGrants.length > 0 || starterCreditAttempted) return
+    // Never auto-grant while a global admin is inspecting billing — a view
+    // must not mutate the inspected org's ledger.
+    if (loading || creditGrants.length > 0 || starterCreditAttempted || globalAdmin) return
     const autoGrant = async () => {
       try {
         sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
@@ -464,7 +498,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       }
     }
     autoGrant()
-  }, [loading, creditGrants.length, starterCreditAttempted, org, user, loadBillingData])
+  }, [loading, creditGrants.length, starterCreditAttempted, globalAdmin, org, user, loadBillingData])
 
   const admin = isAdminUser(user.email)
 
@@ -725,6 +759,12 @@ export function BillingShell({ org, user }: BillingShellProps) {
     window.location.href = '/'
   }, [])
 
+  const handleChangeViewOrg = useCallback((next: string) => {
+    if (typeof window !== 'undefined') localStorage.setItem('hanzo_billing_view_org', next)
+    setLoading(true)
+    setViewOrg(next) // recreates loadBillingData/loadUsage → reload for the new org
+  }, [])
+
   // ── Section routing ─────────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<BillingSection>(getInitialSection)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -966,6 +1006,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
         {/* ── Main content ─────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-4xl px-8 py-8">
+            {globalAdmin && (
+              <OrgViewSelector orgs={viewableOrgs} value={viewOrg} onChange={handleChangeViewOrg} />
+            )}
+
             {error && (
               <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}

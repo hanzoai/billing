@@ -20,6 +20,15 @@ export interface IamUser {
   sub: string
   /** Commerce user ID in owner/name format (e.g. "hanzo/z"). */
   commerceUserId: string
+  /** The user's home org slug (JWT `owner` claim, e.g. "hanzo" or "admin"). */
+  owner: string
+  /**
+   * Platform-wide superadmin. True ONLY for global admins — distinct from an
+   * org-level admin role. Drives whether the billing org-selector is offered;
+   * commerce EdgeAuth re-checks this server-side, so it is never the trust
+   * boundary, only UX.
+   */
+  isGlobalAdmin: boolean
 }
 
 export interface IamAuthConfig {
@@ -78,16 +87,27 @@ export function getCurrentUser(): IamUser | null {
     // not UUID. IAM JWTs include both owner and name claims.
     const commerceUserId =
       (payload.owner && payload.name) ? `${payload.owner}/${payload.name}` : (payload.sub ?? '')
+    const owner = (payload.owner ?? '').toLowerCase()
     return {
       email: payload.email ?? payload.name ?? '',
       displayName: payload.displayName ?? payload.name ?? null,
       avatar: payload.avatar ?? null,
       sub: payload.sub ?? payload.name ?? '',
       commerceUserId,
+      owner,
+      // Match commerce EdgeAuth's gate exactly: the explicit isGlobalAdmin
+      // claim OR membership in the global admin org. Plain isAdmin (an
+      // org-level role) is deliberately NOT treated as global.
+      isGlobalAdmin: payload.isGlobalAdmin === true || owner === 'admin',
     }
   } catch {
     return null
   }
+}
+
+/** True for platform-wide global admins (owner=='admin' or isGlobalAdmin claim). */
+export function isGlobalAdminUser(user: IamUser): boolean {
+  return user.isGlobalAdmin || user.owner === 'admin'
 }
 
 /** Start OIDC/PKCE login flow — redirects to Hanzo IAM login page. */

@@ -21,6 +21,14 @@ export type CommerceClientConfig = {
    * a production build leaves it false and bills live.
    */
   testMode?: boolean
+  /**
+   * Billing-view org override. When set, every billing request carries
+   * `?org=<slug>`. commerce EdgeAuth HONORS it only for a verified GLOBAL
+   * admin and ignores it for everyone else, so it is safe to send: it lets
+   * an admin inspect another org's billing without ever weakening per-org
+   * isolation. Leave unset for normal users.
+   */
+  org?: string
 }
 
 export type Balance = {
@@ -288,15 +296,22 @@ export class Commerce {
   private readonly baseUrl: string
   private token: string | undefined
   private readonly testMode: boolean
+  private org: string | undefined
 
   constructor(config: CommerceClientConfig) {
     this.baseUrl = config.commerceUrl.replace(/\/+$/, '')
     this.token = config.token
     this.testMode = config.testMode ?? false
+    this.org = config.org
   }
 
   setToken(token: string) {
     this.token = token
+  }
+
+  /** Set (or clear) the admin billing-view org sent as `?org=` on every call. */
+  setOrg(org: string | undefined) {
+    this.org = org
   }
 
   private async request<T>(
@@ -314,6 +329,8 @@ export class Commerce {
         url.searchParams.set(k, v)
       }
     }
+    // Admin billing-view override (ignored server-side for non-admins).
+    if (this.org) url.searchParams.set('org', this.org)
 
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)

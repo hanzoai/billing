@@ -9,13 +9,27 @@ const TEST_MODE =
   (process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox') !== 'production'
 
 let instance: Commerce | null = null
+let viewOrg: string | undefined
+
+/**
+ * Set the admin billing-view org. When set, the commerce client sends
+ * `?org=<slug>` on every billing call so a GLOBAL admin can inspect another
+ * org's billing (EdgeAuth ignores it for non-admins). Pass undefined to clear
+ * it (normal users). Threaded once here so all getCommerce() call sites stay
+ * unchanged — one way to set the view org.
+ */
+export function setCommerceViewOrg(org: string | undefined) {
+  viewOrg = org
+  instance?.setOrg(org)
+}
 
 export function getCommerce(commerceUrl: string, token?: string): Commerce {
   if (!instance) {
-    instance = new Commerce({ commerceUrl, token, testMode: TEST_MODE })
+    instance = new Commerce({ commerceUrl, token, testMode: TEST_MODE, org: viewOrg })
   }
   if (token) {
     instance.setToken(token)
   }
+  instance.setOrg(viewOrg)
   return instance
 }
