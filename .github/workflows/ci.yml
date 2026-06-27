@@ -32,6 +32,10 @@ jobs:
       - run: GITHUB_PAGES=true pnpm build
 
       - name: Upload artifact
+        # Pages mirror is secondary to the k8s Docker deploy. Org-wide Actions
+        # artifact-storage quota must never abort test-and-build and skip the
+        # downstream deploy-docker job (the production billing surface).
+        continue-on-error: true
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
