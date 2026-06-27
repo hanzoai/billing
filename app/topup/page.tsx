@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getCommerce } from '@/lib/commerce'
+import {
+  sendHusdTopup,
+  recordHusdTopup,
+  topupConfigured,
+  HUSD_TREASURY,
+  type Sent,
+} from '@/lib/wallet-topup'
 
 // ── Wire transfer bank details ──────────────────────────────────────────────
 
@@ -81,7 +88,7 @@ function loadSquareScript(): Promise<void> {
 
 // ── Topup page ───────────────────────────────────────────────────────────────
 
-type PayTab = 'card' | 'crypto' | 'wire'
+type PayTab = 'card' | 'crypto' | 'wire' | 'wallet'
 
 type Status =
   | { type: 'idle' }
@@ -199,6 +206,10 @@ export default function TopupPage() {
   const [txHash, setTxHash] = useState('')
   const [fromAddr, setFromAddr] = useState('')
 
+  // ── Wallet (HUSD) state — a sent-but-not-yet-credited transfer, so a failed
+  //    record can be retried without re-sending HUSD. ─────────────────────────
+  const [walletSent, setWalletSent] = useState<Sent | null>(null)
+
   // ── Crypto receive address (Hanzo's deposit wallet) ──────────────────────
   const HANZO_ETH_ADDRESS = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
 
@@ -296,6 +307,50 @@ export default function TopupPage() {
     },
     [params, txHash, fromAddr, amountCents, commerceUrl, handleSuccess],
   )
+
+  // ── Wallet (HUSD) submit ───────────────────────────────────────────────────
+  const creditWalletTopup = useCallback(
+    async (sent: Sent) => {
+      const { balanceCents } = await recordHusdTopup({
+        commerceUrl,
+        token: params.token ?? undefined,
+        userId: params.userId ?? undefined,
+        txHash: sent.txHash,
+        fromAddress: sent.fromAddress,
+      })
+      setWalletSent(null)
+      handleSuccess(balanceCents)
+    },
+    [commerceUrl, params.token, params.userId, handleSuccess],
+  )
+
+  const handleWalletPay = useCallback(async () => {
+    if (!params.token) {
+      setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
+      return
+    }
+    setStatus({ type: 'loading' })
+    try {
+      // Send HUSD from the user's wallet, then credit from the verified on-chain
+      // amount. If the send lands but crediting fails, `walletSent` lets the user
+      // retry crediting without re-sending.
+      const sent = await sendHusdTopup((amountCents / 100).toFixed(2))
+      setWalletSent(sent)
+      await creditWalletTopup(sent)
+    } catch (err) {
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'HUSD top-up failed.' })
+    }
+  }, [params.token, amountCents, creditWalletTopup])
+
+  const handleWalletRetry = useCallback(async () => {
+    if (!walletSent) return
+    setStatus({ type: 'loading' })
+    try {
+      await creditWalletTopup(walletSent)
+    } catch (err) {
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Crediting failed. Please retry.' })
+    }
+  }, [walletSent, creditWalletTopup])
 
   // ── Wire confirm ──────────────────────────────────────────────────────────
   const handleWireConfirm = useCallback(async () => {
@@ -403,7 +458,7 @@ export default function TopupPage() {
 
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '3px', marginBottom: '16px' }}>
-          {(['card', 'crypto', 'wire'] as PayTab[]).map((t) => (
+          {(['card', 'crypto', 'wallet', 'wire'] as PayTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -421,7 +476,7 @@ export default function TopupPage() {
                 transition: 'all 0.15s',
               }}
             >
-              {t === 'card' ? 'Card' : t === 'crypto' ? 'Crypto' : 'Wire'}
+              {t === 'card' ? 'Card' : t === 'crypto' ? 'Crypto' : t === 'wallet' ? 'HUSD' : 'Wire'}
             </button>
           ))}
         </div>
@@ -545,6 +600,83 @@ export default function TopupPage() {
               {isLoading ? 'Verifying...' : `Confirm ${fmtUSD(amountCents)} crypto payment`}
             </button>
           </form>
+        )}
+
+        {/* ── Wallet (HUSD) tab ─────────────────────────────────────────── */}
+        {tab === 'wallet' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {!topupConfigured() ? (
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+                HUSD is coming to Hanzo Mainnet. Once the HUSD stablecoin is live you can top up your
+                balance directly from your wallet here — 1 HUSD = $1.00 credit.
+              </p>
+            ) : (
+              <>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+                  Pay with HUSD on Hanzo Mainnet (chain 36963). Your wallet sends HUSD to the
+                  treasury; we verify it on-chain and credit your balance. 1 HUSD = $1.00.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => copy(HUSD_TREASURY, 'Treasury')}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                    HUSD treasury (Hanzo Mainnet)
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#fafafa', wordBreak: 'break-all' }}>
+                    {HUSD_TREASURY}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>Click to copy</div>
+                </button>
+
+                {copyMsg && <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>}
+
+                {walletSent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleWalletRetry}
+                      style={submitStyle(isLoading)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Crediting...' : `Credit ${fmtUSD(amountCents)} (retry)`}
+                    </button>
+                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                      HUSD sent (tx {walletSent.txHash.slice(0, 10)}…). If crediting failed, retry above —
+                      no need to send again.
+                    </p>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleWalletPay}
+                    style={submitStyle(isLoading)}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Confirm in wallet...' : `Pay ${fmtUSD(amountCents)} with HUSD`}
+                  </button>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  Non-custodial — you sign in your own wallet, verified on-chain.
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* ── Wire tab ──────────────────────────────────────────────────── */}
