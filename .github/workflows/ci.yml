@@ -72,6 +72,14 @@ jobs:
     with:
       image: ghcr.io/hanzoai/billing
       platforms: linux/amd64
+      # Pin the build to the online DinD arcd pool. docker-build.yml defaults
+      # runner-amd64/runner-deploy to ["self-hosted","linux","amd64"], which
+      # only matches the evo host-daemon pool — currently offline, so the job
+      # queued forever. The hanzo-build-linux-amd64 scale set registers
+      # labels hanzo-build-linux-amd64,self-hosted,Linux,X64 (X64, not amd64),
+      # is org-wide, and has containerMode: dind for buildx. Target it by name.
+      runner-amd64: '["hanzo-build-linux-amd64"]'
+      runner-deploy: '["hanzo-build-linux-amd64"]'
       # Build + push only. Deployment is driven solely by the operator CR in
       # universe (infra/k8s/operator/crs/billing-v1.yaml). A CI `kubectl set
       # image` fights the operator, which reverts the deployment back to the
