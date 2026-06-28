@@ -297,7 +297,20 @@ export function BillingShell({ org, user }: BillingShellProps) {
         commerce.listBillingAccounts(),
       ])
 
-      if (bal.status === 'fulfilled') setBalance(bal.value)
+      if (bal.status === 'fulfilled') {
+        setBalance(bal.value)
+      } else {
+        // A rejected getBalance() must NOT silently render as $0.00 — a
+        // failed fetch (401/500/network) is indistinguishable from a real
+        // zero balance otherwise. Leave balance unknown (null) and surface an
+        // explicit error so the UI shows an error state, never a fake $0.00.
+        setBalance(null)
+        setError(
+          bal.reason instanceof Error
+            ? `Could not load balance: ${bal.reason.message}`
+            : 'Could not load balance (fetch failed)',
+        )
+      }
 
       if (planList.status === 'fulfilled') {
         const remotePlans: SubscriptionPlan[] = asList<Plan>(planList.value).map((p) => ({

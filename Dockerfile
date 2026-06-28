@@ -22,11 +22,20 @@ ARG SQUARE_APPLICATION_ID=""
 ARG SQUARE_LOCATION_ID=""
 ARG SQUARE_ENVIRONMENT=""
 
+# Commerce API origin the static app talks to. /topup reads
+# NEXT_PUBLIC_COMMERCE_URL (else falls back to api.hanzo.ai). For an isolated
+# SANDBOX build, point it at the sandbox commerce so card top-ups settle there.
+ARG NEXT_PUBLIC_COMMERCE_URL=""
+
 COPY . .
 RUN if [ -n "$SQUARE_APPLICATION_ID" ]; then \
       printf 'NEXT_PUBLIC_SQUARE_APPLICATION_ID=%s\nNEXT_PUBLIC_SQUARE_LOCATION_ID=%s\nNEXT_PUBLIC_SQUARE_ENVIRONMENT=%s\n' \
         "$SQUARE_APPLICATION_ID" "$SQUARE_LOCATION_ID" "$SQUARE_ENVIRONMENT" > .env.production.local; \
       echo "billing: SANDBOX Square build ($SQUARE_ENVIRONMENT / $SQUARE_APPLICATION_ID)"; \
+    fi && \
+    if [ -n "$NEXT_PUBLIC_COMMERCE_URL" ]; then \
+      printf 'NEXT_PUBLIC_COMMERCE_URL=%s\n' "$NEXT_PUBLIC_COMMERCE_URL" >> .env.production.local; \
+      echo "billing: commerce origin $NEXT_PUBLIC_COMMERCE_URL"; \
     fi && \
     pnpm build
 
