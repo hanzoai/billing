@@ -60,7 +60,9 @@ jobs:
 
   deploy-docker:
     needs: test-and-build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Publish on main (sha image) AND on v* tags (semver image) so deploy pins
+    # can be proper semver (vX.Y.Z) per policy, not sha.
+    if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && github.event_name == 'push'
     permissions:
       contents: read
       packages: write
