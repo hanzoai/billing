@@ -72,9 +72,12 @@ jobs:
     with:
       image: ghcr.io/hanzoai/billing
       platforms: linux/amd64
-      deploy: true
-      deploy-deployment: billing
-      deploy-namespace: hanzo
+      # Build + push only. Deployment is driven solely by the operator CR in
+      # universe (infra/k8s/operator/crs/billing-v1.yaml). A CI `kubectl set
+      # image` fights the operator, which reverts the deployment back to the
+      # CR's declared tag — that race is why v1.0.1 built but never rolled out.
+      # One deploy path: the operator reconciling the declared CR tag.
+      deploy: false
       build-args: |
         NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=22b98f00bd4572e2a42773ad82b329b0
     secrets: inherit

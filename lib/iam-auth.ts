@@ -50,6 +50,61 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** Token endpoint response (the subset this client consumes). */
+interface TokenResponse {
+  access_token?: string
+  refresh_token?: string
+  expires_in?: number
+}
+
+/**
+ * fetch + parse JSON with a precise failure mode. Verifies the response status
+ * and content-type before parsing, so a misrouted endpoint that returns an HTML
+ * page (e.g. the IAM SPA catch-all: HTTP 200, text/html) surfaces as a clear
+ * error with the upstream status and a body snippet — never the cryptic
+ * `Unexpected token '<', "<!DOCTYPE "... is not valid JSON` from JSON.parse.
+ */
+async function fetchJson<T>(url: string, init: RequestInit, label: string): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(url, init)
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e)
+    throw new Error(`${label}: could not reach ${url} (${reason})`)
+  }
+
+  const contentType = res.headers.get('content-type') ?? ''
+  const raw = await res.text()
+
+  let parsed: unknown
+  if (contentType.includes('json')) {
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = undefined
+    }
+  }
+
+  if (!res.ok) {
+    const err = parsed as { error?: string; error_description?: string } | undefined
+    const detail = err?.error_description || err?.error || bodySnippet(raw)
+    throw new Error(`${label} failed (HTTP ${res.status}): ${detail}`)
+  }
+  if (parsed === undefined) {
+    throw new Error(
+      `${label} returned ${contentType || 'an unknown content-type'} instead of JSON ` +
+        `(HTTP ${res.status}): ${bodySnippet(raw)}`,
+    )
+  }
+  return parsed as T
+}
+
+/** Single-line, length-capped snippet of an (often HTML) response body. */
+function bodySnippet(body: string): string {
+  const collapsed = body.replace(/\s+/g, ' ').trim()
+  return collapsed.length > 160 ? `${collapsed.slice(0, 160)}…` : collapsed
+}
+
 /** Check if user is logged in (has valid token). */
 export function isLoggedIn(): boolean {
   const token = localStorage.getItem(KEY_ACCESS_TOKEN)
@@ -160,25 +215,26 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
   }
 
   // Exchange code for tokens via the canonical IAM token endpoint (HIP-0111).
+  // fetchJson verifies status + content-type before parsing, so a misrouted
+  // endpoint (the SPA catch-all returns HTTP 200 text/html) surfaces as a clear
+  // error instead of an "Unexpected token '<'" JSON.parse crash on an HTML page.
   const base = config.iamServerUrl.replace(/\/+$/, '')
-  const tokenRes = await fetch(`${base}/v1/iam/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: config.clientId,
-      code,
-      redirect_uri: config.redirectUri,
-      code_verifier: codeVerifier,
-    }),
-  })
+  const data = await fetchJson<TokenResponse>(
+    `${base}/v1/iam/oauth/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: config.clientId,
+        code,
+        redirect_uri: config.redirectUri,
+        code_verifier: codeVerifier,
+      }),
+    },
+    'IAM token exchange',
+  )
 
-  if (!tokenRes.ok) {
-    const text = await tokenRes.text()
-    throw new Error(`Token exchange failed: ${text}`)
-  }
-
-  const data = await tokenRes.json()
   const accessToken = data.access_token
   const refreshToken = data.refresh_token
   const expiresIn = data.expires_in ?? 3600
