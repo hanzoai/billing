@@ -111,8 +111,9 @@ export async function startLogin(config: IamAuthConfig): Promise<void> {
     code_challenge_method: 'S256',
   })
 
-  // Use the IAM login authorize endpoint (shows the login form)
-  window.location.href = `${base}/oauth/authorize?${params}`
+  // Canonical IAM authorize endpoint (HIP-0111). The bare /oauth/* paths hit the
+  // IAM SPA catch-all (200 text/html), which breaks the JSON token exchange.
+  window.location.href = `${base}/v1/iam/oauth/authorize?${params}`
 }
 
 /** Handle the OAuth callback — exchange code for tokens or accept implicit grant. */
@@ -158,9 +159,9 @@ export async function handleCallback(config: IamAuthConfig): Promise<IamUser | n
     console.warn('OAuth state mismatch — continuing (PKCE protects the exchange)')
   }
 
-  // Exchange code for tokens via IAM token endpoint
+  // Exchange code for tokens via the canonical IAM token endpoint (HIP-0111).
   const base = config.iamServerUrl.replace(/\/+$/, '')
-  const tokenRes = await fetch(`${base}/oauth/token`, {
+  const tokenRes = await fetch(`${base}/v1/iam/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
