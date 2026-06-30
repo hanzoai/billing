@@ -18,7 +18,12 @@ export interface IamUser {
   displayName: string | null
   avatar: string | null
   sub: string
-  /** Commerce user ID in owner/name format (e.g. "hanzo/z"). */
+  /**
+   * Commerce billing subject = the lowercased ORG SLUG (the `owner` claim,
+   * e.g. "hanzo"). Commerce keys per-org billing (balance, payment methods,
+   * subscriptions, invoices) on this slug — NOT owner/name. See the note in
+   * userFromToken().
+   */
   commerceUserId: string
 }
 
@@ -129,10 +134,17 @@ export function getCurrentUser(): IamUser | null {
     let b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
     while (b64.length % 4) b64 += '='
     const payload = JSON.parse(atob(b64))
-    // Commerce stores balances under owner/name format (e.g. "hanzo/z"),
-    // not UUID. IAM JWTs include both owner and name claims.
+    // Commerce keys per-org billing on the lowercased ORG SLUG (the `owner`
+    // claim, e.g. "hanzo") — NOT owner/name. commerce-api's EdgeAuth
+    // (COMMERCE_EDGE_AUTH) locks every /billing read's subject param
+    // (user/userId/customerId) to the caller's lowercased owner slug, and
+    // usage + balances are keyed the same way ("iam-user/<owner>"). Sending
+    // owner/name ("hanzo/z") stored payment methods under "hanzo/z" (POST body
+    // params are not locked) but read them under "hanzo" (GET query params
+    // are) — so the list always came back empty. Mirror EdgeAuth exactly: use
+    // the lowercased owner slug as the billing subject everywhere.
     const commerceUserId =
-      (payload.owner && payload.name) ? `${payload.owner}/${payload.name}` : (payload.sub ?? '')
+      payload.owner ? String(payload.owner).trim().toLowerCase() : (payload.sub ?? '')
     return {
       email: payload.email ?? payload.name ?? '',
       displayName: payload.displayName ?? payload.name ?? null,
