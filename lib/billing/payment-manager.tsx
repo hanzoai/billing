@@ -7,6 +7,7 @@ import { useAccount, useChainId } from 'wagmi'
 import type { PaymentMethod, PaymentMethodType, CryptoNetwork } from './types'
 import { AnimatedCard } from '../components/animated-card'
 import { SquareCardForm } from './square-card-form'
+import { getWalletConfig } from '../wallet-config'
 
 export interface PaymentMethodManagerProps {
   paymentMethods?: PaymentMethod[]
@@ -135,6 +136,18 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
   const [status, setStatus] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
+  // Crypto payments require a WalletConnect projectId (so WagmiProvider mounts).
+  // Without it, CryptoForm's wagmi hooks throw WagmiProviderNotFoundError — so
+  // hide the Crypto tab unless a wallet config is actually available. Resolved
+  // after mount (client-only), matching the provider which also mounts on the
+  // client; falls back off 'crypto' if it was somehow the active tab.
+  const [cryptoAvailable, setCryptoAvailable] = React.useState(false)
+  React.useEffect(() => {
+    const ok = !!getWalletConfig()
+    setCryptoAvailable(ok)
+    if (!ok) setActiveTab(t => (t === 'crypto' ? 'card' : t))
+  }, [])
+
   React.useEffect(() => {
     if (paymentMethods) setMethods(paymentMethods)
   }, [paymentMethods])
@@ -200,9 +213,9 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
             <div className="mb-4 flex gap-1 rounded-xl bg-bg p-1">
               {([
                 ['card', 'Card'],
-                ['crypto', 'Crypto'],
+                ...(cryptoAvailable ? [['crypto', 'Crypto']] : []),
                 ['wire', 'Bank Wire'],
-              ] as const).map(([id, label]) => (
+              ] as [AddMethodTab, string][]).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -230,7 +243,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                 }}
               />
             )}
-            {activeTab === 'crypto' && <CryptoForm onAdd={addMethod} setError={setError} />}
+            {activeTab === 'crypto' && cryptoAvailable && <CryptoForm onAdd={addMethod} setError={setError} />}
             {activeTab === 'wire' && <WireForm onAdd={addMethod} />}
 
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
