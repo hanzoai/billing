@@ -54,10 +54,12 @@ function loadSquareScript(): Promise<void> {
   if (typeof window !== 'undefined' && window.Square) {
     return (scriptLoadPromise = Promise.resolve())
   }
-  scriptLoadPromise = new Promise((resolve, reject) => {
+  scriptLoadPromise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector(`script[src="${SQUARE_SCRIPT_URL}"]`)
     if (existing) {
+      if (typeof window !== 'undefined' && window.Square) { resolve(); return }
       existing.addEventListener('load', () => resolve())
+      existing.addEventListener('error', () => reject(new Error('Failed to load Square Web Payments SDK')))
       return
     }
     const script = document.createElement('script')
@@ -66,6 +68,12 @@ function loadSquareScript(): Promise<void> {
     script.onload = () => resolve()
     script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'))
     document.head.appendChild(script)
+  }).catch((e) => {
+    // Never cache a rejected load — a later retry must be able to re-attempt
+    // (the old code cached the rejection forever, so one transient network
+    // blip permanently broke the card form until a full page reload).
+    scriptLoadPromise = null
+    throw e
   })
   return scriptLoadPromise
 }
@@ -107,33 +115,46 @@ export function SquareCardForm({ onToken, onCvvFocus, disabled }: SquareCardForm
 
   React.useEffect(() => {
     mountedRef.current = true
-    let card: SquareCard | null = null
+
+    async function attemptInit(): Promise<SquareCard> {
+      await loadSquareScript()
+      if (!window.Square) throw new Error('Square SDK not available')
+      if (!SQUARE_APP_ID) throw new Error('NEXT_PUBLIC_SQUARE_APPLICATION_ID is not set')
+      if (!SQUARE_LOCATION_ID) throw new Error('NEXT_PUBLIC_SQUARE_LOCATION_ID is not set')
+      const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+      const c = await payments.card({ style: SQUARE_STYLE })
+      await c.attach(`#${CONTAINER_ID}`)
+      return c
+    }
 
     async function init() {
-      try {
-        await loadSquareScript()
-        if (!mountedRef.current) return
-
-        if (!window.Square) throw new Error('Square SDK not available')
-        if (!SQUARE_APP_ID) throw new Error('NEXT_PUBLIC_SQUARE_APPLICATION_ID is not set')
-        if (!SQUARE_LOCATION_ID) throw new Error('NEXT_PUBLIC_SQUARE_LOCATION_ID is not set')
-
-        const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-        card = await payments.card({ style: SQUARE_STYLE })
-        await card.attach(`#${CONTAINER_ID}`)
-
-        if (mountedRef.current) {
-          cardRef.current = card
+      // Square's "Web Payments SDK was unable to be initialized in time" is
+      // frequently a transient backend timeout. Retry a few times with backoff
+      // before surfacing an error so a single hiccup doesn't strand the form.
+      let lastErr: unknown = null
+      for (let attempt = 1; attempt <= 3 && mountedRef.current; attempt++) {
+        try {
+          const c = await attemptInit()
+          if (!mountedRef.current) { await c.destroy().catch(() => undefined); return }
+          cardRef.current = c
           setReady(true)
-        } else {
-          await card.destroy()
+          setError(null)
+          setLoading(false)
+          return
+        } catch (err) {
+          lastErr = err
+          if (attempt < 3 && mountedRef.current) {
+            await new Promise((r) => setTimeout(r, 1200 * attempt))
+          }
         }
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize payment form')
-        }
-      } finally {
-        if (mountedRef.current) setLoading(false)
+      }
+      if (mountedRef.current) {
+        const raw = lastErr instanceof Error ? lastErr.message : ''
+        const friendly = /initialized in time|timeout|timed out|network/i.test(raw)
+          ? 'The card form timed out loading from Square. Reload to retry — or use Crypto or Bank Wire instead. If it keeps failing, a browser ad/privacy blocker may be blocking Square.'
+          : raw || 'Failed to initialize payment form'
+        setError(friendly)
+        setLoading(false)
       }
     }
 
