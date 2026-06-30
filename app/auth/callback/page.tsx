@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { getOrgByHost } from '@/lib/config'
 import { makeAuthConf } from '@/lib/auth'
-import { handleCallback } from '@/lib/iam-auth'
+import { handleCallback, startLogin, logout } from '@/lib/iam-auth'
+
+// One-shot retry flag — survives the authorize round-trip via sessionStorage so
+// a transient first-attempt failure self-heals silently but can never loop.
+const RETRY_KEY = 'iam-callback-retry'
 
 export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null)
@@ -21,10 +25,25 @@ export default function CallbackPage() {
 
     handleCallback(conf)
       .then(() => {
+        sessionStorage.removeItem(RETRY_KEY)
         window.location.href = '/'
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Authentication failed')
+        const msg = err instanceof Error ? err.message : 'Authentication failed'
+        // A consumed/stale authorization code or a lost PKCE verifier is a
+        // transient first-attempt failure that a fresh authorize round-trip
+        // resolves. Recover automatically ONCE (guarded so it cannot loop) by
+        // clearing the stale PKCE/token state and restarting sign-in, so the
+        // user sees a brief spinner instead of a spurious "Authentication Error".
+        const transient = /invalid_grant|authorization code|code[_ ]?verifier|expired/i.test(msg)
+        if (transient && !sessionStorage.getItem(RETRY_KEY)) {
+          sessionStorage.setItem(RETRY_KEY, '1')
+          logout() // clear any stale token + PKCE/state so the retry starts clean
+          startLogin(conf).catch(() => setError(msg))
+          return
+        }
+        sessionStorage.removeItem(RETRY_KEY)
+        setError(msg)
       })
   }, [])
 
