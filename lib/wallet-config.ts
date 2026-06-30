@@ -1,6 +1,7 @@
 'use client'
 
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
+import { http } from 'viem'
 import {
   mainnet,
   polygon,
@@ -10,6 +11,21 @@ import {
   avalanche,
   bsc,
 } from 'wagmi/chains'
+
+// CORS-enabled public RPCs. wagmi/viem's DEFAULT mainnet transport is
+// eth.merkle.io, which does NOT send Access-Control-Allow-Origin, so every
+// chain read from the browser fails CORS and wagmi retries in a tight loop
+// (the postMessage storm). publicnode.com endpoints are public, free, and
+// CORS-enabled, so the reads succeed and the loop stops.
+const TRANSPORTS = {
+  [mainnet.id]: http('https://ethereum-rpc.publicnode.com'),
+  [polygon.id]: http('https://polygon-bor-rpc.publicnode.com'),
+  [optimism.id]: http('https://optimism-rpc.publicnode.com'),
+  [arbitrum.id]: http('https://arbitrum-one-rpc.publicnode.com'),
+  [base.id]: http('https://base-rpc.publicnode.com'),
+  [avalanche.id]: http('https://avalanche-c-chain-rpc.publicnode.com'),
+  [bsc.id]: http('https://bsc-rpc.publicnode.com'),
+}
 
 // WalletConnect project ID — resolved at CALL time (not module load) so it picks
 // up the runtime config the serving layer injects from KMS as
@@ -39,6 +55,7 @@ export function getWalletConfig() {
       appName: 'Hanzo Billing',
       projectId,
       chains: [mainnet, polygon, optimism, arbitrum, base, avalanche, bsc],
+      transports: TRANSPORTS,
       ssr: false,
     })
   }
