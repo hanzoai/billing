@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getCommerce } from '@/lib/commerce'
+import { ErrorBoundary } from '@/lib/components/error-boundary'
 import {
   sendHusdTopup,
   recordHusdTopup,
@@ -24,6 +25,21 @@ const WIRE_DETAILS = [
 
 function fmtUSD(cents: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
+}
+
+// Inline fallback for a crashed crypto/wallet tab — keeps the top-up page (and
+// its other tabs) alive instead of surfacing a whole-page "Something went wrong".
+function walletTabFallback(_error: Error, reset: () => void) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <p style={{ fontSize: '13px', color: '#f87171', margin: 0, lineHeight: 1.5 }}>
+        This payment option is temporarily unavailable. Try another method above, or retry.
+      </p>
+      <button type="button" onClick={reset} style={submitStyle(false)}>
+        Try again
+      </button>
+    </div>
+  )
 }
 
 // ── Square Web Payments SDK types (minimal surface) ──────────────────────
@@ -542,6 +558,7 @@ export default function TopupPage() {
 
         {/* ── Crypto tab ────────────────────────────────────────────────── */}
         {tab === 'crypto' && (
+          <ErrorBoundary fallback={walletTabFallback}>
           <form onSubmit={handleCryptoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
               Send USDC or ETH to the address below, then paste your transaction hash to confirm.
@@ -600,10 +617,12 @@ export default function TopupPage() {
               {isLoading ? 'Verifying...' : `Confirm ${fmtUSD(amountCents)} crypto payment`}
             </button>
           </form>
+          </ErrorBoundary>
         )}
 
         {/* ── Wallet (HUSD) tab ─────────────────────────────────────────── */}
         {tab === 'wallet' && (
+          <ErrorBoundary fallback={walletTabFallback}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {!topupConfigured() ? (
               <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
@@ -677,6 +696,7 @@ export default function TopupPage() {
               </>
             )}
           </div>
+          </ErrorBoundary>
         )}
 
         {/* ── Wire tab ──────────────────────────────────────────────────── */}
