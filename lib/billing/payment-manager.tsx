@@ -7,7 +7,8 @@ import { useAccount, useChainId } from 'wagmi'
 import type { PaymentMethod, PaymentMethodType, CryptoNetwork } from './types'
 import { AnimatedCard } from '../components/animated-card'
 import { SquareCardForm } from './square-card-form'
-import { getWalletConfig } from '../wallet-config'
+import { ErrorBoundary } from '../components/error-boundary'
+import { useWalletReady } from '../wallet-ready'
 
 export interface PaymentMethodManagerProps {
   paymentMethods?: PaymentMethod[]
@@ -136,17 +137,18 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
   const [status, setStatus] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
-  // Crypto payments require a WalletConnect projectId (so WagmiProvider mounts).
-  // Without it, CryptoForm's wagmi hooks throw WagmiProviderNotFoundError — so
-  // hide the Crypto tab unless a wallet config is actually available. Resolved
-  // after mount (client-only), matching the provider which also mounts on the
-  // client; falls back off 'crypto' if it was somehow the active tab.
-  const [cryptoAvailable, setCryptoAvailable] = React.useState(false)
+  // Crypto payments render wagmi hooks + RainbowKit's ConnectButton, which MUST
+  // sit inside the mounted WagmiProvider/RainbowKitProvider. `useWalletReady()`
+  // is true only once those providers exist — they mount lazily, client-only,
+  // and only when a WalletConnect projectId is configured. Gating the Crypto tab
+  // on it (instead of probing getWalletConfig() in an effect, which could win the
+  // race against the still-lazy provider) means the connector never renders
+  // before its provider: no WagmiProviderNotFoundError, and no stray DialogClose
+  // crash on a refresh of the crypto flow.
+  const cryptoAvailable = useWalletReady()
   React.useEffect(() => {
-    const ok = !!getWalletConfig()
-    setCryptoAvailable(ok)
-    if (!ok) setActiveTab(t => (t === 'crypto' ? 'card' : t))
-  }, [])
+    if (!cryptoAvailable) setActiveTab(t => (t === 'crypto' ? 'card' : t))
+  }, [cryptoAvailable])
 
   React.useEffect(() => {
     if (paymentMethods) setMethods(paymentMethods)
@@ -243,7 +245,23 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                 }}
               />
             )}
-            {activeTab === 'crypto' && cryptoAvailable && <CryptoForm onAdd={addMethod} setError={setError} />}
+            {activeTab === 'crypto' && cryptoAvailable && (
+              <ErrorBoundary
+                fallback={(_err, reset) => (
+                  <div className="space-y-3">
+                    <p className="text-sm text-text-muted">
+                      The crypto wallet connector is temporarily unavailable. You can add a card or
+                      bank wire instead, or try again.
+                    </p>
+                    <button type="button" onClick={reset} className={BTN_PRIMARY}>
+                      Try again
+                    </button>
+                  </div>
+                )}
+              >
+                <CryptoForm onAdd={addMethod} setError={setError} />
+              </ErrorBoundary>
+            )}
             {activeTab === 'wire' && <WireForm onAdd={addMethod} />}
 
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}

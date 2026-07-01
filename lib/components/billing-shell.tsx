@@ -343,15 +343,25 @@ export function BillingShell({ org, user }: BillingShellProps) {
         if (grants.length > 0) {
           setCreditGrants(grants)
         } else if (txList.status === 'fulfilled') {
-          // Synthesize credit grants from deposit transactions tagged "starter-credit"
+          // The starter credit is recorded by commerce as a Deposit transaction
+          // tagged "starter-credit" (deliberately NOT a credit-grant — it nets
+          // into the balance ledger), so getCreditGrants() is empty and we
+          // synthesize a grant from that transaction to surface it as claimed.
           const txs = asList<Transaction>(txList.value)
           const creditTxs = txs.filter((tx) => tx.type === 'deposit' && (tx.tags === 'starter-credit' || (Array.isArray(tx.tags) && tx.tags.includes('starter-credit'))))
           setCreditGrants(creditTxs.map((tx): CreditGrant => ({
             id: tx.id ?? '',
-            name: tx.notes ?? 'Starter Credit',
+            // Name it "Starter Credit" (NOT the transaction's freeform notes, e.g.
+            // "Welcome credit: $100.00 USD …"): the credits UI recognises a claimed
+            // starter credit by name.includes('starter'), so notes-derived names
+            // left the grant showing an un-claimed "Claim $5 Starter Credit" button
+            // even though the credit was already granted. The starter-credit tag is
+            // the source of truth that this IS the starter credit.
+            name: 'Starter Credit',
             amountCents: tx.amount ?? 0,
             remainingCents: tx.amount ?? 0,
             currency: tx.currency ?? 'usd',
+            expiresAt: tx.expiresAt,
             active: true,
             createdAt: tx.createdAt ?? new Date().toISOString(),
           })))

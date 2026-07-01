@@ -7,6 +7,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 
 import { getWalletConfig } from './wallet-config'
+import { WalletReadyProvider } from './wallet-ready'
 
 const queryClient = new QueryClient()
 
@@ -40,7 +41,9 @@ export default function WalletProviders({ children }: { children: React.ReactNod
             overlayBlur: 'small',
           })}
         >
-          {children}
+          {/* Signal to the crypto UI that wagmi hooks / ConnectButton are safe to
+              render — they mount ONLY inside this provider subtree. */}
+          <WalletReadyProvider value={true}>{children}</WalletReadyProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
