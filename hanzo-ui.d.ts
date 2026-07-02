@@ -124,7 +124,9 @@ declare module '@hanzo/ui/team' {
     org: string
     currentUserRoles: string[]
     isGlobalAdmin?: boolean
+    isOrgAdmin?: boolean
     apiBase?: string
+    iamPath?: string
     getToken?: () => string | Promise<string> | undefined
     onError?: (err: Error) => void
     title?: string
