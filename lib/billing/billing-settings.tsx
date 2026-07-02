@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { SpendAlertsPanel } from './spend-alerts'
-import { AccountMembers } from './account-members'
 import { BusinessProfilePanel } from './business-profile-panel'
 import { TaxCompliancePanel } from './tax-compliance-panel'
 import { SupportTiersPanel } from './support-tiers-panel'
 import { PromotionsPanel } from './promotions-panel'
+import { TeamManagement } from '@hanzo/ui/team'
 import type {
   SpendAlert,
   BillingAccountMember,
@@ -25,10 +25,26 @@ export interface BillingSettingsProps {
   onCreateSpendAlert?: (title: string, threshold: number) => Promise<void>
   onUpdateSpendAlert?: (id: string, title: string, threshold: number) => Promise<void>
   onDeleteSpendAlert?: (id: string) => Promise<void>
-  accountMembers: BillingAccountMember[]
-  userRole: BillingRole
+  /**
+   * IAM team context for the shared <TeamManagement> (app-scoped roles enforced
+   * server-side in Hanzo IAM). Without teamOrg the Team tab shows a fail-safe
+   * sign-in prompt. Derive from iam-auth: teamOrg = getCurrentUser().id split
+   * on '/', teamGetToken = getAccessToken.
+   */
+  teamOrg?: string
+  teamGetToken?: () => string | Promise<string> | undefined
+  teamCurrentUserRoles?: string[]
+  teamIsGlobalAdmin?: boolean
+  teamApiBase?: string
+  /** @deprecated commerce-backed members — superseded by IAM (teamOrg + <TeamManagement>). */
+  accountMembers?: BillingAccountMember[]
+  /** @deprecated superseded by IAM roles. */
+  userRole?: BillingRole
+  /** @deprecated superseded by IAM invitations. */
   onInviteMember?: (email: string, role: BillingRole) => Promise<void>
+  /** @deprecated superseded by IAM role assignment. */
   onChangeMemberRole?: (memberId: string, role: BillingRole) => Promise<void>
+  /** @deprecated superseded by IAM role removal. */
   onRemoveMember?: (memberId: string) => Promise<void>
   businessProfile: BusinessProfile
   onSaveBusinessProfile?: (profile: BusinessProfile) => Promise<void>
@@ -82,12 +98,13 @@ export function BillingSettings(props: BillingSettingsProps) {
         />
       )}
       {active === 'team' && (
-        <AccountMembers
-          members={props.accountMembers}
-          userRole={props.userRole}
-          onInvite={props.onInviteMember}
-          onChangeRole={props.onChangeMemberRole}
-          onRemove={props.onRemoveMember}
+        <TeamManagement
+          app="billing"
+          org={props.teamOrg ?? ''}
+          getToken={props.teamGetToken}
+          apiBase={props.teamApiBase}
+          currentUserRoles={props.teamCurrentUserRoles ?? []}
+          isGlobalAdmin={props.teamIsGlobalAdmin}
         />
       )}
       {active === 'business' && (

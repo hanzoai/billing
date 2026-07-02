@@ -109,6 +109,47 @@ declare module '@hanzo/ui/billing' {
   export const TaxCompliancePanel: FC<any>
 }
 
+declare module '@hanzo/ui/team' {
+  import type { FC } from 'react'
+
+  export type TeamApp = 'billing' | 'console' | 'org'
+  export type TeamTier = 'viewer' | 'admin' | 'owner'
+  export type RoleKey =
+    | 'billing:viewer' | 'billing:admin'
+    | 'console:viewer' | 'console:admin' | 'console:owner'
+    | 'org:owner'
+
+  export interface TeamManagementProps {
+    app: TeamApp
+    org: string
+    currentUserRoles: string[]
+    isGlobalAdmin?: boolean
+    apiBase?: string
+    getToken?: () => string | Promise<string> | undefined
+    onError?: (err: Error) => void
+    title?: string
+  }
+  export const TeamManagement: FC<TeamManagementProps>
+
+  export interface TeamMember {
+    id: string
+    email: string
+    name: string
+    roleKey: RoleKey
+    addedAt: string
+  }
+  export class TeamClient {
+    constructor(opts: { org: string; apiBase?: string; getToken?: () => string | Promise<string> | undefined; fetchImpl?: typeof fetch })
+    listMembers(app: TeamApp): Promise<TeamMember[]>
+    invite(app: TeamApp, email: string, roleKey: RoleKey): Promise<void>
+    changeRole(app: TeamApp, memberId: string, newRoleKey: RoleKey): Promise<void>
+    remove(app: TeamApp, memberId: string): Promise<void>
+  }
+
+  export function assignableKeysForApp(callerKeys: readonly string[], app: TeamApp, isGlobalAdmin?: boolean): RoleKey[]
+  export function canManageApp(callerKeys: readonly string[], app: TeamApp, isGlobalAdmin?: boolean): boolean
+}
+
 declare module '@hanzo/ui/navigation/hanzo-shell' {
   export type OrgDomains = {
     id: string
