@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM ghcr.io/hanzoai/nodejs:v24.18.0 AS builder
 RUN corepack enable && corepack prepare pnpm@10.22.0 --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
