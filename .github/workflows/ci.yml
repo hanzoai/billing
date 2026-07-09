@@ -31,32 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: GITHUB_PAGES=true pnpm build
-
-      - name: Upload artifact
-        # Pages mirror is secondary to the k8s Docker deploy. Org-wide Actions
-        # artifact-storage quota must never abort test-and-build and skip the
-        # downstream deploy-docker job (the production billing surface).
-        continue-on-error: true
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: out
-
-  deploy-pages:
-    needs: test-and-build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: hanzo-deploy-linux-amd64
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - run: pnpm build
 
   deploy-docker:
     needs: test-and-build
