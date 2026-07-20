@@ -484,7 +484,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const minSeats = plan.minSeats ?? 2
             const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
             const monthlyTotal = plan.price * seats
-            const periodPrice = isFree ? 'Free' : plan.perSeat ? `$${plan.price}` : `$${plan.price}/mo`
+            const periodPrice = isFree ? 'Free' : `$${plan.price}`
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
             const showNoProcessor = checkoutOpen && noProcessorPlanId === plan.id
