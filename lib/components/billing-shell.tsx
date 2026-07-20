@@ -575,6 +575,21 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await handleUpgrade(planId)
   }, [handleUpgrade])
 
+  // Self-serve paid checkout: charge a Square nonce and start the subscription.
+  // Rethrows CommerceApiError (with .status) so SubscribeCardForm can branch on
+  // 402/409/422/500 with honest UI. On success, refresh state to show the plan.
+  const handleSubscribeWithCard = useCallback(async (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => {
+    const token = getAccessToken()
+    if (!token) throw new Error('Your session expired. Please sign in again.')
+    const commerce = getCommerce(org.commerceUrl, token)
+    const userId = user.commerceUserId || user.email || user.sub
+    await commerce.subscribeWithCard(
+      { sourceId, planId, userId, quantity, currency: 'usd' },
+      { idempotencyKey },
+    )
+    await loadBillingData()
+  }, [org, user, loadBillingData])
+
   const handleCancel = useCallback(async (_reason: string, _feedback?: string) => {
     const token = getAccessToken()
     if (!token || !subscription.id) return
@@ -934,6 +949,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
             onApplyDiscount={handleApplyDiscount}
+            onSubscribeWithCard={handleSubscribeWithCard}
           />
         )
       case 'credits':

@@ -1,28 +1,13 @@
 'use client'
 
 import * as React from 'react'
-
-// ── Square Web Payments SDK types (minimal surface) ───────────────────────
-
-interface SquareCard {
-  attach(selector: string): Promise<void>
-  tokenize(): Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>
-  destroy(): Promise<void>
-}
-
-interface SquarePayments {
-  card(options?: Record<string, unknown>): Promise<SquareCard>
-}
-
-interface SquareSDK {
-  payments(appId: string, locationId: string): Promise<SquarePayments>
-}
-
-declare global {
-  interface Window {
-    Square?: SquareSDK
-  }
-}
+import {
+  loadSquareScript,
+  SQUARE_APP_ID,
+  SQUARE_LOCATION_ID,
+  SQUARE_CARD_STYLE,
+  type SquareCard,
+} from '@/lib/square'
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
@@ -32,73 +17,6 @@ export interface SquareCardFormProps {
   /** Called when cvv input is focused (for card flip animation) */
   onCvvFocus?: (focused: boolean) => void
   disabled?: boolean
-}
-
-// ── Square environment config ─────────────────────────────────────────────
-
-const SQUARE_APP_ID = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? ''
-const SQUARE_LOCATION_ID = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? ''
-const SQUARE_ENV = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox'
-
-const SQUARE_SCRIPT_URL =
-  SQUARE_ENV === 'production'
-    ? 'https://web.squarecdn.com/v1/square.js'
-    : 'https://sandbox.web.squarecdn.com/v1/square.js'
-
-// ── Script loader ─────────────────────────────────────────────────────────
-
-let scriptLoadPromise: Promise<void> | null = null
-
-function loadSquareScript(): Promise<void> {
-  if (scriptLoadPromise) return scriptLoadPromise
-  if (typeof window !== 'undefined' && window.Square) {
-    return (scriptLoadPromise = Promise.resolve())
-  }
-  scriptLoadPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${SQUARE_SCRIPT_URL}"]`)
-    if (existing) {
-      if (typeof window !== 'undefined' && window.Square) { resolve(); return }
-      existing.addEventListener('load', () => resolve())
-      existing.addEventListener('error', () => reject(new Error('Failed to load Square Web Payments SDK')))
-      return
-    }
-    const script = document.createElement('script')
-    script.src = SQUARE_SCRIPT_URL
-    script.async = true
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'))
-    document.head.appendChild(script)
-  }).catch((e) => {
-    // Never cache a rejected load — a later retry must be able to re-attempt
-    // (the old code cached the rejection forever, so one transient network
-    // blip permanently broke the card form until a full page reload).
-    scriptLoadPromise = null
-    throw e
-  })
-  return scriptLoadPromise
-}
-
-// ── Square card appearance (dark theme) ──────────────────────────────────
-
-// Square Web Payments SDK only supports a subset of CSS selectors/properties.
-// Use only the documented selectors: input, input::placeholder, .message-text, .message-icon
-// https://developer.squareup.com/docs/web-payments/customize-the-card-payment-form
-const SQUARE_STYLE = {
-  input: {
-    backgroundColor: 'transparent',
-    color: '#fafafa',
-    fontFamily: 'sans-serif',
-    fontSize: '14px',
-  },
-  'input::placeholder': {
-    color: '#52525b',
-  },
-  '.message-text': {
-    color: '#f87171',
-  },
-  '.message-icon': {
-    color: '#f87171',
-  },
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -122,7 +40,7 @@ export function SquareCardForm({ onToken, onCvvFocus, disabled }: SquareCardForm
       if (!SQUARE_APP_ID) throw new Error('NEXT_PUBLIC_SQUARE_APPLICATION_ID is not set')
       if (!SQUARE_LOCATION_ID) throw new Error('NEXT_PUBLIC_SQUARE_LOCATION_ID is not set')
       const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-      const c = await payments.card({ style: SQUARE_STYLE })
+      const c = await payments.card({ style: SQUARE_CARD_STYLE })
       await c.attach(`#${CONTAINER_ID}`)
       return c
     }

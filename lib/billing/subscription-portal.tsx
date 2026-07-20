@@ -16,9 +16,9 @@ export interface SubscriptionPortalProps {
   /** Plans are still loading from the catalog — render a skeleton grid */
   plansLoading?: boolean
   /**
-   * Caller may create paid-tier subscriptions directly (platform admin).
-   * When false, paid plans show the honest activation flow — add funds via
-   * Square top-up + request activation — instead of a POST that 403s.
+   * Caller may create paid-tier subscriptions directly (platform admin) via the
+   * mint-gated POST /v1/billing/subscriptions. When false, paid plans run the
+   * self-serve card checkout (Square nonce → POST subscribe/card).
    */
   canDirectSubscribe?: boolean
   usageMetrics?: BillingMetric[]
@@ -29,11 +29,21 @@ export interface SubscriptionPortalProps {
   onCancel?: (reason: string, feedback?: string) => Promise<void>
   onAcceptOffer?: (offerId: string) => Promise<void>
   onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
+  /**
+   * Self-serve paid checkout: charge a Square nonce and start the subscription.
+   * Rejects with a CommerceApiError carrying the HTTP status for honest UI.
+   */
+  onSubscribeWithCard?: (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => Promise<void>
+  /**
+   * Logged-out public pricing: every plan CTA calls this (start sign-in) instead
+   * of subscribing. Auth gates the subscribe action, not viewing prices.
+   */
+  onRequireAuth?: () => void
   showHistory?: boolean
   defaultView?: 'overview' | 'plans' | 'history'
 }
 
-import { BASE_PATH } from '@/lib/config'
+import { SubscribeCardForm } from './subscribe-card-form'
 
 function formatCurrency(value: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', {
@@ -94,14 +104,18 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     onDowngrade,
     onCancel,
     onApplyDiscount,
+    onSubscribeWithCard,
+    onRequireAuth,
     defaultView = 'overview',
   } = props
 
   const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
   const [planError, setPlanError] = React.useState<string | null>(null)
-  // Paid plan whose honest activation panel is open (no self-serve checkout yet)
+  // Paid plan whose self-serve card checkout panel is open.
   const [activationPlanId, setActivationPlanId] = React.useState<string | null>(null)
+  // Paid plan whose org has no payment processor (422) — show the contact fallback.
+  const [noProcessorPlanId, setNoProcessorPlanId] = React.useState<string | null>(null)
   // Seat count per per-seat plan id, defaulting to the plan minimum
   const [seatCounts, setSeatCounts] = React.useState<Record<string, number>>({})
 
@@ -122,22 +136,27 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
   const handlePlanChange = React.useCallback(
     async (plan: SubscriptionPlan) => {
-      // External / contact-sales plans
+      // External / contact-sales plans (marketing CTA — no auth needed).
       if (plan.externalUrl) {
         window.open(plan.externalUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+      // Logged-out public pricing: viewing is open, subscribing needs sign-in.
+      if (onRequireAuth) {
+        onRequireAuth()
         return
       }
       if (plan.id === currentPlan?.id) return
       setPlanError(null)
 
-      // Paid tier without direct-subscribe authority: POST /v1/billing/
-      // subscriptions is mint-gated server-side (403 by design). Open the
-      // honest activation flow instead of firing a request that must fail.
-      if (plan.price > 0 && !canDirectSubscribe) {
+      // Paid tier, self-serve: open the Square card checkout panel (toggle).
+      if (plan.price > 0 && !canDirectSubscribe && onSubscribeWithCard) {
+        setNoProcessorPlanId(null)
         setActivationPlanId((prev) => (prev === plan.id ? null : plan.id))
         return
       }
 
+      // Free tiers (and platform admins) subscribe directly.
       setBusyPlanId(plan.id)
       try {
         if (!currentPlan || plan.price >= (currentPlan?.price ?? 0)) {
@@ -151,7 +170,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, onDowngrade, onUpgrade, canDirectSubscribe],
+    [currentPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {
@@ -466,7 +485,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
             const monthlyTotal = plan.price * seats
             const periodPrice = isFree ? 'Free' : plan.perSeat ? `$${plan.price}` : `$${plan.price}/mo`
-            const showActivation = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe
+            const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
+            const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
+            const showNoProcessor = checkoutOpen && noProcessorPlanId === plan.id
 
             const buttonLabel = isCurrent
               ? 'Current plan'
@@ -592,27 +613,31 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   {buttonLabel}
                 </button>
 
-                {showActivation && (
+                {showCheckout && (
+                  <SubscribeCardForm
+                    planId={plan.id}
+                    planName={plan.name}
+                    quantity={seats}
+                    totalLabel={`$${monthlyTotal}/mo`}
+                    onSubscribe={(sourceId, idempotencyKey) => onSubscribeWithCard!(plan.id, sourceId, seats, idempotencyKey)}
+                    onSuccess={() => setActivationPlanId(null)}
+                    onNoProcessor={() => setNoProcessorPlanId(plan.id)}
+                  />
+                )}
+
+                {showNoProcessor && (
                   <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
-                    <p className="text-[12px] font-semibold text-amber-300">Checkout for paid plans is not self-serve yet</p>
+                    <p className="text-[12px] font-semibold text-amber-300">Card checkout is not enabled for this org yet</p>
                     <p className="mt-1 text-[12px] leading-relaxed text-white/50">
-                      Fund your balance now, then request activation — our billing
-                      team enables {plan.name} on your account.
+                      Your organization has no payment processor configured. Contact
+                      our billing team and we will enable {plan.name} on your account.
                     </p>
-                    <div className="mt-3 flex flex-col gap-2">
-                      <a
-                        href={`${BASE_PATH}/topup/?amount=${monthlyTotal * 100}`}
-                        className="rounded-lg bg-white px-3 py-2 text-center text-[13px] font-semibold text-black transition hover:bg-white/90"
-                      >
-                        Add ${monthlyTotal} funds
-                      </a>
-                      <a
-                        href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
-                        className="rounded-lg bg-white/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-white/70 transition hover:bg-white/[0.12] hover:text-white"
-                      >
-                        Request activation
-                      </a>
-                    </div>
+                    <a
+                      href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please enable card checkout and activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
+                      className="mt-3 block rounded-lg bg-white/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                    >
+                      Contact billing
+                    </a>
                   </div>
                 )}
               </div>

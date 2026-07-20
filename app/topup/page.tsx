@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getCommerce } from '@/lib/commerce'
+import { useSquareCard } from '@/lib/square'
 import { ErrorBoundary } from '@/lib/components/error-boundary'
 import {
   sendHusdTopup,
@@ -40,66 +41,6 @@ function walletTabFallback(_error: Error, reset: () => void) {
       </button>
     </div>
   )
-}
-
-// ── Square Web Payments SDK types (minimal surface) ──────────────────────
-
-interface SquareCard {
-  attach(selector: string): Promise<void>
-  tokenize(): Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>
-  destroy(): Promise<void>
-}
-interface SquarePayments {
-  card(options?: Record<string, unknown>): Promise<SquareCard>
-}
-interface SquareSDK {
-  payments(appId: string, locationId: string): Promise<SquarePayments>
-}
-declare global {
-  interface Window { Square?: SquareSDK }
-}
-
-const SQ_APP_ID = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? ''
-const SQ_LOCATION_ID = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? ''
-const SQ_ENV = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox'
-const SQ_SCRIPT =
-  SQ_ENV === 'production'
-    ? 'https://web.squarecdn.com/v1/square.js'
-    : 'https://sandbox.web.squarecdn.com/v1/square.js'
-
-const SQ_CARD_STYLE = {
-  input: {
-    backgroundColor: 'transparent',
-    color: '#fafafa',
-    // NOTE: Square Web Payments SDK validates fontFamily against its own
-    // allowlist (it must be able to load the font into the iframe) — it
-    // rejects both CSS-wide stacks ('ui-sans-serif, system-ui, …') AND
-    // arbitrary names like 'Inter', throwing "Invalid style value … for
-    // property 'fontFamily'" which blocks the card iframe from painting.
-    // Omit fontFamily entirely → Square uses its built-in default and the
-    // field renders cleanly.
-    fontSize: '13px',
-  },
-  'input::placeholder': { color: '#52525b' },
-  '.message-text': { color: '#f87171' },
-  '.message-icon': { color: '#f87171' },
-}
-
-let sqScriptPromise: Promise<void> | null = null
-function loadSquareScript(): Promise<void> {
-  if (sqScriptPromise) return sqScriptPromise
-  if (typeof window !== 'undefined' && window.Square) return (sqScriptPromise = Promise.resolve())
-  sqScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${SQ_SCRIPT}"]`)
-    if (existing) { existing.addEventListener('load', () => resolve()); return }
-    const s = document.createElement('script')
-    s.src = SQ_SCRIPT
-    s.async = true
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'))
-    document.head.appendChild(s)
-  })
-  return sqScriptPromise
 }
 
 // ── Topup page ───────────────────────────────────────────────────────────────
@@ -162,61 +103,11 @@ export default function TopupPage() {
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Square SDK state ─────────────────────────────────────────────────────
-  const sqCardRef = useRef<SquareCard | null>(null)
-  const sqMountedRef = useRef(true)
-  const [sqReady, setSqReady] = useState(false)
-  const [sqLoading, setSqLoading] = useState(false)
-  const [sqError, setSqError] = useState<string | null>(null)
-
-  // Initialize Square card element when card tab is active
-  useEffect(() => {
-    if (tab !== 'card') return
-    sqMountedRef.current = true
-    setSqLoading(true)
-    setSqError(null)
-    setSqReady(false)
-
-    let card: SquareCard | null = null
-
-    async function initSquare() {
-      try {
-        await loadSquareScript()
-        if (!sqMountedRef.current) return
-        if (!window.Square) throw new Error('Square SDK unavailable')
-        if (!SQ_APP_ID) throw new Error('Payment form not configured (missing app ID)')
-        if (!SQ_LOCATION_ID) throw new Error('Payment form not configured (missing location ID)')
-
-        const payments = await window.Square.payments(SQ_APP_ID, SQ_LOCATION_ID)
-        card = await payments.card({ style: SQ_CARD_STYLE })
-        await card.attach('#sq-card-container')
-
-        if (sqMountedRef.current) {
-          sqCardRef.current = card
-          setSqReady(true)
-        } else {
-          await card.destroy()
-        }
-      } catch (err) {
-        if (sqMountedRef.current) {
-          setSqError(err instanceof Error ? err.message : 'Failed to initialize card form')
-        }
-      } finally {
-        if (sqMountedRef.current) setSqLoading(false)
-      }
-    }
-
-    void initSquare()
-
-    return () => {
-      sqMountedRef.current = false
-      sqCardRef.current?.destroy().catch(() => undefined)
-      sqCardRef.current = null
-      setSqReady(false)
-    }
-  // Re-init when tab changes back to card
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+  // ── Square card element (shared hook) — only init on the Card tab ────────
+  const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
+    'sq-card-container',
+    tab === 'card',
+  )
 
   // ── Crypto payment state ─────────────────────────────────────────────────
   const [txHash, setTxHash] = useState('')
@@ -251,25 +142,20 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
         return
       }
-      if (!sqCardRef.current || !sqReady) {
+      if (!sqReady) {
         setStatus({ type: 'error', message: 'Card form not ready. Please wait.' })
         return
       }
 
       setStatus({ type: 'loading' })
       try {
-        const result = await sqCardRef.current.tokenize()
-        if (result.status !== 'OK' || !result.token) {
-          const msg = result.errors?.map((e) => e.message).join('; ') ?? 'Card tokenization failed'
-          setStatus({ type: 'error', message: msg })
-          return
-        }
+        const sourceId = await sqTokenize()
 
         const commerce = getCommerce(commerceUrl, params.token)
         const userId = params.userId ?? ''
 
         const payment = await commerce.topupWithSquareToken({
-          sourceId: result.token,
+          sourceId,
           amountCents,
           userId: userId || undefined,
           currency: 'usd',
@@ -280,7 +166,7 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
       }
     },
-    [params, sqReady, amountCents, commerceUrl, handleSuccess],
+    [params, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────

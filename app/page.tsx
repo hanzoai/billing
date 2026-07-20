@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getOrgByHost, type BillingOrgConfig } from '@/lib/config'
 import { isLoggedIn, startLogin, getCurrentUser, type IamUser } from '@/lib/iam-auth'
 import { makeAuthConf } from '@/lib/auth'
 import { BillingShell } from '@/lib/components/billing-shell'
+import { PublicPricing } from '@/lib/components/public-pricing'
 
 export default function BillingPage() {
   const [org, setOrg] = useState<BillingOrgConfig | null>(null)
@@ -15,18 +16,18 @@ export default function BillingPage() {
   useEffect(() => {
     const detectedOrg = getOrgByHost(window.location.host)
     setOrg(detectedOrg)
-
-    if (isLoggedIn()) {
-      setUser(getCurrentUser())
-      setChecked(true)
-    } else {
-      setChecked(true)
-      // Surface a sign-in failure instead of hanging on the spinner forever.
-      startLogin(makeAuthConf(detectedOrg)).catch((err) => {
-        setAuthError(err instanceof Error ? err.message : 'Could not start sign in')
-      })
-    }
+    // Do NOT auto-redirect to login: logged-out prospects see public pricing
+    // (no login wall). Auth gates only the subscribe action.
+    if (isLoggedIn()) setUser(getCurrentUser())
+    setChecked(true)
   }, [])
+
+  const handleSignIn = useCallback(() => {
+    if (!org) return
+    startLogin(makeAuthConf(org)).catch((err) => {
+      setAuthError(err instanceof Error ? err.message : 'Could not start sign in')
+    })
+  }, [org])
 
   if (!org || !checked) {
     return (
@@ -54,14 +55,7 @@ export default function BillingPage() {
   }
 
   if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-bg">
-        <div className="text-center">
-          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-text-dim border-t-brand" />
-          <p className="mt-4 text-sm text-text-muted">Redirecting to sign in...</p>
-        </div>
-      </main>
-    )
+    return <PublicPricing onSignIn={handleSignIn} />
   }
 
   return <BillingShell org={org} user={user} />

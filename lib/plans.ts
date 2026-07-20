@@ -1,0 +1,74 @@
+import type { SubscriptionPlan } from './billing/types'
+
+/**
+ * Public plan catalog — the ONE logged-out source of pricing.
+ *
+ * The commerce catalog (GET /v1/billing/plans on commerce-api) is IAM-gated and
+ * 403s logged-out, so a prospect hitting the pricing grid without a session used
+ * to land on a login wall. The same @hanzo/plans catalog is served publicly by
+ * cloud, but the direct cloud host (api.cloud.hanzo.ai/v1/plans/subscriptions)
+ * emits NO Access-Control-Allow-Origin — a cross-origin browser fetch from
+ * billing.hanzo.ai is blocked. The gateway (api.hanzo.ai) proxies the identical
+ * route, is public (200 unauthenticated), AND returns
+ * `access-control-allow-origin: https://billing.hanzo.ai`, so it is the correct
+ * browser-facing source. Prices here are in DOLLARS (priceMonthly: 20), unlike
+ * commerce's cents.
+ */
+export const PUBLIC_PLANS_URL = 'https://api.hanzo.ai/v1/plans/subscriptions'
+
+// Subscription tiers shown on the pricing grid (the catalog also carries
+// world/social plans, which have their own product surfaces).
+const PLAN_CATEGORIES = new Set(['personal', 'team', 'enterprise'])
+
+interface PublicPlan {
+  id?: string
+  name?: string
+  description?: string
+  category?: string
+  priceMonthly?: number // DOLLARS (0 = free)
+  priceAnnual?: number // DOLLARS per month billed annually
+  currency?: string
+  features?: string[]
+  limits?: Record<string, number | null | undefined>
+  popular?: boolean
+  contactSales?: boolean
+  trialPeriodDays?: number
+  price_ref?: { recurring?: { per_seat?: boolean } }
+}
+
+function mapPublicPlan(p: PublicPlan): SubscriptionPlan {
+  const limits: Record<string, number> = {}
+  for (const [k, v] of Object.entries(p.limits ?? {})) {
+    if (typeof v === 'number') limits[k] = v
+  }
+  const perSeat = p.price_ref?.recurring?.per_seat ?? p.category === 'team'
+  return {
+    id: p.id ?? '',
+    name: p.name ?? '',
+    description: p.description ?? '',
+    price: p.priceMonthly ?? 0,
+    annualPrice: p.priceAnnual || undefined,
+    billingPeriod: 'monthly',
+    currency: p.currency ?? 'usd',
+    features: p.features ?? [],
+    limits,
+    highlighted: p.popular,
+    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
+    contactSales: p.contactSales,
+    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
+    trialDays: p.trialPeriodDays || undefined,
+    perSeat,
+    // commerce rejects fewer than 2 seats on per-seat tiers; the selector floor
+    // matches so the public grid can't propose an amount the checkout refuses.
+    minSeats: perSeat ? limits.minSeats ?? 2 : undefined,
+  }
+}
+
+/** Fetch and project the public catalog onto the pricing-grid plan shape. */
+export async function fetchPublicPlans(): Promise<SubscriptionPlan[]> {
+  const res = await fetch(PUBLIC_PLANS_URL, { headers: { Accept: 'application/json' } })
+  if (!res.ok) throw new Error(`plan catalog HTTP ${res.status}`)
+  const data = (await res.json()) as { plans?: PublicPlan[] }
+  const plans = Array.isArray(data.plans) ? data.plans : []
+  return plans.filter((p) => PLAN_CATEGORIES.has(p.category ?? '')).map(mapPublicPlan)
+}

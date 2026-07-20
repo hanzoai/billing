@@ -306,6 +306,7 @@ export class Commerce {
       body?: unknown
       token?: string
       params?: Record<string, string>
+      headers?: Record<string, string>
     },
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`)
@@ -322,6 +323,7 @@ export class Commerce {
     const authToken = opts?.token ?? this.token
     if (authToken) headers.Authorization = `Bearer ${authToken}`
     if (opts?.body) headers['Content-Type'] = 'application/json'
+    if (opts?.headers) Object.assign(headers, opts.headers)
 
     try {
       const res = await fetch(url.toString(), {
@@ -424,6 +426,33 @@ export class Commerce {
     return this.request<Subscription>('/v1/billing/subscriptions', {
       method: 'POST', body: params, token,
     })
+  }
+
+  /**
+   * Self-serve paid-plan checkout: charge a Square Web Payments nonce and start
+   * the subscription in one call. Server-authoritative — the price is the plan's
+   * price × max(1, quantity); NO client amount is sent and minSeats is enforced
+   * server-side. Pass a stable `idempotencyKey` per checkout attempt so a replay
+   * returns the first result (200) instead of double-charging.
+   *
+   * Errors surface as CommerceApiError with the HTTP status the UI branches on:
+   *   400 bad args / $0 plan (use subscribe())   401 unauthenticated
+   *   402 card declined                           409 checkout already in progress
+   *   422 org has no payment processor            500 charged but activation failed
+   */
+  async subscribeWithCard(
+    params: { sourceId: string; planId: string; userId?: string; quantity?: number; currency?: string },
+    opts?: { idempotencyKey?: string; token?: string },
+  ): Promise<{ subscriptionId: string; invoiceId: string; planId: string; amountCents: number; currency: string; status: string }> {
+    return this.request<{ subscriptionId: string; invoiceId: string; planId: string; amountCents: number; currency: string; status: string }>(
+      '/v1/billing/subscribe/card',
+      {
+        method: 'POST',
+        body: params,
+        token: opts?.token,
+        headers: opts?.idempotencyKey ? { 'X-Idempotency-Key': opts.idempotencyKey } : undefined,
+      },
+    )
   }
 
   async getSubscription(subscriptionId: string, token?: string): Promise<Subscription | null> {
