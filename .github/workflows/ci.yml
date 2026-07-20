@@ -35,7 +35,10 @@ jobs:
 
   deploy-docker:
     needs: test-and-build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # main push → sha-<sha7> + latest; v* tag push → semver image tag.
+    # The old `ref == refs/heads/main` gate skipped tag builds, so semver
+    # image tags (docker/metadata-action type=semver) could never mint.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
