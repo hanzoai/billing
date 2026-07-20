@@ -21,6 +21,10 @@ export interface SubscriptionPlan {
   externalUrl?: string
   /** Annual price alternative shown on the card */
   annualPrice?: number
+  /** Price is per seat — the card shows a seat selector and per-seat total */
+  perSeat?: boolean
+  /** Minimum seats for per-seat plans (backend rejects fewer) */
+  minSeats?: number
 }
 
 export interface Subscription {

@@ -60,15 +60,27 @@ export type Subscription = {
   } | null
 }
 
+/**
+ * Wire shape of GET /v1/billing/plans — commerce's staticPlan, projected from
+ * the canonical @hanzo/plans/subscription.json catalog. Prices are CENTS.
+ */
 export type Plan = {
   slug?: string
   name?: string
   description?: string
-  price?: number
+  category?: string
+  price?: number // monthly price in cents (0 = free)
+  priceAnnual?: number // annual price in cents per month
   currency?: string
   interval?: 'monthly' | 'yearly' | string
   intervalCount?: number
   trialPeriodDays?: number
+  contactSales?: boolean
+  popular?: boolean
+  features?: string[]
+  bundles?: string[]
+  includedIn?: string[]
+  limits?: Record<string, number | null | undefined>
   metadata?: Record<string, unknown>
 }
 
@@ -511,9 +523,37 @@ export class Commerce {
 
   async getUsage(userId: string, token?: string): Promise<CommerceUsageSummary> {
     try {
-      return await this.request<CommerceUsageSummary>('/v1/billing/usage', {
+      // Live wire shape: { user, count, usage: [{ transactionId, amount (cents),
+      // currency, notes, metadata, createdAt }] } — each item an api-usage
+      // withdraw transaction. Fold into the UsageSummary the panels render.
+      const raw = await this.request<{
+        user?: string
+        count?: number
+        currency?: string
+        usage?: Array<{ transactionId?: string; amount?: number; currency?: string; notes?: string; createdAt?: string }>
+      }>('/v1/billing/usage', {
         params: { user: userId }, token,
       })
+      const items = raw.usage ?? []
+      if (items.length === 0) return { totalCost: 0, currency: 'usd', period: {}, records: [] }
+      const totalCents = items.reduce((sum, it) => sum + (it.amount ?? 0), 0)
+      const dates = items.map((it) => it.createdAt).filter((d): d is string => !!d).sort()
+      const period = { start: dates[0], end: dates[dates.length - 1] }
+      return {
+        totalCost: totalCents / 100,
+        currency: items[0]?.currency ?? 'usd',
+        period,
+        records: [{
+          meterId: 'api_calls',
+          label: 'API usage',
+          current: items.length,
+          limit: null,
+          unit: 'requests',
+          cost: totalCents / 100,
+          periodStart: period.start ?? '',
+          periodEnd: period.end ?? '',
+        }],
+      }
     } catch {
       return { totalCost: 0, currency: 'usd', period: {}, records: [] }
     }

@@ -13,6 +13,14 @@ import type {
 export interface SubscriptionPortalProps {
   subscription: Subscription
   availablePlans: SubscriptionPlan[]
+  /** Plans are still loading from the catalog — render a skeleton grid */
+  plansLoading?: boolean
+  /**
+   * Caller may create paid-tier subscriptions directly (platform admin).
+   * When false, paid plans show the honest activation flow — add funds via
+   * Square top-up + request activation — instead of a POST that 403s.
+   */
+  canDirectSubscribe?: boolean
   usageMetrics?: BillingMetric[]
   retentionOffers?: RetentionOffer[]
   subscriptionHistory?: SubscriptionHistory[]
@@ -24,6 +32,8 @@ export interface SubscriptionPortalProps {
   showHistory?: boolean
   defaultView?: 'overview' | 'plans' | 'history'
 }
+
+import { BASE_PATH } from '@/lib/config'
 
 function formatCurrency(value: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', {
@@ -75,6 +85,8 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const {
     subscription,
     availablePlans,
+    plansLoading = false,
+    canDirectSubscribe = false,
     usageMetrics = [],
     retentionOffers = [],
     subscriptionHistory = [],
@@ -87,6 +99,11 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
   const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
+  const [planError, setPlanError] = React.useState<string | null>(null)
+  // Paid plan whose honest activation panel is open (no self-serve checkout yet)
+  const [activationPlanId, setActivationPlanId] = React.useState<string | null>(null)
+  // Seat count per per-seat plan id, defaulting to the plan minimum
+  const [seatCounts, setSeatCounts] = React.useState<Record<string, number>>({})
 
   // Discount code state
   const [discountCode, setDiscountCode] = React.useState('')
@@ -111,19 +128,30 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         return
       }
       if (plan.id === currentPlan?.id) return
-      setBusyPlanId(plan.id)
+      setPlanError(null)
 
+      // Paid tier without direct-subscribe authority: POST /v1/billing/
+      // subscriptions is mint-gated server-side (403 by design). Open the
+      // honest activation flow instead of firing a request that must fail.
+      if (plan.price > 0 && !canDirectSubscribe) {
+        setActivationPlanId((prev) => (prev === plan.id ? null : plan.id))
+        return
+      }
+
+      setBusyPlanId(plan.id)
       try {
         if (!currentPlan || plan.price >= (currentPlan?.price ?? 0)) {
           await onUpgrade?.(plan.id)
         } else {
           await onDowngrade?.(plan.id)
         }
+      } catch (err) {
+        setPlanError(err instanceof Error ? err.message : 'Plan change failed')
       } finally {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, onDowngrade, onUpgrade],
+    [currentPlan, onDowngrade, onUpgrade, canDirectSubscribe],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {
@@ -397,15 +425,48 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         </div>
       )}
 
-      {view === 'plans' && (
+      {view === 'plans' && plansLoading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex animate-pulse flex-col rounded-2xl border border-white/[0.08] bg-[#141419] p-5">
+              <div className="h-4 w-20 rounded bg-white/[0.08]" />
+              <div className="mt-5 h-7 w-24 rounded bg-white/[0.08]" />
+              <div className="mt-4 h-3 w-full rounded bg-white/[0.06]" />
+              <div className="mt-2 h-3 w-3/4 rounded bg-white/[0.06]" />
+              <div className="mt-6 flex-1 space-y-2">
+                {[0, 1, 2, 3].map((j) => <div key={j} className="h-3 w-5/6 rounded bg-white/[0.05]" />)}
+              </div>
+              <div className="mt-5 h-10 w-full rounded-xl bg-white/[0.06]" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === 'plans' && !plansLoading && availablePlans.length === 0 && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-6 text-sm text-red-400">
+          Could not load the plan catalog. Retry, or reach us at billing@hanzo.ai.
+        </div>
+      )}
+
+      {view === 'plans' && !plansLoading && availablePlans.length > 0 && (
+        <>
+          {planError && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              {planError}
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {availablePlans.map((plan) => {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
             const isFree = plan.price === 0
             const hasTrial = (plan.trialDays ?? 0) > 0
             const isExternal = !!plan.externalUrl || plan.contactSales
-            const periodPrice = isFree ? 'Free' : `$${plan.price}/mo`
+            const minSeats = plan.minSeats ?? 2
+            const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
+            const monthlyTotal = plan.price * seats
+            const periodPrice = isFree ? 'Free' : plan.perSeat ? `$${plan.price}` : `$${plan.price}/mo`
+            const showActivation = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe
 
             const buttonLabel = isCurrent
               ? 'Current plan'
@@ -453,18 +514,49 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 <div className="mt-4">
                   <p className="text-2xl font-bold text-white">
                     {isExternal && !isFree ? `$${formatCurrency(plan.price).replace('$', '').split('.')[0]}` : periodPrice}
-                    {!isFree && !isExternal && <span className="text-sm font-normal text-white/40">/mo</span>}
+                    {!isFree && !isExternal && <span className="text-sm font-normal text-white/40">{plan.perSeat ? '/user/mo' : '/mo'}</span>}
                     {isExternal && !isFree && <span className="text-sm font-normal text-white/40">/mo+</span>}
                   </p>
-                  {plan.annualPrice && !isCurrent && (
-                    <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}/yr — save ${plan.price * 12 - plan.annualPrice}</p>
-                  )}
+                  {plan.annualPrice && !isCurrent ? (
+                    <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
+                  ) : null}
                   {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
                     <p className="mt-0.5 text-[12px] text-emerald-400">+${(plan.trialCreditCents! / 100).toFixed(0)} credit included</p>
                   )}
                 </div>
 
                 <p className="mt-3 text-[13px] leading-relaxed text-white/40">{plan.description}</p>
+
+                {plan.perSeat && !isCurrent && (
+                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-white/50">Seats (min {minSeats})</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Fewer seats"
+                          disabled={seats <= minSeats}
+                          onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: Math.max(minSeats, seats - 1) }))}
+                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          −
+                        </button>
+                        <span className="w-6 text-center text-[13px] font-semibold text-white">{seats}</span>
+                        <button
+                          type="button"
+                          aria-label="More seats"
+                          onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: seats + 1 }))}
+                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14]"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[12px] text-white/40">
+                      {seats} × ${plan.price}/mo = <span className="font-semibold text-white/80">${monthlyTotal}/mo</span>
+                    </p>
+                  </div>
+                )}
 
                 <ul className="mt-4 flex-1 space-y-1.5">
                   {plan.features.map((feature) => (
@@ -499,10 +591,35 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 >
                   {buttonLabel}
                 </button>
+
+                {showActivation && (
+                  <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
+                    <p className="text-[12px] font-semibold text-amber-300">Checkout for paid plans is not self-serve yet</p>
+                    <p className="mt-1 text-[12px] leading-relaxed text-white/50">
+                      Fund your balance now, then request activation — our billing
+                      team enables {plan.name} on your account.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <a
+                        href={`${BASE_PATH}/topup/?amount=${monthlyTotal * 100}`}
+                        className="rounded-lg bg-white px-3 py-2 text-center text-[13px] font-semibold text-black transition hover:bg-white/90"
+                      >
+                        Add ${monthlyTotal} funds
+                      </a>
+                      <a
+                        href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
+                        className="rounded-lg bg-white/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                      >
+                        Request activation
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {view === 'history' && (

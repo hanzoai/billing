@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   },
 }
 
+// Skeleton fallback when the pricing service is unreachable at build time —
+// aligned with the canonical @hanzo/plans/subscription.json tiers.
 const FALLBACK_PLANS: PricingPlan[] = [
   {
     id: 'developer',
@@ -29,20 +31,38 @@ const FALLBACK_PLANS: PricingPlan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    description: 'For developers shipping real products. Higher limits and priority support.',
-    priceMonthly: 49,
-    priceAnnual: 39,
+    description: 'For developers shipping real products. One $20 subscription with unified AI usage across hanzo.ai, hanzo.app, and hanzo.team.',
+    priceMonthly: 20,
+    priceAnnual: 16,
     popular: true,
-    features: ['500 requests/min', '1M tokens/min', 'Email support', 'Analytics dashboard', 'Priority inference', 'Earn up to 20% on idle compute & LLM resale'],
+    features: ['$20/mo included usage', 'hanzo.team access — invite up to 3 guests', '500 requests/min', '1M tokens/min', 'Priority inference', 'Earn up to 20% on idle compute & LLM resale'],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: 'plus',
+    name: 'Plus',
+    description: '5x Pro for power users. Max-tier models and priority support.',
+    priceMonthly: 100,
+    priceAnnual: 80,
+    features: ['Everything in Pro, 5x the usage', '$100/mo included usage', 'hanzo.team access — invite up to 3 guests', '2500 requests/min', '5M tokens/min', 'Max-tier model access', 'Priority support'],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: 'max',
+    name: 'Max',
+    description: 'Maximum AI power for individuals. 20x Pro usage and unlimited premium models.',
+    priceMonthly: 200,
+    priceAnnual: 160,
+    features: ['Everything in Plus', 'Unlimited premium model access', 'hanzo.team access — invite up to 3 guests', '5000 requests/min', '10M tokens/min', '$100/mo cloud credits included', 'Dedicated support channel'],
     payouts: { idleResalePercent: 20 },
   },
   {
     id: 'team',
     name: 'Team',
-    description: 'For teams building together. SSO, shared billing, and custom training.',
-    priceMonthly: 199,
-    priceAnnual: 159,
-    features: ['Up to 10 members', 'SSO / SAML', 'Priority support', 'Custom model training', 'Shared billing', 'Usage analytics', 'Earn up to 20% on idle compute & LLM resale'],
+    description: 'hanzo.team for your whole org. $25 per user, minimum 2 seats.',
+    priceMonthly: 25,
+    priceAnnual: 20,
+    features: ['$25/user/mo — minimum 2 seats', 'SSO / SAML + IAM team management', 'Shared billing + usage analytics', 'Audit log + enterprise-grade security', 'Up to 100 members', 'Priority support'],
     payouts: { idleResalePercent: 20 },
   },
   {

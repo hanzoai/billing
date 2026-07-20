@@ -6,7 +6,6 @@ import {
   UsagePanel,
   CostExplorer,
   InvoicesPayments,
-  SubscriptionPortal,
   CreditsPanel,
   TransactionsPanel,
   SpendAlertsPanel,
@@ -18,14 +17,16 @@ import {
 // Use local PaymentMethodManager with Square Web Payments SDK card form
 // instead of the @hanzo/ui version that calls the server-side /card/tokenize endpoint.
 import { PaymentMethodManager } from '@/lib/billing/payment-manager'
+// Use local SubscriptionPortal: per-seat plans get a seat selector, and paid
+// tiers show the honest activation flow (top-up + request) instead of firing
+// the mint-gated subscribe POST that 403s for non-platform callers.
+import { SubscriptionPortal } from '@/lib/billing/subscription-portal'
 import type { BillingSection } from '@hanzo/ui/billing'
 import { GuidedSetup } from '@/lib/billing/guided-setup'
 import type {
   BillingAccount,
   BillingAccountMember,
   BillingRole,
-  Subscription,
-  SubscriptionPlan,
   PaymentMethod,
   Invoice,
   BusinessProfile,
@@ -33,14 +34,16 @@ import type {
   ComplianceItem,
   SpendAlert,
   UsageSummary,
-  DiscountCode,
   CreditGrant,
   TransactionRecord,
 } from '@hanzo/ui/billing'
+// Local billing types (the shapes the local SubscriptionPortal renders);
+// SubscriptionPlan adds perSeat/minSeats for the seat selector.
+import type { Subscription, SubscriptionPlan, DiscountCode } from '@/lib/billing/types'
 import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
-import { type BillingOrgConfig, isAdminUser, HANZO_PLANS, mergePlans } from '@/lib/config'
+import { type BillingOrgConfig, isAdminUser, BASE_PATH } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 
 import { ORG_DOMAINS, HanzoHeader } from '@hanzo/ui/navigation/hanzo-shell'
@@ -241,6 +244,44 @@ function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
   }
 }
 
+// Subscription tiers shown on the pricing grid (the catalog also carries
+// dns/world/social plans, which have their own product surfaces).
+const PLAN_CATEGORIES = new Set(['personal', 'team', 'enterprise'])
+
+/**
+ * Project a commerce catalog plan (prices in cents, from
+ * @hanzo/plans/subscription.json) onto the card the portal renders.
+ * The catalog is the ONE source of plan copy — features, prices, tiers.
+ */
+function mapCommercePlan(p: Plan): SubscriptionPlan {
+  const limits: Record<string, number> = {}
+  for (const [k, v] of Object.entries(p.limits ?? {})) {
+    if (typeof v === 'number') limits[k] = v
+  }
+  const perSeat = p.category === 'team'
+  return {
+    id: p.slug ?? '',
+    name: p.name ?? '',
+    description: p.description ?? '',
+    price: (p.price ?? 0) / 100,
+    annualPrice: p.priceAnnual ? p.priceAnnual / 100 : undefined,
+    billingPeriod: 'monthly',
+    currency: p.currency ?? 'usd',
+    features: p.features ?? [],
+    limits,
+    highlighted: p.popular,
+    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
+    contactSales: p.contactSales,
+    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
+    trialDays: p.trialPeriodDays || undefined,
+    trialCreditCents: limits.freeCredit ? limits.freeCredit * 100 : undefined,
+    perSeat,
+    // minSeats comes from the catalog when projected; commerce rejects fewer
+    // than 2 seats on per-seat tiers, so the selector enforces the same floor.
+    minSeats: perSeat ? limits.minSeats ?? 2 : undefined,
+  }
+}
+
 /** Normalise any API envelope (array / {data:[]} / {items:[]} etc.) to a plain array. */
 function asList<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[]
@@ -256,7 +297,8 @@ function asList<T>(v: unknown): T[] {
 export function BillingShell({ org, user }: BillingShellProps) {
   const [balance, setBalance] = useState<Balance | null>(null)
   const [subscription, setSubscription] = useState<Subscription>(EMPTY_SUBSCRIPTION)
-  const [plans, setPlans] = useState<SubscriptionPlan[]>(HANZO_PLANS)
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE)
@@ -300,17 +342,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
       if (planList.status === 'fulfilled') {
-        const remotePlans: SubscriptionPlan[] = asList<Plan>(planList.value).map((p) => ({
-          id: p.slug ?? '',
-          name: p.name ?? '',
-          description: p.description ?? '',
-          price: p.price ?? 0,
-          billingPeriod: (p.interval as 'monthly' | 'yearly') ?? 'monthly',
-          features: [],
-          currency: p.currency ?? 'usd',
-        }))
-        setPlans(mergePlans(remotePlans))
+        setPlans(
+          asList<Plan>(planList.value)
+            .filter((p) => PLAN_CATEGORIES.has(p.category ?? ''))
+            .map(mapCommercePlan),
+        )
       }
+      // Loading is over either way; a rejected fetch leaves plans empty and
+      // the portal shows an honest catalog error, never stale local copy.
+      setPlansLoading(false)
 
       if (subs.status === 'fulfilled' && asList<CommerceSubscription>(subs.value).length > 0) {
         const subsList = asList<CommerceSubscription>(subs.value)
@@ -409,6 +449,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       setError(err instanceof Error ? err.message : 'Failed to load billing data')
     } finally {
       setLoading(false)
+      setPlansLoading(false)
     }
   }, [org, user])
 
@@ -481,14 +522,22 @@ export function BillingShell({ org, user }: BillingShellProps) {
   // ── Handlers ──────────────────────────────────────────────────────────
 
   const handleAddFunds = useCallback(async (amount: number) => {
+    const cents = Math.round(amount * 100)
+    // POST /v1/billing/deposit is mint-gated (platform only). The self-serve
+    // money-in is the Square top-up page — send everyone else there instead
+    // of firing a deposit that 403s.
+    if (!admin) {
+      window.location.href = `${BASE_PATH}/topup/?amount=${cents}`
+      return
+    }
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
     const userId = user.commerceUserId || user.email || user.sub
-    await commerce.addDeposit({ user: userId, amount: Math.round(amount * 100), currency: 'usd' })
+    await commerce.addDeposit({ user: userId, amount: cents, currency: 'usd' })
     const newBalance = await commerce.getBalance(userId)
     setBalance(newBalance)
-  }, [org, user])
+  }, [org, user, admin])
 
   const handleGrantCredit = useCallback(async (email: string, amount: number) => {
     const token = getAccessToken()
@@ -502,6 +551,14 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }, [org, user])
 
   const handleUpgrade = useCallback(async (planId: string) => {
+    // Paid-tier subscribe is mint-gated server-side (403 for non-platform
+    // callers). For overview-originated upgrades, land on the pricing section
+    // where the honest activation flow (top-up + request) lives.
+    const target = plans.find((p) => p.id === planId)
+    if (target && target.price > 0 && !admin) {
+      window.location.hash = 'pricing'
+      return
+    }
     const token = getAccessToken()
     if (!token) return
     const commerce = getCommerce(org.commerceUrl, token)
@@ -512,7 +569,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       await commerce.subscribe({ planId, userId })
     }
     await loadBillingData()
-  }, [org, user, subscription.id, loadBillingData])
+  }, [org, user, subscription.id, loadBillingData, plans, admin])
 
   const handleDowngrade = useCallback(async (planId: string) => {
     await handleUpgrade(planId)
@@ -870,6 +927,9 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <SubscriptionPortal
             subscription={subscription}
             availablePlans={plans}
+            plansLoading={plansLoading}
+            canDirectSubscribe={admin}
+            defaultView="plans"
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
