@@ -1,3 +1,8 @@
+# Build + deploy of the app image is now the native Hanzo pipeline:
+# .hanzo/workflows/deploy.yml (Hanzo Git push → act_runner → BuildKit →
+# ghcr.io/hanzoai/billing:<sha> → kubectl patch app billing → operator).
+# GitHub is a mirror; this workflow keeps only test/lint/build validation.
+# NO GitHub builders push images or deploy anymore.
 name: CI
 
 on:
@@ -10,8 +15,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
   test-and-build:
@@ -32,96 +35,3 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
-
-  deploy-docker:
-    needs: test-and-build
-    # main push → sha-<sha7> + latest; v* tag push → semver image tag.
-    # The old `ref == refs/heads/main` gate skipped tag builds, so semver
-    # image tags (docker/metadata-action type=semver) could never mint.
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    permissions:
-      contents: read
-      packages: write
-      # id-token: write is required by the reusable workflow for OIDC.
-      # Job-level permissions are NOT inherited from workflow-level when
-      # calling a reusable workflow — missing this caused startup_failure.
-      id-token: write
-    uses: hanzoai/.github/.github/workflows/docker-build.yml@main
-    with:
-      image: ghcr.io/hanzoai/billing
-      platforms: linux/amd64
-      # Pin the build to the online DinD arcd pool. docker-build.yml defaults
-      # runner-amd64/runner-deploy to ["self-hosted","linux","amd64"], which
-      # only matches the evo host-daemon pool — currently offline, so the job
-      # queued forever. The hanzo-build-linux-amd64 scale set registers
-      # labels hanzo-build-linux-amd64,self-hosted,Linux,X64 (X64, not amd64),
-      # is org-wide, and has containerMode: dind for buildx. Target it by name.
-      runner-amd64: '["hanzo-build-linux-amd64"]'
-      runner-deploy: '["hanzo-build-linux-amd64"]'
-      # Build + push only. Deployment is driven solely by the operator CR in
-      # universe (infra/k8s/operator/crs/billing-v1.yaml). A CI `kubectl set
-      # image` fights the operator, which reverts the deployment back to the
-      # CR's declared tag — that race is why v1.0.1 built but never rolled out.
-      # One deploy path: the operator reconciling the declared CR tag.
-      deploy: false
-      build-args: |
-        NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=22b98f00bd4572e2a42773ad82b329b0
-    secrets: inherit
-
-  deploy-cloudflare:
-    needs: test-and-build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_CLOUDFLARE == 'true'
-    runs-on: hanzo-deploy-linux-amd64
-    permissions:
-      contents: read
-      deployments: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-
-      - name: Fetch CF credentials from KMS
-        id: kms
-        env:
-          KMS_CLIENT_ID: ${{ secrets.KMS_CLIENT_ID }}
-          KMS_CLIENT_SECRET: ${{ secrets.KMS_CLIENT_SECRET }}
-          HANZO_API_KEY: ${{ secrets.HANZO_API_KEY }}
-          KMS_ENDPOINT: ${{ vars.KMS_ENDPOINT || 'https://kms.hanzo.ai' }}
-        run: |
-          # Auth: Universal Auth (preferred) or legacy API key
-          if [ -n "${KMS_CLIENT_ID}" ] && [ -n "${KMS_CLIENT_SECRET}" ]; then
-            HANZO_API_KEY=$(curl -sf "${KMS_ENDPOINT}/api/v1/auth/universal-auth/login" \
-              -H "Content-Type: application/json" \
-              -d "{\"clientId\":\"${KMS_CLIENT_ID}\",\"clientSecret\":\"${KMS_CLIENT_SECRET}\"}" | jq -r '.accessToken')
-          fi
-          response=$(curl -sf "${KMS_ENDPOINT}/api/v3/secrets/raw?workspaceId=e1359bf4-31b4-4dfa-bb90-323e2c298ad8&secretPath=/deploy&environment=prod" \
-            -H "Authorization: Bearer ${HANZO_API_KEY}" 2>/dev/null || echo "")
-          if [ -n "$response" ]; then
-            cf_token=$(echo "$response" | jq -r '.secrets[] | select(.secretKey=="CLOUDFLARE_API_TOKEN") | .secretValue // empty')
-            cf_account=$(echo "$response" | jq -r '.secrets[] | select(.secretKey=="CLOUDFLARE_ACCOUNT_ID") | .secretValue // empty')
-          fi
-          if [ -z "${cf_token:-}" ]; then
-            echo "::error::CF credentials not found in KMS."
-            exit 1
-          fi
-          echo "::add-mask::${cf_token}"
-          echo "::add-mask::${cf_account}"
-          echo "cf_token=${cf_token}" >> "$GITHUB_OUTPUT"
-          echo "cf_account=${cf_account}" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ steps.kms.outputs.cf_token }}
-          accountId: ${{ steps.kms.outputs.cf_account }}
-          command: pages deploy out --project-name=hanzo-billing
