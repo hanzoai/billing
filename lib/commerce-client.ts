@@ -224,27 +224,6 @@ export type CommerceCreditBalance = {
   balances?: Array<{ currency?: string; available?: number }>
 }
 
-export type CommerceMeter = {
-  id?: string
-  name?: string
-  description?: string
-  unit?: string
-  aggregation?: string
-  createdAt?: string
-}
-
-export type CommerceMeterEventsSummary = {
-  userId?: string
-  meters?: Array<{
-    meterId?: string
-    name?: string
-    total?: number
-    unit?: string
-    dimensions?: Record<string, number>
-  }>
-  period?: { start?: string; end?: string }
-}
-
 export type CommerceBillingAccount = {
   id?: string
   name?: string
@@ -264,16 +243,6 @@ export type CommerceBillingAccountMember = {
   name?: string
   role?: string
   addedAt?: string
-}
-
-export type CommercePortalOverview = {
-  customerId?: string
-  balance?: Balance
-  creditBalance?: number
-  activeSubscription?: Subscription
-  pendingInvoices?: number
-  totalSpendThisPeriod?: number
-  currency?: string
 }
 
 export class CommerceApiError extends Error {
@@ -518,7 +487,7 @@ export class Commerce {
 
   async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
     try {
-      return await this.request<CommercePaymentMethod[]>('/v1/billing/payment-methods', {
+      return await this.request<CommercePaymentMethod[]>('/v1/billing/methods', {
         params: { customerId: userId }, token,
       })
     } catch { return [] }
@@ -530,13 +499,13 @@ export class Commerce {
     if (!body.customerId && params.userId) {
       body.customerId = params.userId
     }
-    return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
+    return this.request<CommercePaymentMethod>('/v1/billing/methods', {
       method: 'POST', body, token,
     })
   }
 
   async removePaymentMethod(methodId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/payment-methods/${methodId}`, {
+    await this.request<void>(`/v1/billing/methods/${methodId}`, {
       method: 'DELETE', token,
     })
   }
@@ -592,26 +561,26 @@ export class Commerce {
 
   async getSpendAlerts(userId: string, token?: string): Promise<CommerceSpendAlert[]> {
     try {
-      return await this.request<CommerceSpendAlert[]>('/v1/billing/spend-alerts', {
+      return await this.request<CommerceSpendAlert[]>('/v1/billing/alerts', {
         params: { user: userId }, token,
       })
     } catch { return [] }
   }
 
   async createSpendAlert(params: { userId: string; title: string; threshold: number; currency?: string }, token?: string): Promise<CommerceSpendAlert> {
-    return this.request<CommerceSpendAlert>('/v1/billing/spend-alerts', {
+    return this.request<CommerceSpendAlert>('/v1/billing/alerts', {
       method: 'POST', body: params, token,
     })
   }
 
   async updateSpendAlert(alertId: string, params: { title?: string; threshold?: number }, token?: string): Promise<CommerceSpendAlert> {
-    return this.request<CommerceSpendAlert>(`/v1/billing/spend-alerts/${alertId}`, {
+    return this.request<CommerceSpendAlert>(`/v1/billing/alerts/${alertId}`, {
       method: 'PATCH', body: params, token,
     })
   }
 
   async deleteSpendAlert(alertId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/spend-alerts/${alertId}`, {
+    await this.request<void>(`/v1/billing/alerts/${alertId}`, {
       method: 'DELETE', token,
     })
   }
@@ -628,7 +597,7 @@ export class Commerce {
 
   async getCreditGrants(userId: string, token?: string): Promise<CommerceCreditGrant[]> {
     try {
-      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credit-grants', {
+      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credits', {
         params: { userId }, token,
       })
       // Unwrap envelope: Go API returns { grants: [...], count: N }
@@ -662,7 +631,7 @@ export class Commerce {
 
   /** Save a Square-tokenized card as a payment method */
   async tokenizeAndAddCard(sourceId: string, userId: string, token?: string): Promise<CommercePaymentMethod> {
-    return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
+    return this.request<CommercePaymentMethod>('/v1/billing/methods', {
       method: 'POST',
       body: { providerRef: sourceId, type: 'card', providerType: 'square', customerId: userId },
       token,
@@ -692,27 +661,7 @@ export class Commerce {
 
   // ── Portal ────────────────────────────────────────────────────────────
 
-  async getPortalOverview(customerId: string, token?: string): Promise<CommercePortalOverview> {
-    return this.request<CommercePortalOverview>('/v1/billing/portal/overview', {
-      params: { customerId }, token,
-    })
-  }
 
-  // ── Meters ────────────────────────────────────────────────────────────
-
-  async getMeters(token?: string): Promise<CommerceMeter[]> {
-    try {
-      return await this.request<CommerceMeter[]>('/v1/billing/meters', { token })
-    } catch { return [] }
-  }
-
-  async getMeterEventsSummary(userId: string, token?: string): Promise<CommerceMeterEventsSummary> {
-    try {
-      return await this.request<CommerceMeterEventsSummary>('/v1/billing/meter-events/summary', {
-        params: { userId }, token,
-      })
-    } catch { return { userId, meters: [], period: {} } }
-  }
 
   // ── Billing Accounts ──────────────────────────────────────────────────
 
