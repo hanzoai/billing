@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+// Every billing surface comes from ONE place: the local `lib/billing` barrel.
+// The published @hanzo/ui/billing bundle is deliberately NOT used — its barrel
+// drags in a first-party card form that reads the raw PAN into JS. Square Web
+// Payments hosted fields are the only card entry path here.
 import {
   OverviewDashboard,
   UsagePanel,
@@ -9,19 +13,16 @@ import {
   CreditsPanel,
   TransactionsPanel,
   SpendAlertsPanel,
-  PaymentMethodManager as _PaymentMethodManager,
+  PaymentMethodManager,
   AccountMembers,
   BusinessProfilePanel,
   TaxCompliancePanel,
-} from '@hanzo/ui/billing'
-// Use local PaymentMethodManager with Square Web Payments SDK card form
-// instead of the @hanzo/ui version that calls the server-side /card/tokenize endpoint.
-import { PaymentMethodManager } from '@/lib/billing/payment-manager'
+} from '@/lib/billing'
 // Use local SubscriptionPortal: per-seat plans get a seat selector, and paid
 // tiers show the honest activation flow (top-up + request) instead of firing
 // the mint-gated subscribe POST that 403s for non-platform callers.
 import { SubscriptionPortal } from '@/lib/billing/subscription-portal'
-import type { BillingSection } from '@hanzo/ui/billing'
+import type { BillingSection } from '@/lib/billing'
 import { GuidedSetup } from '@/lib/billing/guided-setup'
 import type {
   BillingAccount,
@@ -36,7 +37,7 @@ import type {
   UsageSummary,
   CreditGrant,
   TransactionRecord,
-} from '@hanzo/ui/billing'
+} from '@/lib/billing'
 // Local billing types (the shapes the local SubscriptionPortal renders);
 // SubscriptionPlan adds perSeat/minSeats for the seat selector.
 import type { Subscription, SubscriptionPlan, DiscountCode } from '@/lib/billing/types'
@@ -74,10 +75,6 @@ const SECTION_TITLES: Record<BillingSection, string> = {
   payment: 'Payment Methods',
   team: 'Team',
   settings: 'Settings',
-  tax: 'Tax & Compliance',
-  members: 'Team Members',
-  cost: 'Cost Explorer',
-  business: 'Business Profile',
 }
 
 function getInitialSection(): BillingSection {
@@ -202,7 +199,7 @@ function mapCommerceTransaction(tx: Transaction): TransactionRecord {
     currency: tx.currency ?? 'usd',
     description: tx.notes ?? (tx.metadata?.description as string | undefined),
     balanceAfter: tx.metadata?.balanceAfter as number | undefined,
-    tags: tx.tags,
+    tags: typeof tx.tags === 'string' ? [tx.tags] : tx.tags,
     createdAt: tx.createdAt ?? new Date().toISOString(),
   }
 }

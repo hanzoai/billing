@@ -650,16 +650,6 @@ export class Commerce {
 
   // ── Payment Processing ──────────────────────────────────────────────
 
-  /** Process a card payment (backend handles PCI-compliant tokenization) */
-  async processCardPayment(
-    params: { card: { number: string; expMonth: number; expYear: number; cvc: string }; amount: number; userId?: string; currency?: string },
-    token?: string,
-  ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
-      method: 'POST', body: { ...params, method: 'card' }, token,
-    })
-  }
-
   /** Record a crypto payment (on-chain tx already sent by the client) */
   async recordCryptoPayment(
     params: { txHash: string; network: string; chainId?: number; amount: number; currency: string; userId?: string; fromAddress: string; toAddress: string },

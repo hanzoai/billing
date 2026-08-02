@@ -14,8 +14,6 @@ import {
 export interface SquareCardFormProps {
   /** Called with the Square sourceId token when tokenization succeeds */
   onToken: (sourceId: string) => Promise<void>
-  /** Called when cvv input is focused (for card flip animation) */
-  onCvvFocus?: (focused: boolean) => void
   disabled?: boolean
 }
 
@@ -23,7 +21,7 @@ export interface SquareCardFormProps {
 
 const CONTAINER_ID = 'sq-card-container'
 
-export function SquareCardForm({ onToken, onCvvFocus, disabled }: SquareCardFormProps) {
+export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
   const cardRef = React.useRef<SquareCard | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [submitting, setSubmitting] = React.useState(false)
@@ -103,42 +101,6 @@ export function SquareCardForm({ onToken, onCvvFocus, disabled }: SquareCardForm
       if (mountedRef.current) setSubmitting(false)
     }
   }, [onToken, ready, submitting, disabled])
-
-  // Wire up CVV focus detection via DOM event listener on the Square iframe container.
-  // Square SDK doesn't expose a direct onCvvFocus callback, so we listen for focus
-  // events on iframe elements within the container.
-  React.useEffect(() => {
-    if (!onCvvFocus) return
-    const container = document.getElementById(CONTAINER_ID)
-    if (!container) return
-
-    // Square renders iframes; we observe mutations to attach listeners when they appear.
-    let cvvFrame: HTMLIFrameElement | null = null
-
-    function findAndAttach() {
-      const frames = container!.querySelectorAll('iframe')
-      frames.forEach(frame => {
-        const name = frame.getAttribute('name') ?? frame.id ?? ''
-        if (name.toLowerCase().includes('cvv') || name.toLowerCase().includes('cvc')) {
-          if (cvvFrame !== frame) {
-            cvvFrame = frame
-            try {
-              frame.contentWindow?.document.body?.addEventListener('focus', () => onCvvFocus!(true), true)
-              frame.contentWindow?.document.body?.addEventListener('blur', () => onCvvFocus!(false), true)
-            } catch {
-              // cross-origin access blocked — Square SDK handles its own events
-            }
-          }
-        }
-      })
-    }
-
-    const observer = new MutationObserver(findAndAttach)
-    observer.observe(container, { childList: true, subtree: true })
-    findAndAttach()
-
-    return () => observer.disconnect()
-  }, [onCvvFocus, ready])
 
   return (
     <div className="space-y-3">

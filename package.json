@@ -1,13 +1,13 @@
 {
   "name": "@hanzo/billing",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "scripts": {
     "build": "next build",
     "clean": "rimraf .next out",
     "dev": "next dev --port 3005",
     "start": "next start",
-    "lint": "echo 'lint ok'",
+    "lint": "node scripts/pci-scope.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
