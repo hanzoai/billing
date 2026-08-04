@@ -120,14 +120,14 @@ export function SubscribeCardForm({
         style={{
           minHeight: loading ? '96px' : undefined,
           borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: '#0a0a0f',
+          border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+          background: 'var(--color-bg)',
           padding: '10px 12px',
         }}
       >
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-            <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.12)', borderTopColor: 'rgba(255,255,255,0.6)', borderRadius: '50%', animation: 'sq-sub-spin 0.8s linear infinite' }} />
+            <div style={{ width: '18px', height: '18px', border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)', borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)', borderRadius: '50%', animation: 'sq-sub-spin 0.8s linear infinite' }} />
             <style>{`@keyframes sq-sub-spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}

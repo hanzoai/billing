@@ -477,7 +477,7 @@ function CardForm({ onAdd, setError }: CardFormProps) {
         {loading ? 'Processing...' : 'Save card'}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)' }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="11" width="18" height="11" rx="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
