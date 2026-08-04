@@ -216,13 +216,8 @@ body {
 }
 
 ::selection {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-html.light ::selection {
-  background-color: rgba(23, 23, 23, 0.15);
-  color: white;
+  background-color: color-mix(in oklab, var(--color-text) 20%, transparent);
+  color: var(--color-text);
 }
 
 /* Theme toggle paints a transition class on <html> for the duration of a flip. */
@@ -678,14 +673,14 @@ html.transitioning *::after {
     border-color: var(--color-border);
   }
 }
-.divide-white\/\[0\.04\] {
+.divide-ink\/\[0\.04\] {
   :where(& > :not(:last-child)) {
-    border-color: color-mix(in oklab, #fff 4%, transparent);
+    border-color: color-mix(in oklab, var(--color-text) 4%, transparent);
   }
 }
-.divide-white\/\[0\.05\] {
+.divide-ink\/\[0\.05\] {
   :where(& > :not(:last-child)) {
-    border-color: color-mix(in oklab, #fff 5%, transparent);
+    border-color: color-mix(in oklab, var(--color-text) 5%, transparent);
   }
 }
 .truncate {
@@ -792,41 +787,41 @@ html.transitioning *::after {
 .border-warning\/30 {
   border-color: color-mix(in oklab, var(--color-warning) 30%, transparent);
 }
-.border-white\/10 {
-  border-color: color-mix(in oklab, #fff 10%, transparent);
+.border-ink\/10 {
+  border-color: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
-.border-white\/\[0\.1\] {
-  border-color: color-mix(in oklab, #fff 10%, transparent);
+.border-ink\/\[0\.1\] {
+  border-color: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
-.border-white\/\[0\.2\] {
-  border-color: color-mix(in oklab, #fff 20%, transparent);
+.border-ink\/\[0\.2\] {
+  border-color: color-mix(in oklab, var(--color-text) 20%, transparent);
 }
-.border-white\/\[0\.04\] {
-  border-color: color-mix(in oklab, #fff 4%, transparent);
+.border-ink\/\[0\.04\] {
+  border-color: color-mix(in oklab, var(--color-text) 4%, transparent);
 }
-.border-white\/\[0\.06\] {
-  border-color: color-mix(in oklab, #fff 6%, transparent);
+.border-ink\/\[0\.06\] {
+  border-color: color-mix(in oklab, var(--color-text) 6%, transparent);
 }
-.border-white\/\[0\.07\] {
-  border-color: color-mix(in oklab, #fff 7.000000000000001%, transparent);
+.border-ink\/\[0\.07\] {
+  border-color: color-mix(in oklab, var(--color-text) 7.000000000000001%, transparent);
 }
-.border-white\/\[0\.08\] {
-  border-color: color-mix(in oklab, #fff 8%, transparent);
+.border-ink\/\[0\.08\] {
+  border-color: color-mix(in oklab, var(--color-text) 8%, transparent);
 }
-.border-white\/\[0\.12\] {
-  border-color: color-mix(in oklab, #fff 12%, transparent);
+.border-ink\/\[0\.12\] {
+  border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
-.border-white\/\[0\.25\] {
-  border-color: color-mix(in oklab, #fff 25%, transparent);
+.border-ink\/\[0\.25\] {
+  border-color: color-mix(in oklab, var(--color-text) 25%, transparent);
 }
 .border-t-brand {
   border-top-color: var(--color-brand);
 }
-.border-t-white\/50 {
-  border-top-color: color-mix(in oklab, #fff 50%, transparent);
+.border-t-ink\/50 {
+  border-top-color: color-mix(in oklab, var(--color-text) 50%, transparent);
 }
-.border-t-white\/60 {
-  border-top-color: color-mix(in oklab, #fff 60%, transparent);
+.border-t-ink\/60 {
+  border-top-color: color-mix(in oklab, var(--color-text) 60%, transparent);
 }
 .bg-\[\#0d0d10\] {
   background-color: #0d0d10;
@@ -878,6 +873,9 @@ html.transitioning *::after {
 }
 .bg-brand {
   background-color: var(--color-brand);
+}
+.bg-brand-foreground {
+  background-color: var(--color-brand-foreground);
 }
 .bg-brand-muted {
   background-color: var(--color-brand-muted);
@@ -978,35 +976,32 @@ html.transitioning *::after {
 .bg-warning\/15 {
   background-color: color-mix(in oklab, var(--color-warning) 15%, transparent);
 }
-.bg-white {
-  background-color: #fff;
+.bg-ink\/10 {
+  background-color: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
-.bg-white\/10 {
-  background-color: color-mix(in oklab, #fff 10%, transparent);
+.bg-ink\/\[0\.02\] {
+  background-color: color-mix(in oklab, var(--color-text) 2%, transparent);
 }
-.bg-white\/\[0\.02\] {
-  background-color: color-mix(in oklab, #fff 2%, transparent);
+.bg-ink\/\[0\.03\] {
+  background-color: color-mix(in oklab, var(--color-text) 3%, transparent);
 }
-.bg-white\/\[0\.03\] {
-  background-color: color-mix(in oklab, #fff 3%, transparent);
+.bg-ink\/\[0\.04\] {
+  background-color: color-mix(in oklab, var(--color-text) 4%, transparent);
 }
-.bg-white\/\[0\.04\] {
-  background-color: color-mix(in oklab, #fff 4%, transparent);
+.bg-ink\/\[0\.05\] {
+  background-color: color-mix(in oklab, var(--color-text) 5%, transparent);
 }
-.bg-white\/\[0\.05\] {
-  background-color: color-mix(in oklab, #fff 5%, transparent);
+.bg-ink\/\[0\.06\] {
+  background-color: color-mix(in oklab, var(--color-text) 6%, transparent);
 }
-.bg-white\/\[0\.06\] {
-  background-color: color-mix(in oklab, #fff 6%, transparent);
+.bg-ink\/\[0\.07\] {
+  background-color: color-mix(in oklab, var(--color-text) 7.000000000000001%, transparent);
 }
-.bg-white\/\[0\.07\] {
-  background-color: color-mix(in oklab, #fff 7.000000000000001%, transparent);
+.bg-ink\/\[0\.08\] {
+  background-color: color-mix(in oklab, var(--color-text) 8%, transparent);
 }
-.bg-white\/\[0\.08\] {
-  background-color: color-mix(in oklab, #fff 8%, transparent);
-}
-.bg-white\/\[0\.12\] {
-  background-color: color-mix(in oklab, #fff 12%, transparent);
+.bg-ink\/\[0\.12\] {
+  background-color: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
 .p-0\.5 {
   padding: 0.125rem;
@@ -1277,32 +1272,32 @@ html.transitioning *::after {
 .text-white {
   color: #fff;
 }
-.text-white\/20 {
-  color: color-mix(in oklab, #fff 20%, transparent);
+.text-ink\/20 {
+  color: color-mix(in oklab, var(--color-text) 20%, transparent);
 }
-.text-white\/25 {
-  color: color-mix(in oklab, #fff 25%, transparent);
+.text-ink\/25 {
+  color: color-mix(in oklab, var(--color-text) 25%, transparent);
 }
-.text-white\/30 {
-  color: color-mix(in oklab, #fff 30%, transparent);
+.text-ink\/30 {
+  color: color-mix(in oklab, var(--color-text) 30%, transparent);
 }
-.text-white\/35 {
-  color: color-mix(in oklab, #fff 35%, transparent);
+.text-ink\/35 {
+  color: color-mix(in oklab, var(--color-text) 35%, transparent);
 }
-.text-white\/40 {
-  color: color-mix(in oklab, #fff 40%, transparent);
+.text-ink\/40 {
+  color: color-mix(in oklab, var(--color-text) 40%, transparent);
 }
-.text-white\/50 {
-  color: color-mix(in oklab, #fff 50%, transparent);
+.text-ink\/50 {
+  color: color-mix(in oklab, var(--color-text) 50%, transparent);
 }
-.text-white\/60 {
-  color: color-mix(in oklab, #fff 60%, transparent);
+.text-ink\/60 {
+  color: color-mix(in oklab, var(--color-text) 60%, transparent);
 }
-.text-white\/70 {
-  color: color-mix(in oklab, #fff 70%, transparent);
+.text-ink\/70 {
+  color: color-mix(in oklab, var(--color-text) 70%, transparent);
 }
-.text-white\/80 {
-  color: color-mix(in oklab, #fff 80%, transparent);
+.text-ink\/80 {
+  color: color-mix(in oklab, var(--color-text) 80%, transparent);
 }
 .uppercase {
   text-transform: uppercase;
@@ -1409,24 +1404,24 @@ html.transitioning *::after {
     }
   }
 }
-.group-hover\:text-white\/40 {
+.group-hover\:text-ink\/40 {
   &:is(:where(.group):hover *) {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 40%, transparent);
+      color: color-mix(in oklab, var(--color-text) 40%, transparent);
     }
   }
 }
-.group-hover\:text-white\/50 {
+.group-hover\:text-ink\/50 {
   &:is(:where(.group):hover *) {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 50%, transparent);
+      color: color-mix(in oklab, var(--color-text) 50%, transparent);
     }
   }
 }
-.group-hover\:text-white\/60 {
+.group-hover\:text-ink\/60 {
   &:is(:where(.group):hover *) {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 60%, transparent);
+      color: color-mix(in oklab, var(--color-text) 60%, transparent);
     }
   }
 }
@@ -1455,24 +1450,24 @@ html.transitioning *::after {
     }
   }
 }
-.hover\:border-white\/\[0\.2\] {
+.hover\:border-ink\/\[0\.2\] {
   &:hover {
     @media (hover: hover) {
-      border-color: color-mix(in oklab, #fff 20%, transparent);
+      border-color: color-mix(in oklab, var(--color-text) 20%, transparent);
     }
   }
 }
-.hover\:border-white\/\[0\.12\] {
+.hover\:border-ink\/\[0\.12\] {
   &:hover {
     @media (hover: hover) {
-      border-color: color-mix(in oklab, #fff 12%, transparent);
+      border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
     }
   }
 }
-.hover\:border-white\/\[0\.14\] {
+.hover\:border-ink\/\[0\.14\] {
   &:hover {
     @media (hover: hover) {
-      border-color: color-mix(in oklab, #fff 14.000000000000002%, transparent);
+      border-color: color-mix(in oklab, var(--color-text) 14.000000000000002%, transparent);
     }
   }
 }
@@ -1546,59 +1541,52 @@ html.transitioning *::after {
     }
   }
 }
-.hover\:bg-white\/90 {
+.hover\:bg-ink\/\[0\.02\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 90%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 2%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.02\] {
+.hover\:bg-ink\/\[0\.03\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 2%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 3%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.03\] {
+.hover\:bg-ink\/\[0\.04\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 3%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 4%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.04\] {
+.hover\:bg-ink\/\[0\.05\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 4%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 5%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.05\] {
+.hover\:bg-ink\/\[0\.06\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 5%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 6%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.06\] {
+.hover\:bg-ink\/\[0\.12\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 6%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 12%, transparent);
     }
   }
 }
-.hover\:bg-white\/\[0\.12\] {
+.hover\:bg-ink\/\[0\.14\] {
   &:hover {
     @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 12%, transparent);
-    }
-  }
-}
-.hover\:bg-white\/\[0\.14\] {
-  &:hover {
-    @media (hover: hover) {
-      background-color: color-mix(in oklab, #fff 14.000000000000002%, transparent);
+      background-color: color-mix(in oklab, var(--color-text) 14.000000000000002%, transparent);
     }
   }
 }
@@ -1630,24 +1618,24 @@ html.transitioning *::after {
     }
   }
 }
-.hover\:text-white {
+.hover\:text-text {
   &:hover {
     @media (hover: hover) {
-      color: #fff;
+      color: var(--color-text);
     }
   }
 }
-.hover\:text-white\/60 {
+.hover\:text-ink\/60 {
   &:hover {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 60%, transparent);
+      color: color-mix(in oklab, var(--color-text) 60%, transparent);
     }
   }
 }
-.hover\:text-white\/70 {
+.hover\:text-ink\/70 {
   &:hover {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 70%, transparent);
+      color: color-mix(in oklab, var(--color-text) 70%, transparent);
     }
   }
 }
@@ -1720,14 +1708,14 @@ html.transitioning *::after {
     cursor: not-allowed;
   }
 }
-.disabled\:bg-white\/\[0\.06\] {
+.disabled\:bg-ink\/\[0\.06\] {
   &:disabled {
-    background-color: color-mix(in oklab, #fff 6%, transparent);
+    background-color: color-mix(in oklab, var(--color-text) 6%, transparent);
   }
 }
-.disabled\:text-white\/30 {
+.disabled\:text-ink\/30 {
   &:disabled {
-    color: color-mix(in oklab, #fff 30%, transparent);
+    color: color-mix(in oklab, var(--color-text) 30%, transparent);
   }
 }
 .disabled\:opacity-30 {
@@ -1876,8 +1864,8 @@ html.transitioning *::after {
 .leading-tight {
   line-height: 1.25;
 }
-.text-white\/\[0\.15\] {
-  color: color-mix(in oklab, #fff 15%, transparent);
+.text-ink\/\[0\.15\] {
+  color: color-mix(in oklab, var(--color-text) 15%, transparent);
 }
 .capitalize {
   text-transform: capitalize;
@@ -1902,17 +1890,17 @@ html.transitioning *::after {
     }
   }
 }
-.hover\:text-white\/80 {
+.hover\:text-ink\/80 {
   &:hover {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 80%, transparent);
+      color: color-mix(in oklab, var(--color-text) 80%, transparent);
     }
   }
 }
-.hover\:text-white\/90 {
+.hover\:text-ink\/90 {
   &:hover {
     @media (hover: hover) {
-      color: color-mix(in oklab, #fff 90%, transparent);
+      color: color-mix(in oklab, var(--color-text) 90%, transparent);
     }
   }
 }
@@ -1921,9 +1909,9 @@ html.transitioning *::after {
     box-shadow: 0 0 0 2px var(--ring-color, currentcolor);
   }
 }
-.focus-visible\:ring-white\/20 {
+.focus-visible\:ring-ink\/20 {
   &:focus-visible {
-    --ring-color: color-mix(in oklab, #fff 20%, transparent);
+    --ring-color: color-mix(in oklab, var(--color-text) 20%, transparent);
   }
 }
 .focus-visible\:outline-none {

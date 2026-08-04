@@ -107,10 +107,10 @@ export function SubscribeCardForm({
   }, [ready, submitting, tokenize, planId, quantity, onSubscribe, onSuccess, onNoProcessor])
 
   return (
-    <div className="mt-3 rounded-xl border border-white/[0.12] bg-white/[0.03] p-3">
-      <p className="text-[12px] font-semibold text-white/80">Subscribe to {planName}</p>
-      <p className="mt-1 text-[12px] text-white/40">
-        Enter a card — you are charged <span className="font-semibold text-white/70">{totalLabel}</span> and the plan
+    <div className="mt-3 rounded-xl border border-ink/[0.12] bg-ink/[0.03] p-3">
+      <p className="text-[12px] font-semibold text-ink/80">Subscribe to {planName}</p>
+      <p className="mt-1 text-[12px] text-ink/40">
+        Enter a card — you are charged <span className="font-semibold text-ink/70">{totalLabel}</span> and the plan
         activates immediately.
       </p>
 
@@ -144,12 +144,12 @@ export function SubscribeCardForm({
         type="button"
         disabled={!ready || submitting}
         onClick={handleSubmit}
-        className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-center text-[13px] font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-white/30"
+        className="mt-3 w-full rounded-lg bg-brand px-3 py-2 text-center text-[13px] font-semibold text-brand-foreground transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-ink/[0.06] disabled:text-ink/30"
       >
         {submitting ? 'Processing…' : `Pay ${totalLabel} & subscribe`}
       </button>
 
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/25">
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink/25">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="11" width="18" height="11" rx="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />

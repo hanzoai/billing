@@ -15,7 +15,7 @@ export default function ErrorPage({
           {error.message}
         </pre>
         {error.stack && (
-          <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-left text-[10px] text-white/30">
+          <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-black/30 p-3 text-left text-[10px] text-ink/30">
             {error.stack}
           </pre>
         )}

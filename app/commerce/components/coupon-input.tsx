@@ -54,11 +54,11 @@ export function CouponInput() {
           onKeyDown={(e) => e.key === 'Enter' && apply()}
           style={{
             flex: 1,
-            background: 'rgba(255,255,255,0.04)',
-            border: `1px solid ${status === 'error' ? 'rgba(239,68,68,0.5)' : status === 'ok' ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.1)'}`,
+            background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+            border: `1px solid ${status === 'error' ? 'rgba(239,68,68,0.5)' : status === 'ok' ? 'rgba(34,197,94,0.5)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
             borderRadius: '8px',
             padding: '10px 14px',
-            color: '#fafafa',
+            color: 'var(--color-text)',
             fontSize: '14px',
             outline: 'none',
             letterSpacing: '0.05em',
@@ -69,11 +69,11 @@ export function CouponInput() {
           onClick={apply}
           disabled={status === 'loading' || !code.trim()}
           style={{
-            background: status === 'loading' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.09)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            background: status === 'loading' ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'color-mix(in oklab, var(--color-text) 9%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
             borderRadius: '8px',
             padding: '10px 18px',
-            color: code.trim() ? '#fafafa' : 'rgba(255,255,255,0.3)',
+            color: code.trim() ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 30%, transparent)',
             fontSize: '13px',
             fontWeight: 500,
             cursor: code.trim() && status !== 'loading' ? 'pointer' : 'not-allowed',

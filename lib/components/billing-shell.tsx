@@ -805,7 +805,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
   const handleLogout = useCallback(() => {
     logout()
-    window.location.href = '/'
+    window.location.href = `${BASE_PATH}/`
   }, [])
 
   // ── Section routing ─────────────────────────────────────────────────
@@ -844,10 +844,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#09090b]">
+      <main className="flex min-h-screen items-center justify-center bg-bg">
         <div className="text-center">
-          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
-          <p className="mt-4 text-[13px] text-white/30">Loading billing…</p>
+          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-ink/10 border-t-ink/60" />
+          <p className="mt-4 text-[13px] text-ink/30">Loading billing…</p>
         </div>
       </main>
     )
@@ -861,14 +861,14 @@ export function BillingShell({ org, user }: BillingShellProps) {
         const showSeparator = prev && prev.group !== s.group
         return (
           <div key={s.id}>
-            {showSeparator && <div className="my-2 border-t border-white/[0.08]" />}
+            {showSeparator && <div className="my-2 border-t border-ink/[0.08]" />}
             <button
               type="button"
               onClick={() => navigate(s.id)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                 activeSection === s.id
-                  ? 'bg-white/[0.08] text-white'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+                  ? 'bg-ink/[0.08] text-text'
+                  : 'text-ink/40 hover:text-ink/70 hover:bg-ink/[0.04]'
               }`}
             >
               <span className="flex-shrink-0">{s.icon}</span>
@@ -1008,7 +1008,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b]">
+    <div className="flex min-h-screen flex-col bg-bg">
       {/* ── Unified Hanzo Header ──────────────────────── */}
       <TenantHeader
         currentApp="Billing"
@@ -1019,7 +1019,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="flex-shrink-0 rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/70 md:hidden"
+            className="flex-shrink-0 rounded-lg p-1.5 text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70 md:hidden"
             aria-label="Toggle menu"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1033,7 +1033,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
       <div className="flex flex-1">
         {/* ── Desktop sidebar ──────────────────────────────── */}
-        <aside className="hidden w-60 flex-shrink-0 border-r border-white/[0.07] bg-[#0d0d10] md:block">
+        <aside className="hidden w-60 flex-shrink-0 border-r border-ink/[0.07] bg-bg md:block">
           {sidebarNav}
         </aside>
 
@@ -1044,7 +1044,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
               className="fixed inset-0 z-40 bg-black/60 md:hidden"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-white/[0.07] bg-[#0d0d10] pt-14 md:hidden">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-ink/[0.07] bg-bg pt-14 md:hidden">
               {sidebarNav}
             </aside>
           </>
@@ -1060,7 +1060,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             )}
 
             {activeSection !== 'overview' && (
-              <h1 className="mb-6 text-2xl font-bold tracking-tight text-white">
+              <h1 className="mb-6 text-2xl font-bold tracking-tight text-text">
                 {SECTION_TITLES[activeSection]}
               </h1>
             )}
