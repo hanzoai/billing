@@ -3,14 +3,11 @@
 import * as React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import type { Invoice } from './types'
+import { money } from '@/lib/money'
 
 export interface InvoicesPaymentsProps {
   invoices: Invoice[]
   onDownloadInvoice?: (invoice: Invoice) => Promise<void>
-}
-
-function fmt(amount: number, currency = 'usd') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
 }
 
 function fmtDate(d: Date | string) {
@@ -93,7 +90,7 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
                           {inv.items?.length === 1 ? 'Single Purchase' : 'Monthly Invoice'}
                         </td>
                         <td className="px-6 py-4 text-[13px] text-text font-semibold text-right tabular-nums">
-                          {fmt(inv.total, inv.currency)}
+                          {money(inv.total, inv.currency)}
                         </td>
                         <td className="px-6 py-4 text-right">
                           <StatusBadge status={inv.status} />

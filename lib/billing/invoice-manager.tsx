@@ -3,6 +3,7 @@
 import * as React from 'react'
 
 import type { Invoice, InvoiceFilters } from './types'
+import { money } from '@/lib/money'
 
 export interface InvoiceManagerProps {
   invoices?: Invoice[]
@@ -10,15 +11,6 @@ export interface InvoiceManagerProps {
   onFilter?: (filters: InvoiceFilters) => void
   defaultView?: 'table' | 'grid'
   pageSize?: number
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatDate(date: Date) {
@@ -252,7 +244,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">{formatDate(invoice.date)}</td>
                       <td className="px-4 py-3 text-sm font-medium text-text">
-                        {formatCurrency(invoiceAmount(invoice), invoice.currency || 'USD')}
+                        {money(invoiceAmount(invoice), invoice.currency || 'USD')}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span
@@ -298,7 +290,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
                   </div>
                   <p className="mt-2 text-sm text-text-muted">Issued {formatDate(invoice.date)}</p>
                   <p className="mt-2 text-xl font-semibold text-text">
-                    {formatCurrency(invoiceAmount(invoice), invoice.currency || 'USD')}
+                    {money(invoiceAmount(invoice), invoice.currency || 'USD')}
                   </p>
                   <button
                     type="button"

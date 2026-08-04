@@ -14,6 +14,7 @@ import type {
   BusinessProfile,
 } from './types'
 import type { Balance } from '../commerce-client'
+import { money } from '@/lib/money'
 
 export interface OverviewDashboardProps {
   subscription: Subscription
@@ -42,10 +43,6 @@ export interface OverviewDashboardProps {
   onAddPaymentMethod?: (method: PaymentMethod) => Promise<void>
   onRemovePaymentMethod?: (id: string) => Promise<void>
   onSetDefaultPaymentMethod?: (id: string) => Promise<void>
-}
-
-function fmt(amount: number, currency = 'usd') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
 }
 
 function fmtTokens(n: number): string {
@@ -302,7 +299,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               <div className="text-right">
                 <p className="text-[11px] text-ink/30 mb-1">{mtdSpend > 0 ? 'API spend' : 'Credits available'}</p>
                 <p className="text-xl font-semibold text-text tabular-nums">
-                  {mtdSpend > 0 ? fmt(mtdSpend, currency) : totalCreditsRemaining > 0 ? fmt(totalCreditsRemaining, currency) : fmt(0, currency)}
+                  {mtdSpend > 0 ? money(mtdSpend, currency) : totalCreditsRemaining > 0 ? money(totalCreditsRemaining, currency) : money(0, currency)}
                 </p>
                 <p className="text-[12px] text-ink/30 mt-1">{daysLeft}d until renewal</p>
               </div>
@@ -345,7 +342,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                   {totalCreditsRemaining <= 0 && !hasStarterCredit ? (
                     <span className="text-emerald-400 text-[13px] font-medium">Claim $5 free →</span>
                   ) : (
-                    fmt(totalCreditsRemaining)
+                    money(totalCreditsRemaining)
                   )}
                 </p>
               </button>
@@ -372,7 +369,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 </svg>
               </div>
             </div>
-            <p className="text-2xl font-bold text-text tabular-nums">{fmt(totalCreditsRemaining)}</p>
+            <p className="text-2xl font-bold text-text tabular-nums">{money(totalCreditsRemaining)}</p>
             <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
               {props.creditGrants.filter(g => g.active && !g.voided).length} active grant{props.creditGrants.filter(g => g.active && !g.voided).length !== 1 ? 's' : ''}
             </p>
@@ -477,7 +474,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                     <p className="text-[12px] text-ink/30">{new Date(inv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[13px] font-semibold text-text tabular-nums">{fmt(inv.total, inv.currency)}</p>
+                    <p className="text-[13px] font-semibold text-text tabular-nums">{money(inv.total, inv.currency)}</p>
                     <span className={`text-[11px] font-medium ${
                       inv.status === 'paid' ? 'text-emerald-400' :
                       inv.status === 'failed' ? 'text-red-400' : 'text-amber-400'

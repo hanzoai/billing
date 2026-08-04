@@ -3,19 +3,12 @@
 import * as React from 'react'
 
 import type { TransactionRecord, TransactionType } from './types'
+import { money } from '@/lib/money'
 
 export interface TransactionsPanelProps {
   transactions: TransactionRecord[]
   loading?: boolean
   pageSize?: number
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatDate(dateStr: string) {
@@ -134,13 +127,13 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
                       <td className={`px-4 py-3 text-right text-sm font-medium ${
                         isPositive ? 'text-emerald-500' : 'text-rose-500'
                       }`}>
-                        {isPositive ? '+' : '-'}{formatCurrency(Math.abs(tx.amountCents) / 100, tx.currency)}
+                        {isPositive ? '+' : '-'}{money(Math.abs(tx.amountCents) / 100, tx.currency)}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-muted">
                         {tx.description || '—'}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-text-secondary">
-                        {tx.balanceAfter != null ? formatCurrency(tx.balanceAfter / 100, tx.currency) : '—'}
+                        {tx.balanceAfter != null ? money(tx.balanceAfter / 100, tx.currency) : '—'}
                       </td>
                     </tr>
                   )

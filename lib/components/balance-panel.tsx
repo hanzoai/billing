@@ -3,6 +3,7 @@
 import * as React from 'react'
 import type { Balance } from '@/lib/commerce-client'
 import type { CreditGrant } from '@/lib/billing/types'
+import { money } from '@/lib/money'
 
 export interface BalancePanelProps {
   balance: Balance | null
@@ -16,14 +17,6 @@ export interface BalancePanelProps {
 }
 
 const DEFAULT_PRESETS = [10, 25, 50, 100, 250, 500]
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value)
-}
 
 function formatCountdown(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -70,7 +63,7 @@ export function BalancePanel({
       setCustomAmount('')
       setSelectedPreset(null)
       setShowAddFunds(false)
-      setSuccess(`Added ${formatCurrency(effectiveAmount, currency)}`)
+      setSuccess(`Added ${money(effectiveAmount, currency)}`)
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add funds')
@@ -88,7 +81,7 @@ export function BalancePanel({
     setSuccess(null)
     try {
       await onGrantCredit(creditEmail, amount)
-      setSuccess(`Granted ${formatCurrency(amount, currency)} credit to ${creditEmail}`)
+      setSuccess(`Granted ${money(amount, currency)} credit to ${creditEmail}`)
       setTimeout(() => setSuccess(null), 5000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to grant credit')
@@ -107,11 +100,11 @@ export function BalancePanel({
               Credits
             </p>
             <p className="mt-2 text-4xl font-bold text-text">
-              {formatCurrency((balance?.available ?? 0) / 100, currency)}
+              {money((balance?.available ?? 0) / 100, currency)}
             </p>
             {balance && balance.holds > 0 && (
               <p className="mt-1 text-sm text-text-muted">
-                {formatCurrency(balance.holds / 100, currency)} on hold
+                {money(balance.holds / 100, currency)} on hold
               </p>
             )}
             {starterCredit && starterCredit.active && starterCredit.expiresAt && (
@@ -127,8 +120,8 @@ export function BalancePanel({
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right text-sm text-text-muted">
-              <p>Total: {formatCurrency((balance?.balance ?? 0) / 100, currency)}</p>
-              <p>Available: {formatCurrency((balance?.available ?? 0) / 100, currency)}</p>
+              <p>Total: {money((balance?.balance ?? 0) / 100, currency)}</p>
+              <p>Available: {money((balance?.available ?? 0) / 100, currency)}</p>
             </div>
             <button
               type="button"
@@ -163,7 +156,7 @@ export function BalancePanel({
                     : 'border border-border bg-bg-elevated text-text hover:border-brand/40 hover:bg-bg-elevated'
                 }`}
               >
-                {formatCurrency(amount, currency)}
+                {money(amount, currency)}
               </button>
             ))}
           </div>
@@ -191,7 +184,7 @@ export function BalancePanel({
               {adding
                 ? 'Adding...'
                 : effectiveAmount > 0
-                  ? `Add ${formatCurrency(effectiveAmount, currency)}`
+                  ? `Add ${money(effectiveAmount, currency)}`
                   : 'Add funds'}
             </button>
           </div>
@@ -257,7 +250,7 @@ export function BalancePanel({
               >
                 {granting
                   ? 'Granting...'
-                  : `Grant ${formatCurrency(parseFloat(creditAmount) || 0, currency)} credit`}
+                  : `Grant ${money(parseFloat(creditAmount) || 0, currency)} credit`}
               </button>
             </div>
           )}

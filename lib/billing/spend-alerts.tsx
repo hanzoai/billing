@@ -3,21 +3,13 @@
 import * as React from 'react'
 
 import type { SpendAlert } from './types'
+import { money } from '@/lib/money'
 
 export interface SpendAlertsPanelProps {
   alerts: SpendAlert[]
   onCreateAlert?: (title: string, threshold: number) => Promise<void>
   onUpdateAlert?: (id: string, title: string, threshold: number) => Promise<void>
   onDeleteAlert?: (id: string) => Promise<void>
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
 }
 
 function formatDate(dateStr: string) {
@@ -176,7 +168,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                      <span>Threshold: {formatCurrency(alert.threshold, alert.currency)}</span>
+                      <span>Threshold: {money(alert.threshold, alert.currency, 0)}</span>
                       <span>Created {formatDate(alert.createdAt)}</span>
                       {alert.triggeredAt && (
                         <span>Triggered {formatDate(alert.triggeredAt)}</span>

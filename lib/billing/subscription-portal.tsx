@@ -44,14 +44,7 @@ export interface SubscriptionPortalProps {
 }
 
 import { SubscribeCardForm } from './subscribe-card-form'
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
+import { money } from '@/lib/money'
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -182,7 +175,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       if (result && result.valid) {
         const desc = result.kind === 'percent'
           ? `${result.value}% off`
-          : `${formatCurrency(result.value)} off`
+          : `${money(result.value, 'USD', 0)} off`
         setDiscountResult({ success: true, message: `Applied: ${result.name || result.code} (${desc})` })
         setDiscountCode('')
       } else {
@@ -228,7 +221,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 Discount: {subscription.discount.name || subscription.discount.code} (
                 {subscription.discount.kind === 'percent'
                   ? `${subscription.discount.value}% off`
-                  : `${formatCurrency(subscription.discount.value)} off`}
+                  : `${money(subscription.discount.value, 'USD', 0)} off`}
                 {subscription.discount.duration === 'repeating' && subscription.discount.durationInMonths
                   ? ` for ${subscription.discount.durationInMonths} months`
                   : subscription.discount.duration === 'forever'
@@ -288,7 +281,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Current spend</p>
             <p className="mt-2 text-2xl font-semibold text-text">
-              {formatCurrency(currentPlan?.price ?? 0)}
+              {money(currentPlan?.price ?? 0, 'USD', 0)}
               <span className="text-sm font-normal text-text-muted">/{currentPlan?.billingPeriod ?? 'monthly'}</span>
             </p>
           </div>
@@ -488,7 +481,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             // has no list price, a $0 tier genuinely costs nothing.
             const priceLabel = isFree
               ? plan.contactSales ? 'Custom' : 'Free'
-              : formatCurrency(plan.price, plan.currency?.toUpperCase() ?? 'USD')
+              : money(plan.price, plan.currency ?? 'USD', 0)
             const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
