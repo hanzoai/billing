@@ -515,10 +515,17 @@ export class Commerce {
   }
 
   // ── Payment Methods ──────────────────────────────────────────────────
+  //
+  // The saved-card family lives at /v1/billing/methods (cloud apps/billing
+  // billing.go: paymentMethods · createPaymentMethod · deletePaymentMethod).
+  // The handlers still carry the old resource name; the ADDRESS does not.
+  // Calling the old /v1/billing/payment-methods 404s, and the catch below
+  // swallowed it into an empty list — a customer with a vaulted card saw none,
+  // and the DELETE simply never removed anything.
 
   async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
     try {
-      return await this.request<CommercePaymentMethod[]>('/v1/billing/payment-methods', {
+      return await this.request<CommercePaymentMethod[]>('/v1/billing/methods', {
         params: { customerId: userId }, token,
       })
     } catch { return [] }
@@ -530,13 +537,13 @@ export class Commerce {
     if (!body.customerId && params.userId) {
       body.customerId = params.userId
     }
-    return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
+    return this.request<CommercePaymentMethod>('/v1/billing/methods', {
       method: 'POST', body, token,
     })
   }
 
   async removePaymentMethod(methodId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/payment-methods/${methodId}`, {
+    await this.request<void>(`/v1/billing/methods/${methodId}`, {
       method: 'DELETE', token,
     })
   }
@@ -589,29 +596,35 @@ export class Commerce {
   }
 
   // ── Spend Alerts ─────────────────────────────────────────────────────
+  //
+  // The spend-cap family lives at /v1/billing/alerts (cloud apps/commerce
+  // mount.go: ListSpendAlerts + the POST/PATCH/DELETE siblings). Reads admit
+  // any org member; the writes require an org admin, so a 403 here is an
+  // ANSWER, not a missing route — which is exactly what the old
+  // /v1/billing/spend-alerts could never tell you, because it 404'd.
 
   async getSpendAlerts(userId: string, token?: string): Promise<CommerceSpendAlert[]> {
     try {
-      return await this.request<CommerceSpendAlert[]>('/v1/billing/spend-alerts', {
+      return await this.request<CommerceSpendAlert[]>('/v1/billing/alerts', {
         params: { user: userId }, token,
       })
     } catch { return [] }
   }
 
   async createSpendAlert(params: { userId: string; title: string; threshold: number; currency?: string }, token?: string): Promise<CommerceSpendAlert> {
-    return this.request<CommerceSpendAlert>('/v1/billing/spend-alerts', {
+    return this.request<CommerceSpendAlert>('/v1/billing/alerts', {
       method: 'POST', body: params, token,
     })
   }
 
   async updateSpendAlert(alertId: string, params: { title?: string; threshold?: number }, token?: string): Promise<CommerceSpendAlert> {
-    return this.request<CommerceSpendAlert>(`/v1/billing/spend-alerts/${alertId}`, {
+    return this.request<CommerceSpendAlert>(`/v1/billing/alerts/${alertId}`, {
       method: 'PATCH', body: params, token,
     })
   }
 
   async deleteSpendAlert(alertId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/spend-alerts/${alertId}`, {
+    await this.request<void>(`/v1/billing/alerts/${alertId}`, {
       method: 'DELETE', token,
     })
   }
@@ -628,7 +641,10 @@ export class Commerce {
 
   async getCreditGrants(userId: string, token?: string): Promise<CommerceCreditGrant[]> {
     try {
-      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credit-grants', {
+      // /v1/billing/credits (cloud apps/commerce mount.go: ListCreditGrants).
+      // The old /v1/billing/credit-grants 404'd and the catch below turned that
+      // into an empty list, so a customer holding grants was shown none.
+      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credits', {
         params: { userId }, token,
       })
       // Unwrap envelope: Go API returns { grants: [...], count: N }
@@ -649,13 +665,18 @@ export class Commerce {
   }
 
   // ── Payment Processing ──────────────────────────────────────────────
+  //
+  // Taking money is POST /v1/payments (cloud apps/commerce payments.go), NOT
+  // /v1/billing/payment. Unlike the reads above these calls do NOT catch, so
+  // the retired address surfaced to the customer as a raw "Not Found" on every
+  // crypto and wire top-up.
 
   /** Process a card payment (backend handles PCI-compliant tokenization) */
   async processCardPayment(
     params: { card: { number: string; expMonth: number; expYear: number; cvc: string }; amount: number; userId?: string; currency?: string },
     token?: string,
   ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
+    return this.request<Payment>('/v1/payments', {
       method: 'POST', body: { ...params, method: 'card' }, token,
     })
   }
@@ -665,14 +686,14 @@ export class Commerce {
     params: { txHash: string; network: string; chainId?: number; amount: number; currency: string; userId?: string; fromAddress: string; toAddress: string },
     token?: string,
   ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
+    return this.request<Payment>('/v1/payments', {
       method: 'POST', body: { ...params, method: 'crypto' }, token,
     })
   }
 
   /** Save a Square-tokenized card as a payment method */
   async tokenizeAndAddCard(sourceId: string, userId: string, token?: string): Promise<CommercePaymentMethod> {
-    return this.request<CommercePaymentMethod>('/v1/billing/payment-methods', {
+    return this.request<CommercePaymentMethod>('/v1/billing/methods', {
       method: 'POST',
       body: { providerRef: sourceId, type: 'card', providerType: 'square', customerId: userId },
       token,
@@ -695,7 +716,7 @@ export class Commerce {
     params: { userId?: string; amount: number; currency?: string; reference?: string },
     token?: string,
   ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
+    return this.request<Payment>('/v1/payments', {
       method: 'POST', body: { ...params, method: 'wire' }, token,
     })
   }
