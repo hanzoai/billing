@@ -84,20 +84,6 @@ export type Plan = {
   metadata?: Record<string, unknown>
 }
 
-export type Payment = {
-  id?: string
-  orderId?: string
-  userId?: string
-  amount?: number
-  amountRefunded?: number
-  fee?: number
-  currency?: string
-  status?: 'cancelled' | 'credit' | 'disputed' | 'failed' | 'fraudulent' | 'paid' | 'refunded' | 'unpaid' | string
-  captured?: boolean
-  live?: boolean
-  createdAt?: string
-}
-
 export type CommerceInvoice = {
   id?: string
   number?: string
@@ -484,10 +470,22 @@ export class Commerce {
   }
 
   // ── Payment Methods ──────────────────────────────────────────────────
+  //
+  // The saved-card LIST and REMOVE are the PORTAL pair — `/v1/billing/portal/
+  // methods` and `/v1/billing/portal/methods/:id` — because that pair is what
+  // the fleet serves a browser. `/v1/billing/methods` is claimed by cloud's
+  // billing app, which answers all three verbs `501 {"error":"billing is not
+  // configured"}` on api.hanzo.ai and commerce-api.hanzo.ai (v1.801.422): its
+  // commerce HTTP proxy is unset in the co-resident deploy, and it forwards to
+  // this same portal pair when it is set. Asking the portal directly is asking
+  // the address that answers. Both are TokenRequired + PinBillingSubject, which
+  // OVERWRITES every billing-subject key with the caller's own validated
+  // subject, so `customerId` below is a scoped read that cannot name a foreign
+  // tenant (cloud apps/commerce/mount.go).
 
   async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
     try {
-      return await this.request<CommercePaymentMethod[]>('/v1/billing/methods', {
+      return await this.request<CommercePaymentMethod[]>('/v1/billing/portal/methods', {
         params: { customerId: userId }, token,
       })
     } catch { return [] }
@@ -505,7 +503,7 @@ export class Commerce {
   }
 
   async removePaymentMethod(methodId: string, token?: string): Promise<void> {
-    await this.request<void>(`/v1/billing/methods/${methodId}`, {
+    await this.request<void>(`/v1/billing/portal/methods/${encodeURIComponent(methodId)}`, {
       method: 'DELETE', token,
     })
   }
@@ -618,16 +616,17 @@ export class Commerce {
   }
 
   // ── Payment Processing ──────────────────────────────────────────────
-
-  /** Record a crypto payment (on-chain tx already sent by the client) */
-  async recordCryptoPayment(
-    params: { txHash: string; network: string; chainId?: number; amount: number; currency: string; userId?: string; fromAddress: string; toAddress: string },
-    token?: string,
-  ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
-      method: 'POST', body: { ...params, method: 'crypto' }, token,
-    })
-  }
+  //
+  // There is no `recordCryptoPayment` / `recordWirePayment` here. Both POSTed
+  // `/v1/billing/payment`, an address NO app in either server repo has ever
+  // registered — it is 404 on api.hanzo.ai and commerce-api.hanzo.ai today. So
+  // a customer who really sent USDC or wired money got an error for it, and
+  // nothing was credited. Cloud deleted its twin of this call for the same
+  // reason (apps/account/account.go). It is not a rename and there is nothing
+  // to point it at: money-IN has ONE door, commerce's mint-gated POST
+  // /v1/billing/deposit, and the fleet deliberately routes no mint address at
+  // the edge. Accepting crypto or wire from the browser starts at that gate,
+  // not here.
 
   /** Save a Square-tokenized card as a payment method */
   async tokenizeAndAddCard(sourceId: string, userId: string, token?: string): Promise<CommercePaymentMethod> {
@@ -647,16 +646,6 @@ export class Commerce {
       '/v1/billing/topup/token',
       { method: 'POST', body: params, token },
     )
-  }
-
-  /** Record a wire transfer (manual, pending verification) */
-  async recordWirePayment(
-    params: { userId?: string; amount: number; currency?: string; reference?: string },
-    token?: string,
-  ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
-      method: 'POST', body: { ...params, method: 'wire' }, token,
-    })
   }
 
   // ── Portal ────────────────────────────────────────────────────────────

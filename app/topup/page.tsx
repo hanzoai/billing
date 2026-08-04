@@ -3,24 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getCommerce } from '@/lib/commerce'
 import { useSquareCard } from '@/lib/square'
-import { ErrorBoundary } from '@/lib/components/error-boundary'
-import {
-  sendHusdTopup,
-  recordHusdTopup,
-  topupConfigured,
-  HUSD_TREASURY,
-  type Sent,
-} from '@/lib/wallet-topup'
-
-// ── Wire transfer bank details ──────────────────────────────────────────────
-
-const WIRE_DETAILS = [
-  { label: 'Beneficiary Bank', value: 'Bank of America, NA' },
-  { label: 'Beneficiary', value: 'Hanzo, Inc' },
-  { label: 'ACH Routing', value: '113000023 / 111000025' },
-  { label: 'Wire Routing', value: '026009593' },
-  { label: 'SWIFT', value: 'BOFAUS3N' },
-]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -28,24 +10,16 @@ function fmtUSD(cents: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
 }
 
-// Inline fallback for a crashed crypto/wallet tab — keeps the top-up page (and
-// its other tabs) alive instead of surfacing a whole-page "Something went wrong".
-function walletTabFallback(_error: Error, reset: () => void) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <p style={{ fontSize: '13px', color: '#f87171', margin: 0, lineHeight: 1.5 }}>
-        This payment option is temporarily unavailable. Try another method above, or retry.
-      </p>
-      <button type="button" onClick={reset} style={submitStyle(false)}>
-        Try again
-      </button>
-    </div>
-  )
-}
-
 // ── Topup page ───────────────────────────────────────────────────────────────
-
-type PayTab = 'card' | 'crypto' | 'wire' | 'wallet'
+//
+// The card is the ONE money-in door here, and the only one there ever was: the
+// Crypto, HUSD and Wire tabs all ended in `POST /v1/billing/payment`, an address
+// no app in either server repo has ever registered (404 today). They took a
+// transaction hash or a "I've sent the wire" confirmation, failed, and credited
+// nothing — worse than absent, because the customer had already moved real
+// money. Card charges `POST /v1/billing/topup/token`, which the fleet serves and
+// which is server-authoritative. See lib/commerce-client.ts for why the phantom
+// is deleted rather than pointed somewhere.
 
 type Status =
   | { type: 'idle' }
@@ -91,10 +65,8 @@ export default function TopupPage() {
   }, [])
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [tab, setTab] = useState<PayTab>('card')
   const [customAmountCents, setCustomAmountCents] = useState<number | null>(null)
   const [status, setStatus] = useState<Status>({ type: 'idle' })
-  const [copyMsg, setCopyMsg] = useState('')
 
   const amountCents = customAmountCents ?? params.amount ?? 2500 // default $25
 
@@ -103,22 +75,11 @@ export default function TopupPage() {
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Square card element (shared hook) — only init on the Card tab ────────
+  // ── Square card element (shared hook) ────────────────────────────────────
   const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
     'sq-card-container',
-    tab === 'card',
+    true,
   )
-
-  // ── Crypto payment state ─────────────────────────────────────────────────
-  const [txHash, setTxHash] = useState('')
-  const [fromAddr, setFromAddr] = useState('')
-
-  // ── Wallet (HUSD) state — a sent-but-not-yet-credited transfer, so a failed
-  //    record can be retried without re-sending HUSD. ─────────────────────────
-  const [walletSent, setWalletSent] = useState<Sent | null>(null)
-
-  // ── Crypto receive address (Hanzo's deposit wallet) ──────────────────────
-  const HANZO_ETH_ADDRESS = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
 
   // ── Success handler ──────────────────────────────────────────────────────
   const handleSuccess = useCallback(
@@ -168,125 +129,6 @@ export default function TopupPage() {
     },
     [params, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
   )
-
-  // ── Crypto submit ─────────────────────────────────────────────────────────
-  const handleCryptoSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      if (!params.token) {
-        setStatus({ type: 'error', message: 'Authentication required.' })
-        return
-      }
-      if (!txHash.trim()) {
-        setStatus({ type: 'error', message: 'Transaction hash required.' })
-        return
-      }
-
-      setStatus({ type: 'loading' })
-      try {
-        const commerce = getCommerce(commerceUrl, params.token)
-        const userId = params.userId ?? params.token!
-
-        const payment = await commerce.recordCryptoPayment({
-          txHash: txHash.trim(),
-          network: 'ethereum',
-          amount: amountCents,
-          currency: 'usdc',
-          userId: userId || undefined,
-          fromAddress: fromAddr.trim() || txHash.trim(),
-          toAddress: HANZO_ETH_ADDRESS,
-        })
-
-        if (payment.status !== 'failed' && payment.status !== 'cancelled') {
-          const bal = await commerce.getBalance(userId)
-          handleSuccess(bal.balance)
-        } else {
-          setStatus({ type: 'error', message: 'Transaction not confirmed. Check the hash and retry.' })
-        }
-      } catch (err) {
-        setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to record payment.' })
-      }
-    },
-    [params, txHash, fromAddr, amountCents, commerceUrl, handleSuccess],
-  )
-
-  // ── Wallet (HUSD) submit ───────────────────────────────────────────────────
-  const creditWalletTopup = useCallback(
-    async (sent: Sent) => {
-      const { balanceCents } = await recordHusdTopup({
-        commerceUrl,
-        token: params.token ?? undefined,
-        userId: params.userId ?? undefined,
-        txHash: sent.txHash,
-        fromAddress: sent.fromAddress,
-      })
-      setWalletSent(null)
-      handleSuccess(balanceCents)
-    },
-    [commerceUrl, params.token, params.userId, handleSuccess],
-  )
-
-  const handleWalletPay = useCallback(async () => {
-    if (!params.token) {
-      setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
-      return
-    }
-    setStatus({ type: 'loading' })
-    try {
-      // Send HUSD from the user's wallet, then credit from the verified on-chain
-      // amount. If the send lands but crediting fails, `walletSent` lets the user
-      // retry crediting without re-sending.
-      const sent = await sendHusdTopup((amountCents / 100).toFixed(2))
-      setWalletSent(sent)
-      await creditWalletTopup(sent)
-    } catch (err) {
-      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'HUSD top-up failed.' })
-    }
-  }, [params.token, amountCents, creditWalletTopup])
-
-  const handleWalletRetry = useCallback(async () => {
-    if (!walletSent) return
-    setStatus({ type: 'loading' })
-    try {
-      await creditWalletTopup(walletSent)
-    } catch (err) {
-      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Crediting failed. Please retry.' })
-    }
-  }, [walletSent, creditWalletTopup])
-
-  // ── Wire confirm ──────────────────────────────────────────────────────────
-  const handleWireConfirm = useCallback(async () => {
-    if (!params.token) {
-      setStatus({ type: 'error', message: 'Authentication required.' })
-      return
-    }
-
-    setStatus({ type: 'loading' })
-    try {
-      const commerce = getCommerce(commerceUrl, params.token)
-      const userId = params.userId ?? params.token!
-
-      await commerce.recordWirePayment({
-        userId: userId || undefined,
-        amount: amountCents,
-        currency: 'usd',
-        reference: `Hanzo topup ${new Date().toISOString()}`,
-      })
-
-      // Wire is pending — optimistically notify with current balance
-      const bal = await commerce.getBalance(userId)
-      handleSuccess(bal.balance)
-    } catch (err) {
-      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to record wire.' })
-    }
-  }, [params, amountCents, commerceUrl, handleSuccess])
-
-  const copy = useCallback((text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopyMsg(`${label} copied`)
-      setTimeout(() => setCopyMsg(''), 2000)
-    })
-  }, [])
 
   // ── Render: success ────────────────────────────────────────────────────────
   if (status.type === 'success') {
@@ -358,31 +200,6 @@ export default function TopupPage() {
           />
         </div>
 
-        {/* Tab bar */}
-        <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '3px', marginBottom: '16px' }}>
-          {(['card', 'crypto', 'wallet', 'wire'] as PayTab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => { setTab(t); setStatus({ type: 'idle' }) }}
-              style={{
-                flex: 1,
-                padding: '7px 8px',
-                fontSize: '12px',
-                fontWeight: 600,
-                borderRadius: '8px',
-                border: 'none',
-                background: tab === t ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: tab === t ? '#fafafa' : 'rgba(255,255,255,0.35)',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              {t === 'card' ? 'Card' : t === 'crypto' ? 'Crypto' : t === 'wallet' ? 'HUSD' : 'Wire'}
-            </button>
-          ))}
-        </div>
-
         {/* Error */}
         {status.type === 'error' && (
           <div style={{ marginBottom: '12px', padding: '10px 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', fontSize: '13px', color: '#f87171' }}>
@@ -390,293 +207,54 @@ export default function TopupPage() {
           </div>
         )}
 
-        {/* ── Card tab ─────────────────────────────────────────────────── */}
-        {tab === 'card' && (
-          <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Square card container */}
-            <div
-              id="sq-card-container"
-              style={{
-                minHeight: '96px',
-                borderRadius: '8px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: '#0a0a0f',
-                padding: '10px 12px',
-                position: 'relative',
-              }}
-            >
-              {sqLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-                  <div style={{
-                    width: '18px', height: '18px',
-                    border: '2px solid rgba(255,255,255,0.12)',
-                    borderTopColor: 'rgba(255,255,255,0.6)',
-                    borderRadius: '50%',
-                    animation: 'sq-spin 0.8s linear infinite',
-                  }} />
-                  <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
-                </div>
-              )}
-              {sqError && !sqLoading && (
-                <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
-                  {sqError}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              style={submitStyle(isLoading || !sqReady)}
-              disabled={isLoading || !sqReady}
-            >
-              {isLoading ? 'Processing...' : `Pay ${fmtUSD(amountCents)}`}
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              Secured by Square — PCI DSS compliant tokenization
-            </div>
-          </form>
-        )}
-
-        {/* ── Crypto tab ────────────────────────────────────────────────── */}
-        {tab === 'crypto' && (
-          <ErrorBoundary fallback={walletTabFallback}>
-          <form onSubmit={handleCryptoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
-              Send USDC or ETH to the address below, then paste your transaction hash to confirm.
-            </p>
-
-            {/* Deposit address */}
-            <button
-              type="button"
-              onClick={() => copy(HANZO_ETH_ADDRESS, 'Address')}
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                Deposit address (Ethereum / EVM)
+        <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Square card container */}
+          <div
+            id="sq-card-container"
+            style={{
+              minHeight: '96px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: '#0a0a0f',
+              padding: '10px 12px',
+              position: 'relative',
+            }}
+          >
+            {sqLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+                <div style={{
+                  width: '18px', height: '18px',
+                  border: '2px solid rgba(255,255,255,0.12)',
+                  borderTopColor: 'rgba(255,255,255,0.6)',
+                  borderRadius: '50%',
+                  animation: 'sq-spin 0.8s linear infinite',
+                }} />
+                <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
               </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#fafafa', wordBreak: 'break-all' }}>
-                {HANZO_ETH_ADDRESS}
-              </div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
-                Click to copy
-              </div>
-            </button>
-
-            {copyMsg && (
-              <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>
             )}
-
-            <input
-              type="text"
-              placeholder="Your wallet address (from)"
-              value={fromAddr}
-              onChange={(e) => setFromAddr(e.target.value)}
-              style={INPUT}
-              disabled={isLoading}
-            />
-            <input
-              type="text"
-              placeholder="Transaction hash (0x...)"
-              value={txHash}
-              onChange={(e) => setTxHash(e.target.value)}
-              style={INPUT}
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              style={submitStyle(isLoading || !txHash.trim())}
-              disabled={isLoading || !txHash.trim()}
-            >
-              {isLoading ? 'Verifying...' : `Confirm ${fmtUSD(amountCents)} crypto payment`}
-            </button>
-          </form>
-          </ErrorBoundary>
-        )}
-
-        {/* ── Wallet (HUSD) tab ─────────────────────────────────────────── */}
-        {tab === 'wallet' && (
-          <ErrorBoundary fallback={walletTabFallback}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {!topupConfigured() ? (
-              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
-                HUSD is coming to Hanzo Mainnet. Once the HUSD stablecoin is live you can top up your
-                balance directly from your wallet here — 1 HUSD = $1.00 credit.
-              </p>
-            ) : (
-              <>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
-                  Pay with HUSD on Hanzo Mainnet (chain 36963). Your wallet sends HUSD to the
-                  treasury; we verify it on-chain and credit your balance. 1 HUSD = $1.00.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => copy(HUSD_TREASURY, 'Treasury')}
-                  style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    padding: '10px 12px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
-                >
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                    HUSD treasury (Hanzo Mainnet)
-                  </div>
-                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#fafafa', wordBreak: 'break-all' }}>
-                    {HUSD_TREASURY}
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>Click to copy</div>
-                </button>
-
-                {copyMsg && <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>}
-
-                {walletSent ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleWalletRetry}
-                      style={submitStyle(isLoading)}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? 'Crediting...' : `Credit ${fmtUSD(amountCents)} (retry)`}
-                    </button>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
-                      HUSD sent (tx {walletSent.txHash.slice(0, 10)}…). If crediting failed, retry above —
-                      no need to send again.
-                    </p>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleWalletPay}
-                    style={submitStyle(isLoading)}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Confirm in wallet...' : `Pay ${fmtUSD(amountCents)} with HUSD`}
-                  </button>
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Non-custodial — you sign in your own wallet, verified on-chain.
-                </div>
-              </>
+            {sqError && !sqLoading && (
+              <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
+                {sqError}
+              </div>
             )}
           </div>
-          </ErrorBoundary>
-        )}
 
-        {/* ── Wire tab ──────────────────────────────────────────────────── */}
-        {tab === 'wire' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
-              Wire the amount below to Hanzo, then click confirm. Credits appear within 1-2 business days after verification.
-            </p>
+          <button
+            type="submit"
+            style={submitStyle(isLoading || !sqReady)}
+            disabled={isLoading || !sqReady}
+          >
+            {isLoading ? 'Processing...' : `Pay ${fmtUSD(amountCents)}`}
+          </button>
 
-            {WIRE_DETAILS.map(({ label, value }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => copy(value, label)}
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '8px',
-                  padding: '9px 12px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#fafafa', marginTop: '2px' }}>{value}</div>
-                </div>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-              </button>
-            ))}
-
-            {/* Reference line */}
-            <button
-              type="button"
-              onClick={() => {
-                const email = params.userId ?? 'your email'
-                copy(`Hanzo ${email}`, 'Reference')
-              }}
-              style={{
-                background: 'rgba(255,68,68,0.06)',
-                border: '1px solid rgba(253,68,68,0.15)',
-                borderRadius: '8px',
-                padding: '9px 12px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(253,68,68,0.7)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Reference (required)
-                </div>
-                <div style={{ fontSize: '13px', color: '#fafafa', marginTop: '2px' }}>
-                  Hanzo {params.userId ?? 'your-email@example.com'}
-                </div>
-              </div>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-
-            {copyMsg && (
-              <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>
-            )}
-
-            <button
-              type="button"
-              onClick={handleWireConfirm}
-              style={submitStyle(isLoading)}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Recording...' : `I've sent ${fmtUSD(amountCents)} via wire`}
-            </button>
-
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0 }}>
-              Wire transfers are verified manually within 1-2 business days.
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Secured by Square — PCI DSS compliant tokenization
           </div>
-        )}
+        </form>
       </div>
     </div>
   )
