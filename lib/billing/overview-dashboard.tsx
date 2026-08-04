@@ -218,7 +218,10 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       {/* ── Upgrade CTA (top priority when not subscribed) ── */}
       {!hasActivePlan && !isTrialing && recommendedPlan && (
         <FadeIn delay={0}>
-          <div className="relative overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-[#1a1a2e] to-[#141419] p-6">
+          <div
+            className="relative overflow-hidden rounded-2xl border border-sky-500/20 p-6"
+            style={{ backgroundImage: 'linear-gradient(to bottom right in oklab, #1a1a2e, #141419)' }}
+          >
             <div className="pointer-events-none absolute -top-12 left-1/2 h-32 w-64 -translate-x-1/2 rounded-full bg-sky-500/10 blur-2xl" />
             <div className="relative">
               <div className="flex items-center gap-2 mb-2">

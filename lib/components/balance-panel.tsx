@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import type { Balance } from '@/lib/commerce-client'
-import type { CreditGrant } from '@/lib/billing'
+import type { CreditGrant } from '@/lib/billing/types'
 
 export interface BalancePanelProps {
   balance: Balance | null

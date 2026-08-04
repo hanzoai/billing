@@ -15,7 +15,7 @@ const config: NextConfig = {
   reactStrictMode: true,
   trailingSlash: true,
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),
-  transpilePackages: ['@hanzo/ui'],
+  transpilePackages: ['@hanzogui/shell'],
   images: {
     unoptimized: true,
   },
