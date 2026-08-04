@@ -2,11 +2,6 @@
 
 import type { Subscription, SubscriptionPlan, PaymentMethod } from './types'
 
-export type BillingSection =
-  | 'overview' | 'usage' | 'invoices' | 'pricing'
-  | 'credits' | 'transactions' | 'alerts'
-  | 'payment' | 'team' | 'settings'
-
 export interface StatusBarProps {
   subscription: Subscription
   currentPlan: SubscriptionPlan | undefined
