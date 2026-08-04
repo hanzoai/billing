@@ -292,14 +292,14 @@ export default function TopupPage() {
         <div style={CARD}>
           <div style={{ textAlign: 'center', padding: '32px 0 16px' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>✓</div>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fafafa', margin: '0 0 8px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px' }}>
               Top-up successful
             </h2>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+            <p style={{ fontSize: '14px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
               New balance: {moneyFromCents(status.balance)}
             </p>
             {params.returnUrl && (
-              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.25)', marginTop: '12px' }}>
+              <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)', marginTop: '12px' }}>
                 Redirecting...
               </p>
             )}
@@ -317,7 +317,7 @@ export default function TopupPage() {
       <div style={CARD}>
         {/* Amount selector */}
         <div style={{ marginBottom: '20px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
             Amount
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '8px' }}>
@@ -331,9 +331,9 @@ export default function TopupPage() {
                   fontSize: '13px',
                   fontWeight: 600,
                   borderRadius: '8px',
-                  border: `1px solid ${amountCents === c ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                  background: amountCents === c ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  color: amountCents === c ? '#fafafa' : 'rgba(255,255,255,0.45)',
+                  border: `1px solid ${amountCents === c ? 'color-mix(in oklab, var(--color-text) 40%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
+                  background: amountCents === c ? 'color-mix(in oklab, var(--color-text) 8%, transparent)' : 'transparent',
+                  color: amountCents === c ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 45%, transparent)',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
@@ -356,7 +356,7 @@ export default function TopupPage() {
         </div>
 
         {/* Tab bar */}
-        <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '3px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '4px', background: 'color-mix(in oklab, var(--color-text) 4%, transparent)', borderRadius: '10px', padding: '3px', marginBottom: '16px' }}>
           {(['card', 'crypto', 'wallet', 'wire'] as PayTab[]).map((t) => (
             <button
               key={t}
@@ -369,8 +369,8 @@ export default function TopupPage() {
                 fontWeight: 600,
                 borderRadius: '8px',
                 border: 'none',
-                background: tab === t ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: tab === t ? '#fafafa' : 'rgba(255,255,255,0.35)',
+                background: tab === t ? 'color-mix(in oklab, var(--color-text) 10%, transparent)' : 'transparent',
+                color: tab === t ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 35%, transparent)',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -396,8 +396,8 @@ export default function TopupPage() {
               style={{
                 minHeight: '96px',
                 borderRadius: '8px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: '#0a0a0f',
+                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+                background: 'var(--color-bg)',
                 padding: '10px 12px',
                 position: 'relative',
               }}
@@ -406,8 +406,8 @@ export default function TopupPage() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
                   <div style={{
                     width: '18px', height: '18px',
-                    border: '2px solid rgba(255,255,255,0.12)',
-                    borderTopColor: 'rgba(255,255,255,0.6)',
+                    border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
+                    borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
                     borderRadius: '50%',
                     animation: 'sq-spin 0.8s linear infinite',
                   }} />
@@ -429,7 +429,7 @@ export default function TopupPage() {
               {isLoading ? 'Processing...' : `Pay ${moneyFromCents(amountCents)}`}
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -443,7 +443,7 @@ export default function TopupPage() {
         {tab === 'crypto' && (
           <ErrorBoundary fallback={walletTabFallback}>
           <form onSubmit={handleCryptoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
               Send USDC or ETH to the address below, then paste your transaction hash to confirm.
             </p>
 
@@ -452,8 +452,8 @@ export default function TopupPage() {
               type="button"
               onClick={() => copy(HANZO_ETH_ADDRESS, 'Address')}
               style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
                 borderRadius: '8px',
                 padding: '10px 12px',
                 textAlign: 'left',
@@ -461,13 +461,13 @@ export default function TopupPage() {
                 width: '100%',
               }}
             >
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
                 Deposit address (Ethereum / EVM)
               </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#fafafa', wordBreak: 'break-all' }}>
+              <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
                 {HANZO_ETH_ADDRESS}
               </div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
+              <div style={{ fontSize: '10px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', marginTop: '4px' }}>
                 Click to copy
               </div>
             </button>
@@ -508,13 +508,13 @@ export default function TopupPage() {
           <ErrorBoundary fallback={walletTabFallback}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {!topupConfigured() ? (
-              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+              <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
                 HUSD is coming to Hanzo Mainnet. Once the HUSD stablecoin is live you can top up your
                 balance directly from your wallet here — 1 HUSD = $1.00 credit.
               </p>
             ) : (
               <>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+                <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
                   Pay with HUSD on Hanzo Mainnet (chain 36963). Your wallet sends HUSD to the
                   treasury; we verify it on-chain and credit your balance. 1 HUSD = $1.00.
                 </p>
@@ -523,8 +523,8 @@ export default function TopupPage() {
                   type="button"
                   onClick={() => copy(HUSD_TREASURY, 'Treasury')}
                   style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+                    border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
                     borderRadius: '8px',
                     padding: '10px 12px',
                     textAlign: 'left',
@@ -532,13 +532,13 @@ export default function TopupPage() {
                     width: '100%',
                   }}
                 >
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
                     HUSD treasury (Hanzo Mainnet)
                   </div>
-                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#fafafa', wordBreak: 'break-all' }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
                     {HUSD_TREASURY}
                   </div>
-                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>Click to copy</div>
+                  <div style={{ fontSize: '10px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', marginTop: '4px' }}>Click to copy</div>
                 </button>
 
                 {copyMsg && <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>}
@@ -553,7 +553,7 @@ export default function TopupPage() {
                     >
                       {isLoading ? 'Crediting...' : `Credit ${moneyFromCents(amountCents)} (retry)`}
                     </button>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                    <p style={{ fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
                       HUSD sent (tx {walletSent.txHash.slice(0, 10)}…). If crediting failed, retry above —
                       no need to send again.
                     </p>
@@ -569,7 +569,7 @@ export default function TopupPage() {
                   </button>
                 )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="11" width="18" height="11" rx="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -585,7 +585,7 @@ export default function TopupPage() {
         {/* ── Wire tab ──────────────────────────────────────────────────── */}
         {tab === 'wire' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
               Wire the amount below to Hanzo, then click confirm. Credits appear within 1-2 business days after verification.
             </p>
 
@@ -595,8 +595,8 @@ export default function TopupPage() {
                 type="button"
                 onClick={() => copy(value, label)}
                 style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'color-mix(in oklab, var(--color-text) 3%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
                   borderRadius: '8px',
                   padding: '9px 12px',
                   textAlign: 'left',
@@ -609,12 +609,12 @@ export default function TopupPage() {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#fafafa', marginTop: '2px' }}>{value}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--color-text)', marginTop: '2px' }}>{value}</div>
                 </div>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="color-mix(in oklab, var(--color-text) 30%, transparent)" strokeWidth="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -646,11 +646,11 @@ export default function TopupPage() {
                 <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(253,68,68,0.7)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Reference (required)
                 </div>
-                <div style={{ fontSize: '13px', color: '#fafafa', marginTop: '2px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--color-text)', marginTop: '2px' }}>
                   Hanzo {params.userId ?? 'your-email@example.com'}
                 </div>
               </div>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="color-mix(in oklab, var(--color-text) 30%, transparent)" strokeWidth="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" />
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
@@ -669,7 +669,7 @@ export default function TopupPage() {
               {isLoading ? 'Recording...' : `I've sent ${moneyFromCents(amountCents)} via wire`}
             </button>
 
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0 }}>
+            <p style={{ fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)', margin: 0 }}>
               Wire transfers are verified manually within 1-2 business days.
             </p>
           </div>
@@ -683,7 +683,7 @@ export default function TopupPage() {
 
 const ROOT: React.CSSProperties = {
   minHeight: '100vh',
-  background: '#0a0a0f',
+  background: 'var(--color-bg)',
   display: 'flex',
   alignItems: 'flex-start',
   justifyContent: 'center',
@@ -694,8 +694,8 @@ const ROOT: React.CSSProperties = {
 const CARD: React.CSSProperties = {
   width: '100%',
   maxWidth: '400px',
-  background: '#141419',
-  border: '1px solid rgba(255,255,255,0.08)',
+  background: 'var(--color-bg-card)',
+  border: '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
   borderRadius: '16px',
   padding: '20px',
 }
@@ -703,12 +703,12 @@ const CARD: React.CSSProperties = {
 const INPUT: React.CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
-  background: '#0a0a0f',
-  border: '1px solid rgba(255,255,255,0.1)',
+  background: 'var(--color-bg)',
+  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
   borderRadius: '8px',
   padding: '9px 12px',
   fontSize: '13px',
-  color: '#fafafa',
+  color: 'var(--color-text)',
   outline: 'none',
   fontFamily: 'inherit',
 }
@@ -719,8 +719,8 @@ function submitStyle(disabled: boolean): React.CSSProperties {
     padding: '10px 16px',
     fontSize: '13px',
     fontWeight: 600,
-    background: disabled ? 'rgba(255,255,255,0.06)' : '#ffffff',
-    color: disabled ? 'rgba(255,255,255,0.3)' : '#09090b',
+    background: disabled ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : '#ffffff',
+    color: disabled ? 'color-mix(in oklab, var(--color-text) 30%, transparent)' : 'var(--color-bg)',
     border: 'none',
     borderRadius: '8px',
     cursor: disabled ? 'not-allowed' : 'pointer',

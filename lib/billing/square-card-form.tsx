@@ -110,15 +110,15 @@ export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
         style={{
           minHeight: loading ? '120px' : undefined,
           borderRadius: '8px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+          backgroundColor: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
           padding: '12px',
           transition: 'border-color 0.2s',
         }}
       >
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '96px' }}>
-            <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.15)', borderTopColor: 'rgba(255,255,255,0.7)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ width: '20px', height: '20px', border: '2px solid color-mix(in oklab, var(--color-text) 15%, transparent)', borderTopColor: 'color-mix(in oklab, var(--color-text) 70%, transparent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}
@@ -135,8 +135,8 @@ export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
         style={{
           width: '100%',
           borderRadius: '8px',
-          backgroundColor: ready && !submitting && !disabled ? 'rgb(250,250,250)' : 'rgba(250,250,250,0.3)',
-          color: ready && !submitting && !disabled ? 'rgb(9,9,11)' : 'rgba(9,9,11,0.5)',
+          backgroundColor: ready && !submitting && !disabled ? 'var(--color-brand)' : 'color-mix(in oklab, var(--color-brand) 30%, transparent)',
+          color: ready && !submitting && !disabled ? 'var(--color-brand-foreground)' : 'color-mix(in oklab, var(--color-brand-foreground) 50%, transparent)',
           padding: '10px 16px',
           fontSize: '14px',
           fontWeight: '500',
@@ -148,7 +148,7 @@ export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
         {submitting ? 'Processing…' : 'Add card'}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 35%, transparent)' }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="11" width="18" height="11" rx="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
