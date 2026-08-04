@@ -484,7 +484,12 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const minSeats = plan.minSeats ?? 2
             const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
             const monthlyTotal = plan.price * seats
-            const periodPrice = isFree ? 'Free' : `$${plan.price}`
+            // A priceless tier means two different things: a contact-sales tier
+            // has no list price, a $0 tier genuinely costs nothing.
+            const priceLabel = isFree
+              ? plan.contactSales ? 'Custom' : 'Free'
+              : formatCurrency(plan.price, plan.currency?.toUpperCase() ?? 'USD')
+            const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
             const showNoProcessor = checkoutOpen && noProcessorPlanId === plan.id
@@ -540,9 +545,8 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
                 <div className="mt-4">
                   <p className="text-2xl font-bold text-white">
-                    {isExternal && !isFree ? `$${formatCurrency(plan.price).replace('$', '').split('.')[0]}` : periodPrice}
-                    {!isFree && !isExternal && <span className="text-sm font-normal text-white/40">{plan.perSeat ? '/user/mo' : '/mo'}</span>}
-                    {isExternal && !isFree && <span className="text-sm font-normal text-white/40">/mo+</span>}
+                    {priceLabel}
+                    {priceSuffix && <span className="text-sm font-normal text-white/40">{priceSuffix}</span>}
                   </p>
                   {plan.annualPrice && !isCurrent ? (
                     <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
