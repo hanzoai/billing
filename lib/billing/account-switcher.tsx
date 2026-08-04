@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import type { BillingAccount, BillingRole } from './types'
+import { moneyFromCents } from '@/lib/money'
 
 export interface AccountSwitcherProps {
   accounts: BillingAccount[]
@@ -23,14 +24,6 @@ function roleBadgeClass(role: BillingRole): string {
 
 function planBadgeClass(_plan: string): string {
   return 'bg-text-dim/20 text-text-muted'
-}
-
-function formatBalance(balance: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: 2,
-  }).format(balance / 100)
 }
 
 export function AccountSwitcher({ accounts, activeAccountId, onSwitch, onCreate }: AccountSwitcherProps) {
@@ -77,7 +70,7 @@ export function AccountSwitcher({ accounts, activeAccountId, onSwitch, onCreate 
                 </span>
               </div>
               <span className="text-xs text-text-muted">
-                {active.orgName} &middot; {formatBalance(active.balance, active.currency)}
+                {active.orgName} &middot; {moneyFromCents(active.balance, active.currency)}
               </span>
             </div>
           </div>
@@ -126,7 +119,7 @@ export function AccountSwitcher({ accounts, activeAccountId, onSwitch, onCreate 
                       </span>
                     </div>
                     <span className="text-xs text-text-muted">
-                      {account.orgName} &middot; {formatBalance(account.balance, account.currency)}
+                      {account.orgName} &middot; {moneyFromCents(account.balance, account.currency)}
                     </span>
                   </div>
                   {isActive && (

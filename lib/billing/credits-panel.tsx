@@ -3,19 +3,12 @@
 import * as React from 'react'
 
 import type { CreditGrant } from './types'
+import { money } from '@/lib/money'
 
 export interface CreditsPanelProps {
   creditGrants: CreditGrant[]
   creditBalance?: number
   onClaimStarterCredit?: () => Promise<void>
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatCountdown(expiresAt: string): string {
@@ -75,7 +68,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
               Total credit balance
             </p>
             <p className="mt-1 text-3xl font-bold text-text">
-              {formatCurrency(creditBalance / 100)}
+              {money(creditBalance / 100)}
             </p>
           </div>
 
@@ -117,7 +110,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
                       <p className="text-sm font-medium text-text">{grant.name}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span>
-                          {formatCurrency(grant.remainingCents / 100, grant.currency)} of {formatCurrency(grant.amountCents / 100, grant.currency)} remaining
+                          {money(grant.remainingCents / 100, grant.currency)} of {money(grant.amountCents / 100, grant.currency)} remaining
                         </span>
                         {grant.createdAt && (
                           <span>Granted {formatDate(grant.createdAt)}</span>
@@ -164,7 +157,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
                 <div>
                   <p className="text-sm font-medium text-text-muted">{grant.name}</p>
                   <p className="text-xs text-text-dim">
-                    {formatCurrency(grant.amountCents / 100, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
+                    {money(grant.amountCents / 100, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
                   </p>
                 </div>
                 {grant.expiresAt && (

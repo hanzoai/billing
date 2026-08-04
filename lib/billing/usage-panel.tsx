@@ -3,19 +3,11 @@
 import * as React from 'react'
 
 import type { UsageSummary, UsageRecord } from './types'
+import { money } from '@/lib/money'
 
 export interface UsagePanelProps {
   usage: UsageSummary | null
   loading?: boolean
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatNumber(value: number) {
@@ -69,7 +61,7 @@ function UsageMeter({ record }: { record: UsageRecord }) {
         </div>
         {record.cost > 0 && (
           <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
-            {formatCurrency(record.cost)}
+            {money(record.cost)}
           </span>
         )}
       </div>
@@ -150,7 +142,7 @@ export function UsagePanel(props: UsagePanelProps) {
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-text-muted">Total cost</p>
             <p className="mt-1 text-xl font-semibold text-text">
-              {formatCurrency(usage.totalCost, usage.currency)}
+              {money(usage.totalCost, usage.currency)}
             </p>
           </div>
         </div>

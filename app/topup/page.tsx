@@ -11,6 +11,7 @@ import {
   HUSD_TREASURY,
   type Sent,
 } from '@/lib/wallet-topup'
+import { moneyFromCents } from '@/lib/money'
 
 // ── Wire transfer bank details ──────────────────────────────────────────────
 
@@ -23,10 +24,6 @@ const WIRE_DETAILS = [
 ]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmtUSD(cents: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
-}
 
 // Inline fallback for a crashed crypto/wallet tab — keeps the top-up page (and
 // its other tabs) alive instead of surfacing a whole-page "Something went wrong".
@@ -299,7 +296,7 @@ export default function TopupPage() {
               Top-up successful
             </h2>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
-              New balance: {fmtUSD(status.balance)}
+              New balance: {moneyFromCents(status.balance)}
             </p>
             {params.returnUrl && (
               <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.25)', marginTop: '12px' }}>
@@ -341,7 +338,7 @@ export default function TopupPage() {
                   transition: 'all 0.15s',
                 }}
               >
-                {fmtUSD(c)}
+                {moneyFromCents(c)}
               </button>
             ))}
           </div>
@@ -429,7 +426,7 @@ export default function TopupPage() {
               style={submitStyle(isLoading || !sqReady)}
               disabled={isLoading || !sqReady}
             >
-              {isLoading ? 'Processing...' : `Pay ${fmtUSD(amountCents)}`}
+              {isLoading ? 'Processing...' : `Pay ${moneyFromCents(amountCents)}`}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
@@ -500,7 +497,7 @@ export default function TopupPage() {
               style={submitStyle(isLoading || !txHash.trim())}
               disabled={isLoading || !txHash.trim()}
             >
-              {isLoading ? 'Verifying...' : `Confirm ${fmtUSD(amountCents)} crypto payment`}
+              {isLoading ? 'Verifying...' : `Confirm ${moneyFromCents(amountCents)} crypto payment`}
             </button>
           </form>
           </ErrorBoundary>
@@ -554,7 +551,7 @@ export default function TopupPage() {
                       style={submitStyle(isLoading)}
                       disabled={isLoading}
                     >
-                      {isLoading ? 'Crediting...' : `Credit ${fmtUSD(amountCents)} (retry)`}
+                      {isLoading ? 'Crediting...' : `Credit ${moneyFromCents(amountCents)} (retry)`}
                     </button>
                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
                       HUSD sent (tx {walletSent.txHash.slice(0, 10)}…). If crediting failed, retry above —
@@ -568,7 +565,7 @@ export default function TopupPage() {
                     style={submitStyle(isLoading)}
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Confirm in wallet...' : `Pay ${fmtUSD(amountCents)} with HUSD`}
+                    {isLoading ? 'Confirm in wallet...' : `Pay ${moneyFromCents(amountCents)} with HUSD`}
                   </button>
                 )}
 
@@ -669,7 +666,7 @@ export default function TopupPage() {
               style={submitStyle(isLoading)}
               disabled={isLoading}
             >
-              {isLoading ? 'Recording...' : `I've sent ${fmtUSD(amountCents)} via wire`}
+              {isLoading ? 'Recording...' : `I've sent ${moneyFromCents(amountCents)} via wire`}
             </button>
 
             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0 }}>
