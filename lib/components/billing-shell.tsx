@@ -1,6 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+// `lib/billing` is the only home for these panels. @hanzo/ui 8 dropped its
+// ./billing entry point, and the local copies were already the correct ones:
+// PaymentMethodManager tokenizes through the Square Web Payments SDK instead of
+// the server-side /card/tokenize endpoint, and SubscriptionPortal gives per-seat
+// plans a seat selector and paid tiers the honest activation flow rather than
+// the mint-gated subscribe POST that 403s for non-platform callers.
 import {
   OverviewDashboard,
   UsagePanel,
@@ -9,21 +15,15 @@ import {
   CreditsPanel,
   TransactionsPanel,
   SpendAlertsPanel,
-  PaymentMethodManager as _PaymentMethodManager,
+  PaymentMethodManager,
   AccountMembers,
   BusinessProfilePanel,
   TaxCompliancePanel,
-} from '@hanzo/ui/billing'
-// Use local PaymentMethodManager with Square Web Payments SDK card form
-// instead of the @hanzo/ui version that calls the server-side /card/tokenize endpoint.
-import { PaymentMethodManager } from '@/lib/billing/payment-manager'
-// Use local SubscriptionPortal: per-seat plans get a seat selector, and paid
-// tiers show the honest activation flow (top-up + request) instead of firing
-// the mint-gated subscribe POST that 403s for non-platform callers.
-import { SubscriptionPortal } from '@/lib/billing/subscription-portal'
-import type { BillingSection } from '@hanzo/ui/billing'
-import { GuidedSetup } from '@/lib/billing/guided-setup'
+  SubscriptionPortal,
+  GuidedSetup,
+} from '@/lib/billing'
 import type {
+  BillingSection,
   BillingAccount,
   BillingAccountMember,
   BillingRole,
@@ -36,17 +36,17 @@ import type {
   UsageSummary,
   CreditGrant,
   TransactionRecord,
-} from '@hanzo/ui/billing'
-// Local billing types (the shapes the local SubscriptionPortal renders);
-// SubscriptionPlan adds perSeat/minSeats for the seat selector.
-import type { Subscription, SubscriptionPlan, DiscountCode } from '@/lib/billing/types'
+  Subscription,
+  SubscriptionPlan,
+  DiscountCode,
+} from '@/lib/billing'
 import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, BASE_PATH } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 
-import { ORG_DOMAINS, HanzoHeader } from '@hanzo/ui/navigation/hanzo-shell'
+import { ORG_DOMAINS, TenantHeader } from '@hanzogui/shell'
 type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
 
 /* ── Sidebar section config ───────────────────────────────────── */
@@ -1009,7 +1009,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-[#09090b]">
       {/* ── Unified Hanzo Header ──────────────────────── */}
-      <HanzoHeader
+      <TenantHeader
         currentApp="Billing"
         currentAppId="billing"
         user={{ id: user.sub, name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}

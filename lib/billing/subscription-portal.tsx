@@ -513,7 +513,13 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 }`}
               >
                 {plan.highlighted && !isCurrent && (
-                  <div className="absolute -top-px left-0 right-0 h-px rounded-t-2xl bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                  <div
+                    className="absolute -top-px left-0 right-0 h-px rounded-t-2xl"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(to right in oklab, transparent, color-mix(in oklab, #fff 40%, transparent), transparent)',
+                    }}
+                  />
                 )}
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-[15px] font-semibold text-white">{plan.name}</p>
