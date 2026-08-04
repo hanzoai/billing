@@ -202,7 +202,8 @@ function mapCommerceTransaction(tx: Transaction): TransactionRecord {
     currency: tx.currency ?? 'usd',
     description: tx.notes ?? (tx.metadata?.description as string | undefined),
     balanceAfter: tx.metadata?.balanceAfter as number | undefined,
-    tags: tx.tags,
+    // commerce serialises tags as a comma-joined string when there is only one
+    tags: typeof tx.tags === 'string' ? tx.tags.split(',').filter(Boolean) : tx.tags,
     createdAt: tx.createdAt ?? new Date().toISOString(),
   }
 }

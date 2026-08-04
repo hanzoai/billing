@@ -1,3 +1,9 @@
+/** Every navigable panel in the billing shell. */
+export type BillingSection =
+  | 'overview' | 'usage' | 'cost' | 'invoices' | 'pricing'
+  | 'credits' | 'transactions' | 'alerts' | 'payment' | 'members'
+  | 'business' | 'tax' | 'team' | 'settings'
+
 export type BillingInterval = "monthly" | "yearly" | "quarterly" | "custom"
 
 // Subscription types
