@@ -56,8 +56,8 @@ export function PlanCard({ plan, billingInterval }: PlanCardProps) {
     <div
       style={{
         position: 'relative',
-        background: isPopular ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
-        border: isPopular ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.08)',
+        background: isPopular ? 'color-mix(in oklab, var(--color-text) 5%, transparent)' : 'color-mix(in oklab, var(--color-text) 2%, transparent)',
+        border: isPopular ? '1px solid color-mix(in oklab, var(--color-text) 20%, transparent)' : '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
         borderRadius: '16px',
         padding: '28px 24px 24px',
         display: 'flex',
@@ -73,8 +73,8 @@ export function PlanCard({ plan, billingInterval }: PlanCardProps) {
           top: '-12px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: '#ffffff',
-          color: '#09090b',
+          background: 'var(--color-brand)',
+          color: 'var(--color-brand-foreground)',
           fontSize: '11px',
           fontWeight: 700,
           letterSpacing: '0.06em',
@@ -89,21 +89,21 @@ export function PlanCard({ plan, billingInterval }: PlanCardProps) {
 
       {/* Header */}
       <div>
-        <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#fafafa', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
           {plan.name}
         </h3>
-        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5 }}>
+        <p style={{ fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 45%, transparent)', margin: 0, lineHeight: 1.5 }}>
           {plan.description}
         </p>
       </div>
 
       {/* Price */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-        <span style={{ fontSize: isFree || isSales ? '28px' : '36px', fontWeight: 700, color: '#fafafa', letterSpacing: '-0.03em', lineHeight: 1 }}>
+        <span style={{ fontSize: isFree || isSales ? '28px' : '36px', fontWeight: 700, color: 'var(--color-text)', letterSpacing: '-0.03em', lineHeight: 1 }}>
           {price(plan, billingInterval)}
         </span>
         {!isFree && !isSales && (
-          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', marginBottom: '4px' }}>
+          <span style={{ fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', marginBottom: '4px' }}>
             {billingInterval === 'annual' ? 'billed annually' : 'billed monthly'}
           </span>
         )}
@@ -134,9 +134,9 @@ export function PlanCard({ plan, billingInterval }: PlanCardProps) {
         style={{
           display: 'block',
           textAlign: 'center',
-          background: isPopular ? '#ffffff' : 'rgba(255,255,255,0.06)',
-          color: isPopular ? '#09090b' : '#fafafa',
-          border: isPopular ? 'none' : '1px solid rgba(255,255,255,0.1)',
+          background: isPopular ? 'var(--color-brand)' : 'color-mix(in oklab, var(--color-text) 6%, transparent)',
+          color: isPopular ? 'var(--color-brand-foreground)' : 'var(--color-text)',
+          border: isPopular ? 'none' : '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
           borderRadius: '8px',
           padding: '10px 16px',
           fontSize: '14px',
@@ -153,7 +153,7 @@ export function PlanCard({ plan, billingInterval }: PlanCardProps) {
       {/* Features */}
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {plan.features.map((f, i) => (
-          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
+          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 60%, transparent)', lineHeight: 1.4 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px', color: '#4ade80' }}>
               <polyline points="20 6 9 17 4 12" />
             </svg>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getOrgByHost } from '@/lib/config'
+import { BASE_PATH, getOrgByHost } from '@/lib/config'
 import { makeAuthConf } from '@/lib/auth'
 import { handleCallback, startLogin, logout } from '@/lib/iam-auth'
 
@@ -26,7 +26,7 @@ export default function CallbackPage() {
     handleCallback(conf)
       .then(() => {
         sessionStorage.removeItem(RETRY_KEY)
-        window.location.href = '/'
+        window.location.href = `${BASE_PATH}/`
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : 'Authentication failed'

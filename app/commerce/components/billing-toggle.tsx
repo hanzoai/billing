@@ -16,8 +16,8 @@ export function BillingToggle({ plans }: BillingToggleProps) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '40px' }}>
         <div style={{
           display: 'inline-flex',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+          border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
           borderRadius: '10px',
           padding: '4px',
           gap: '4px',
@@ -28,11 +28,11 @@ export function BillingToggle({ plans }: BillingToggleProps) {
               type="button"
               onClick={() => setInterval(iv)}
               style={{
-                background: interval === iv ? 'rgba(255,255,255,0.1)' : 'transparent',
-                border: interval === iv ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                background: interval === iv ? 'color-mix(in oklab, var(--color-text) 10%, transparent)' : 'transparent',
+                border: interval === iv ? '1px solid color-mix(in oklab, var(--color-text) 15%, transparent)' : '1px solid transparent',
                 borderRadius: '7px',
                 padding: '6px 16px',
-                color: interval === iv ? '#fafafa' : 'rgba(255,255,255,0.4)',
+                color: interval === iv ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 40%, transparent)',
                 fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer',

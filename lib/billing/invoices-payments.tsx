@@ -45,22 +45,22 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
 
   return (
     <FadeIn delay={0}>
-      <div className="rounded-2xl border border-white/[0.08] bg-[#141419] overflow-hidden">
+      <div className="rounded-2xl border border-ink/[0.08] bg-bg-card overflow-hidden">
         <div className="px-6 py-5">
-          <h3 className="text-[15px] font-semibold text-white">All invoices</h3>
+          <h3 className="text-[15px] font-semibold text-text">All invoices</h3>
         </div>
-        <div className="border-t border-white/[0.06]">
+        <div className="border-t border-ink/[0.06]">
           {invoices.length === 0 ? (
             <div className="py-20 flex flex-col items-center justify-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] text-white/20">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-ink/[0.08] bg-ink/[0.03] text-ink/20">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
                   <path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h4" />
                 </svg>
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium text-white/40">No invoices yet</p>
-                <p className="mt-1 text-[13px] text-white/25">Invoices appear here once you subscribe or make a purchase.</p>
+                <p className="text-sm font-medium text-ink/40">No invoices yet</p>
+                <p className="mt-1 text-[13px] text-ink/25">Invoices appear here once you subscribe or make a purchase.</p>
               </div>
             </div>
           ) : (
@@ -68,31 +68,31 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/[0.06] text-left">
-                      <th className="px-6 py-3 text-[13px] font-medium text-white/40">Invoice #</th>
-                      <th className="px-6 py-3 text-[13px] font-medium text-white/40">Date</th>
-                      <th className="px-6 py-3 text-[13px] font-medium text-white/40">Type</th>
-                      <th className="px-6 py-3 text-[13px] font-medium text-white/40 text-right">Amount</th>
-                      <th className="px-6 py-3 text-[13px] font-medium text-white/40 text-right">Status</th>
+                    <tr className="border-b border-ink/[0.06] text-left">
+                      <th className="px-6 py-3 text-[13px] font-medium text-ink/40">Invoice #</th>
+                      <th className="px-6 py-3 text-[13px] font-medium text-ink/40">Date</th>
+                      <th className="px-6 py-3 text-[13px] font-medium text-ink/40">Type</th>
+                      <th className="px-6 py-3 text-[13px] font-medium text-ink/40 text-right">Amount</th>
+                      <th className="px-6 py-3 text-[13px] font-medium text-ink/40 text-right">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageInvoices.map((inv, i) => (
                       <tr
                         key={inv.id}
-                        className="group border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        className="group border-b border-ink/[0.04] last:border-0 hover:bg-ink/[0.02] transition-colors cursor-pointer"
                         onClick={() => props.onDownloadInvoice?.(inv)}
                       >
-                        <td className="px-6 py-4 text-[13px] text-white font-medium">
+                        <td className="px-6 py-4 text-[13px] text-text font-medium">
                           #{inv.invoiceNumber || inv.number || inv.id.slice(0, 15)}
                         </td>
-                        <td className="px-6 py-4 text-[13px] text-white/50">
+                        <td className="px-6 py-4 text-[13px] text-ink/50">
                           {fmtDate(inv.date)}
                         </td>
-                        <td className="px-6 py-4 text-[13px] text-white/50">
+                        <td className="px-6 py-4 text-[13px] text-ink/50">
                           {inv.items?.length === 1 ? 'Single Purchase' : 'Monthly Invoice'}
                         </td>
-                        <td className="px-6 py-4 text-[13px] text-white font-semibold text-right tabular-nums">
+                        <td className="px-6 py-4 text-[13px] text-text font-semibold text-right tabular-nums">
                           {fmt(inv.total, inv.currency)}
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -105,8 +105,8 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
               </div>
 
               {totalPages > 1 && (
-                <div className="border-t border-white/[0.06] px-6 py-3 flex items-center justify-between bg-white/[0.02]">
-                  <p className="text-[13px] text-white/30">
+                <div className="border-t border-ink/[0.06] px-6 py-3 flex items-center justify-between bg-ink/[0.02]">
+                  <p className="text-[13px] text-ink/30">
                     Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, invoices.length)} of {invoices.length}
                   </p>
                   <div className="flex gap-1.5">
@@ -114,7 +114,7 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
                       type="button"
                       disabled={page === 0}
                       onClick={() => setPage(p => p - 1)}
-                      className="rounded-full border border-white/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-white/70 transition-all hover:bg-white/[0.05] hover:border-white/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
+                      className="rounded-full border border-ink/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-ink/70 transition-all hover:bg-ink/[0.05] hover:border-ink/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
                     >
                       Previous
                     </button>
@@ -122,7 +122,7 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
                       type="button"
                       disabled={page >= totalPages - 1}
                       onClick={() => setPage(p => p + 1)}
-                      className="rounded-full border border-white/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-white/70 transition-all hover:bg-white/[0.05] hover:border-white/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
+                      className="rounded-full border border-ink/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-ink/70 transition-all hover:bg-ink/[0.05] hover:border-ink/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
                     >
                       Next
                     </button>
@@ -144,7 +144,7 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
         isPaid
-          ? 'bg-white/[0.08] text-white/80'
+          ? 'bg-ink/[0.08] text-ink/80'
           : isFailed
             ? 'bg-red-500/15 text-red-400'
             : 'bg-amber-500/15 text-amber-400'

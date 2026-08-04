@@ -447,15 +447,15 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       {view === 'plans' && plansLoading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex animate-pulse flex-col rounded-2xl border border-white/[0.08] bg-[#141419] p-5">
-              <div className="h-4 w-20 rounded bg-white/[0.08]" />
-              <div className="mt-5 h-7 w-24 rounded bg-white/[0.08]" />
-              <div className="mt-4 h-3 w-full rounded bg-white/[0.06]" />
-              <div className="mt-2 h-3 w-3/4 rounded bg-white/[0.06]" />
+            <div key={i} className="flex animate-pulse flex-col rounded-2xl border border-ink/[0.08] bg-bg-card p-5">
+              <div className="h-4 w-20 rounded bg-ink/[0.08]" />
+              <div className="mt-5 h-7 w-24 rounded bg-ink/[0.08]" />
+              <div className="mt-4 h-3 w-full rounded bg-ink/[0.06]" />
+              <div className="mt-2 h-3 w-3/4 rounded bg-ink/[0.06]" />
               <div className="mt-6 flex-1 space-y-2">
-                {[0, 1, 2, 3].map((j) => <div key={j} className="h-3 w-5/6 rounded bg-white/[0.05]" />)}
+                {[0, 1, 2, 3].map((j) => <div key={j} className="h-3 w-5/6 rounded bg-ink/[0.05]" />)}
               </div>
-              <div className="mt-5 h-10 w-full rounded-xl bg-white/[0.06]" />
+              <div className="mt-5 h-10 w-full rounded-xl bg-ink/[0.06]" />
             </div>
           ))}
         </div>
@@ -511,10 +511,10 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 key={plan.id}
                 className={`relative flex flex-col rounded-2xl border p-5 transition ${
                   plan.highlighted && !isCurrent
-                    ? 'border-white/[0.2] bg-[#141419]'
+                    ? 'border-ink/[0.2] bg-bg-card'
                     : isCurrent
-                      ? 'border-white/[0.25] bg-[#141419]'
-                      : 'border-white/[0.08] bg-[#141419]'
+                      ? 'border-ink/[0.25] bg-bg-card'
+                      : 'border-ink/[0.08] bg-bg-card'
                 }`}
               >
                 {plan.highlighted && !isCurrent && (
@@ -527,16 +527,16 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   />
                 )}
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[15px] font-semibold text-white">{plan.name}</p>
+                  <p className="text-[15px] font-semibold text-text">{plan.name}</p>
                   {plan.badge ? (
                     <span className={`rounded-full px-2 py-1 text-[11px] font-semibold flex-shrink-0 ${
                       isCurrent
-                        ? 'bg-white/10 text-white/60'
+                        ? 'bg-ink/10 text-ink/60'
                         : plan.contactSales
                           ? 'bg-amber-500/15 text-amber-400'
                           : hasTrial
                             ? 'bg-sky-500/15 text-sky-400'
-                            : 'bg-white/[0.07] text-white/40'
+                            : 'bg-ink/[0.07] text-ink/40'
                     }`}>
                       {plan.badge}
                     </span>
@@ -544,9 +544,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 </div>
 
                 <div className="mt-4">
-                  <p className="text-2xl font-bold text-white">
+                  <p className="text-2xl font-bold text-text">
                     {priceLabel}
-                    {priceSuffix && <span className="text-sm font-normal text-white/40">{priceSuffix}</span>}
+                    {priceSuffix && <span className="text-sm font-normal text-ink/40">{priceSuffix}</span>}
                   </p>
                   {plan.annualPrice && !isCurrent ? (
                     <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
@@ -556,43 +556,43 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   )}
                 </div>
 
-                <p className="mt-3 text-[13px] leading-relaxed text-white/40">{plan.description}</p>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink/40">{plan.description}</p>
 
                 {plan.perSeat && !isCurrent && (
-                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+                  <div className="mt-3 rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-white/50">Seats (min {minSeats})</span>
+                      <span className="text-[12px] text-ink/50">Seats (min {minSeats})</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           aria-label="Fewer seats"
                           disabled={seats <= minSeats}
                           onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: Math.max(minSeats, seats - 1) }))}
-                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-6 w-6 rounded-md bg-ink/[0.08] text-sm text-ink/70 hover:bg-ink/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center text-[13px] font-semibold text-white">{seats}</span>
+                        <span className="w-6 text-center text-[13px] font-semibold text-text">{seats}</span>
                         <button
                           type="button"
                           aria-label="More seats"
                           onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: seats + 1 }))}
-                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14]"
+                          className="h-6 w-6 rounded-md bg-ink/[0.08] text-sm text-ink/70 hover:bg-ink/[0.14]"
                         >
                           +
                         </button>
                       </div>
                     </div>
-                    <p className="mt-2 text-[12px] text-white/40">
-                      {seats} × ${plan.price}/mo = <span className="font-semibold text-white/80">${monthlyTotal}/mo</span>
+                    <p className="mt-2 text-[12px] text-ink/40">
+                      {seats} × ${plan.price}/mo = <span className="font-semibold text-ink/80">${monthlyTotal}/mo</span>
                     </p>
                   </div>
                 )}
 
                 <ul className="mt-4 flex-1 space-y-1.5">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-[13px] text-white/50">
-                      <span className="mt-0.5 flex-shrink-0 text-white/30">
+                    <li key={feature} className="flex items-start gap-2 text-[13px] text-ink/50">
+                      <span className="mt-0.5 flex-shrink-0 text-ink/30">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
@@ -608,16 +608,16 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   onClick={() => handlePlanChange(plan)}
                   className={`mt-5 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
                     isCurrent
-                      ? 'cursor-not-allowed bg-white/[0.06] text-white/30'
+                      ? 'cursor-not-allowed bg-ink/[0.06] text-ink/30'
                       : isBusy
-                        ? 'cursor-wait bg-white/[0.06] text-white/30'
+                        ? 'cursor-wait bg-ink/[0.06] text-ink/30'
                         : plan.highlighted
-                          ? 'bg-white text-black hover:bg-white/90'
+                          ? 'bg-brand text-brand-foreground hover:bg-brand-hover'
                           : isExternal
-                            ? 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                            ? 'bg-ink/[0.08] text-ink/70 hover:bg-ink/[0.12] hover:text-text'
                             : hasTrial && !subscription.id
                               ? 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30'
-                              : 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                              : 'bg-ink/[0.08] text-ink/70 hover:bg-ink/[0.12] hover:text-text'
                   }`}
                 >
                   {buttonLabel}
@@ -638,13 +638,13 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 {showNoProcessor && (
                   <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
                     <p className="text-[12px] font-semibold text-amber-300">Card checkout is not enabled for this org yet</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-white/50">
+                    <p className="mt-1 text-[12px] leading-relaxed text-ink/50">
                       Your organization has no payment processor configured. Contact
                       our billing team and we will enable {plan.name} on your account.
                     </p>
                     <a
                       href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please enable card checkout and activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
-                      className="mt-3 block rounded-lg bg-white/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                      className="mt-3 block rounded-lg bg-ink/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-ink/70 transition hover:bg-ink/[0.12] hover:text-text"
                     >
                       Contact billing
                     </a>
