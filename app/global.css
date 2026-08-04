@@ -1,28 +1,40 @@
+/* TOKENS COME FROM @hanzo/design — the same ladder every Hanzo surface reads.
+   Dark is the default (:root is the dark palette) and `.light` retunes it,
+   which matches this app's html.light toggle exactly. Only the app-local
+   aliases below are authored here; the values live in one place.
+   Fonts are deliberately NOT imported: next/font provides --font-sans and
+   --font-mono, and design's fonts.css would pull a second copy. */
+@import '@hanzo/design/tokens/colors.css';
+@import '@hanzo/design/tokens/typography.css';
+@import '@hanzo/design/tokens/spacing.css';
+@import '@hanzo/design/tokens/radius.css';
+@import '@hanzo/design/tokens/elevation.css';
+@import '@hanzo/design/tokens/motion.css';
+@import '@hanzo/design/tokens/z.css';
 @import 'tailwindcss';
 
 @theme {
-  /* Brand — white in dark mode, dark in light mode (overridden below) */
-  --color-brand: #ffffff;
-  --color-brand-foreground: #000000;
-  --color-brand-hover: #d4d4d4;
-  --color-brand-muted: rgba(255, 255, 255, 0.1);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-hover: var(--primary-hover);
+  --color-brand-muted: var(--brand-muted);
 
-  /* Semantic tokens — dark mode default (matches hanzo.id) */
-  --color-bg: #0a0a0f;
-  --color-bg-card: #141419;
-  --color-bg-elevated: #1a1a22;
-  --color-bg-input: #0a0a0f;
-  --color-border: #333333;
-  --color-border-strong: #555555;
-  --color-text: #ffffff;
-  --color-text-secondary: #aaaaaa;
-  --color-text-muted: #888888;
-  --color-text-dim: #555555;
+  --color-bg: var(--background);
+  --color-bg-card: var(--card);
+  --color-bg-elevated: var(--accent);
+  --color-bg-input: var(--background);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--foreground);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-tertiary);
+  --color-text-dim: var(--text-disabled);
 
-  /* Status colors */
-  --color-success: #22c55e;
+  /* Status — error/success come from design; warning/info have no design
+     token yet, so the literals stay until the ladder grows them. */
+  --color-success: var(--state-success);
   --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-danger: var(--state-error);
   --color-info: #3b82f6;
 }
 
@@ -33,28 +45,6 @@
 
 html {
   scrollbar-gutter: stable;
-  color-scheme: dark;
-}
-
-html.light {
-  --color-bg: hsl(0, 0%, 98%);
-  --color-bg-card: hsl(0, 0%, 100%);
-  --color-bg-elevated: hsl(0, 0%, 96%);
-  --color-bg-input: hsl(0, 0%, 100%);
-  --color-border: hsl(0, 0%, 88%);
-  --color-border-strong: hsl(0, 0%, 78%);
-  --color-text: hsl(0, 0%, 8%);
-  --color-text-secondary: hsl(0, 0%, 35%);
-  --color-text-muted: hsl(0, 0%, 45%);
-  --color-text-dim: hsl(0, 0%, 60%);
-
-  /* Brand inverts to dark in light mode so logo/buttons remain visible */
-  --color-brand: #171717;
-  --color-brand-foreground: #ffffff;
-  --color-brand-hover: #404040;
-  --color-brand-muted: rgba(23, 23, 23, 0.1);
-
-  color-scheme: light;
 }
 
 body {
@@ -63,13 +53,7 @@ body {
 }
 
 ::selection {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-html.light ::selection {
-  background-color: rgba(23, 23, 23, 0.15);
-  color: white;
+  background-color: var(--selection);
 }
 
 /* Loading spinner */
