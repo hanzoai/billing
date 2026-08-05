@@ -21,8 +21,8 @@ importers:
         specifier: ^8.0.47
         version: 8.0.47(b572eb2df2cf7f56f9409d16af5fb82e)
       '@hanzogui/shell':
-        specifier: ^8.1.3
-        version: 8.1.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^8.1.4
+        version: 8.1.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@rainbow-me/rainbowkit':
         specifier: ^2.2.10
         version: 2.2.10(@tanstack/react-query@5.94.5(react@19.2.4))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(viem@2.47.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(wagmi@3.5.0)
@@ -891,8 +891,8 @@ packages:
     peerDependencies:
       react: '>=19'
 
-  '@hanzogui/shell@8.1.3':
-    resolution: {integrity: sha512-IWahe05okXlvPpcE60zy8cj2RQy/cZDKqDZlCwVK7m8Hpi3KIZyFa4D+NL7RoazvrZgljdoz2wRexDMWS38eYg==}
+  '@hanzogui/shell@8.1.4':
+    resolution: {integrity: sha512-08gK5yxT33eZyialnGhwvuAtBS33AVDpp4EYk1X3adzb3GPzBaQPsB0lULQLjHIctZwatCzVFh8cA2cKxRYvRw==}
     peerDependencies:
       react: '*'
       react-dom: '*'
@@ -5180,7 +5180,7 @@ snapshots:
     transitivePeerDependencies:
       - react-dom
 
-  '@hanzogui/shell@8.1.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@hanzogui/shell@8.1.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
