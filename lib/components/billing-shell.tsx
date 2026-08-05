@@ -49,8 +49,7 @@ import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, BASE_PATH } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 
-import { ORG_DOMAINS, TenantHeader } from '@hanzogui/shell'
-type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
+import { OrgHeader } from '@hanzogui/shell'
 
 /* ── Sidebar section config ───────────────────────────────────── */
 const SIDEBAR_SECTIONS: Array<{ id: BillingSection; label: string; icon: React.ReactNode; group: 'main' | 'manage' }> = [
@@ -954,10 +953,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       {/* ── Unified Hanzo Header ──────────────────────── */}
-      <TenantHeader
+      <OrgHeader
         currentApp="Billing"
         currentAppId="billing"
-        user={{ id: user.sub, name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
+        user={{ name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
         onSignOut={handleLogout}
         headerRight={
           <button
