@@ -137,7 +137,6 @@ jobs:
           KMS_CLIENT_ID: ${{ secrets.KMS_CLIENT_ID }}
           KMS_CLIENT_SECRET: ${{ secrets.KMS_CLIENT_SECRET }}
           KMS_ENDPOINT: ${{ vars.KMS_ENDPOINT || 'https://kms.hanzo.ai' }}
-          KMS_ORG: ${{ vars.KMS_ORG || 'hanzo' }}
           KMS_SECRET_ENV: ${{ vars.KMS_SECRET_ENV || 'prod' }}
           # pin.sh probes the registry before it moves anything; these let it read
           # a private manifest instead of falling back to anonymous.
@@ -148,16 +147,22 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
 
           # Secrets come from KMS, never from a file or a repo variable.
-          KMS_TOKEN=$(curl -fsS "${KMS_ENDPOINT}/v1/kms/auth/login" \
+          KMS_TOKEN=$(curl -sS "${KMS_ENDPOINT}/v1/kms/auth/login" \
             -H 'Content-Type: application/json' \
             -d "{\"clientId\":\"${KMS_CLIENT_ID}\",\"clientSecret\":\"${KMS_CLIENT_SECRET}\"}" \
-            | jq -r '.accessToken // empty')
+            | jq -r '.accessToken // empty' || true)
           [ -n "$KMS_TOKEN" ] || { echo "::error::KMS login failed at ${KMS_ENDPOINT}"; exit 1; }
 
-          PIN_TOKEN=$(curl -fsS \
-            "${KMS_ENDPOINT}/v1/kms/orgs/${KMS_ORG}/secrets/deploy/UNIVERSE_PIN_TOKEN?env=${KMS_SECRET_ENV}" \
-            -H "Authorization: Bearer ${KMS_TOKEN}" | jq -r '.secret.value // empty')
-          [ -n "$PIN_TOKEN" ] || { echo "::error::UNIVERSE_PIN_TOKEN missing in KMS at ${KMS_ORG}/deploy (env ${KMS_SECRET_ENV})"; exit 1; }
+          # THERE IS NO ORG IN A KMS PATH. The store root comes from the
+          # validated claim, so the org is the credential's, not the URL's —
+          # that is what makes another tenant's secret unnameable rather than
+          # merely refused. The /orgs/<org>/ spelling was never a route the
+          # broker has; it 404'd this step on every run (cloud's rollout had
+          # the identical bug, fixed the identical way).
+          PIN_TOKEN=$(curl -sS \
+            "${KMS_ENDPOINT}/v1/kms/secrets/deploy/UNIVERSE_PIN_TOKEN?env=${KMS_SECRET_ENV}" \
+            -H "Authorization: Bearer ${KMS_TOKEN}" | jq -r '.secret.value // empty' || true)
+          [ -n "$PIN_TOKEN" ] || { echo "::error::UNIVERSE_PIN_TOKEN missing in KMS at deploy/ (env ${KMS_SECRET_ENV}, org from the KMS credential)"; exit 1; }
           echo "::add-mask::${PIN_TOKEN}"
 
           # Shallow: universe is ~600MB of history and this needs one file from
