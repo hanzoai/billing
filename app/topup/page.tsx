@@ -337,6 +337,7 @@ export default function TopupPage() {
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
+                className="mono"
               >
                 {moneyFromCents(c)}
               </button>

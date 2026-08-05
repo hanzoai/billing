@@ -67,7 +67,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
               Total credit balance
             </p>
-            <p className="mt-1 text-3xl font-bold text-text">
+            <p className="mono mt-1 text-3xl font-bold text-text">
               {money(creditBalance / 100)}
             </p>
           </div>

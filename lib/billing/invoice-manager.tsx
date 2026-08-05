@@ -243,7 +243,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
                         {invoice.number || invoice.invoiceNumber || invoice.id}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">{formatDate(invoice.date)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-text">
+                      <td className="mono px-4 py-3 text-sm font-medium text-text">
                         {money(invoiceAmount(invoice), invoice.currency || 'USD')}
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -289,7 +289,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-text-muted">Issued {formatDate(invoice.date)}</p>
-                  <p className="mt-2 text-xl font-semibold text-text">
+                  <p className="mono mt-2 text-xl font-semibold text-text">
                     {money(invoiceAmount(invoice), invoice.currency || 'USD')}
                   </p>
                   <button

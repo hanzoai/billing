@@ -99,7 +99,7 @@ export function BalancePanel({
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
               Credits
             </p>
-            <p className="mt-2 text-4xl font-bold text-text">
+            <p className="mono mt-2 text-4xl font-bold text-text">
               {money((balance?.available ?? 0) / 100, currency)}
             </p>
             {balance && balance.holds > 0 && (
@@ -150,7 +150,7 @@ export function BalancePanel({
                   setCustomAmount('')
                   setError(null)
                 }}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.96] ${
+                className={`mono rounded-xl px-4 py-3 text-sm font-semibold transition active:scale-[0.96] ${
                   selectedPreset === amount
                     ? 'bg-brand text-brand-foreground shadow-lg shadow-brand/20'
                     : 'border border-border bg-bg-elevated text-text hover:border-brand/40 hover:bg-bg-elevated'

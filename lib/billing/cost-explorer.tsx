@@ -127,7 +127,7 @@ export function CostExplorer({ usage, usageLoading }: CostExplorerProps) {
         <div className="flex items-end justify-between mb-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-text-dim">Total Cost ({timeRange})</p>
-            <p className="text-3xl font-bold text-text mt-1">{money(totalCost, currency)}</p>
+            <p className="mono text-3xl font-bold text-text mt-1">{money(totalCost, currency)}</p>
           </div>
           {usage?.period && (
             <p className="text-xs text-text-muted">
@@ -154,7 +154,7 @@ export function CostExplorer({ usage, usageLoading }: CostExplorerProps) {
                   <div className="flex-1 h-4 rounded bg-bg-elevated overflow-hidden">
                     <div className={`h-full rounded ${color} transition-all`} style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="w-20 shrink-0 text-right text-xs font-medium text-text">{money(rec.cost)}</span>
+                  <span className="mono w-20 shrink-0 text-right text-xs font-medium text-text">{money(rec.cost)}</span>
                   <span className="w-12 shrink-0 text-right text-[11px] text-text-muted">{pct.toFixed(1)}%</span>
                 </div>
               )
@@ -199,7 +199,7 @@ export function CostExplorer({ usage, usageLoading }: CostExplorerProps) {
                       {rec.current.toLocaleString()} {rec.unit}
                       {rec.limit ? <span className="text-text-dim"> / {rec.limit.toLocaleString()}</span> : null}
                     </td>
-                    <td className="px-4 py-3 text-right text-text font-medium">{money(rec.cost)}</td>
+                    <td className="mono px-4 py-3 text-right text-text font-medium">{money(rec.cost)}</td>
                     <td className="px-4 py-3 text-right text-text-muted">{pct.toFixed(1)}%</td>
                   </tr>
                 )
@@ -210,7 +210,7 @@ export function CostExplorer({ usage, usageLoading }: CostExplorerProps) {
             <tfoot>
               <tr className="bg-bg-elevated font-medium">
                 <td colSpan={3} className="px-4 py-3 text-xs uppercase tracking-wide text-text-muted">Total</td>
-                <td className="px-4 py-3 text-right text-text">{money(totalCost, currency)}</td>
+                <td className="mono px-4 py-3 text-right text-text">{money(totalCost, currency)}</td>
                 <td className="px-4 py-3 text-right text-text-muted">100%</td>
               </tr>
             </tfoot>

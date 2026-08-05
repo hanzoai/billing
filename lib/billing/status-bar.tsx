@@ -55,7 +55,7 @@ export function StatusBar({ subscription, currentPlan, mtdSpend, currency, payme
         {/* MTD Spend */}
         <div className="p-4">
           <p className="text-[11px] uppercase tracking-wide text-text-dim mb-1">This Period</p>
-          <p className="text-sm font-semibold text-text">{money(mtdSpend, currency)}</p>
+          <p className="mono text-sm font-semibold text-text">{money(mtdSpend, currency)}</p>
           <p className="text-xs text-text-muted mt-0.5">Month-to-date</p>
         </div>
 

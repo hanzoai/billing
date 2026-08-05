@@ -4,15 +4,28 @@
 Hanzo billing service
 
 ## Tech Stack
-- TypeScript · React 19 · Next 16 (`output: 'export'`, Turbopack) · TypeScript 7
-- `@hanzogui/shell` 8.0.3 for the cross-app chrome (TenantHeader, ORG_DOMAINS)
-- **No Tailwind, no Radix, no shadcn, no PostCSS.** See *Styling* below.
+- TypeScript 5.9.3 · React 19 · Next 16.2 (`output: 'export'`, **Turbopack**)
+- `@hanzo/ui` 8.0.47 — the shared handle vocabulary (`mono`, `tnum`, `paper`,
+  `row`, `elevation-1..4`). `.btn` and `.badge` do NOT exist in it; anything
+  that looks like one is defined locally in `app/global.css`.
+- `@hanzo/design` 0.4.6 — the colour ladder AND the two self-hosted faces.
+- `@hanzo/gui` 8.0.2 — ships `gui-css-check`, which `postbuild` runs.
+- `@hanzogui/shell` 8.0.6 for the cross-app chrome (TenantHeader, ORG_DOMAINS).
+  **Never 8.0.3** — that release published 966 lines of Tailwind classes with no
+  Tailwind in its dependencies and rendered completely unstyled. 8.0.6 ships zero
+  CSS and zero className literals; it styles itself with inline style objects and
+  one scoped `[data-hanzo-shell]` sheet.
+- **No Tailwind, no Radix, no shadcn, no tailwind-merge, no PostCSS config.**
+  See *Styling* below.
 
 ## Build & Run
 ```bash
-pnpm install && pnpm build   # static export -> out/
-pnpm typecheck               # tsc --noEmit (TypeScript 7, native)
+pnpm install && pnpm build   # static export -> out/, then gui-css-check
+pnpm lint                    # scripts/pci-scope.mjs — the SAQ-A boundary
+pnpm typecheck               # tsc --noEmit
 ```
+`pnpm lint` scans BOTH the source and the built bundle, so it needs `pnpm build`
+to have run — it refuses to pass on a scan that examined nothing.
 
 ## Structure
 ```
@@ -39,10 +52,39 @@ billing/
 
 ## Styling (one way)
 
-Plain CSS. `app/global.css` is the entire stylesheet: custom-property tokens on
-`:root`, flipped by `html.light`, then ordinary rules for the exact utility
-class vocabulary the markup uses. There is no build plugin, no `postcss.config`,
-no `tailwind.config` — **do not reintroduce one.**
+Plain CSS. `app/global.css` is the entire stylesheet: three `@import`s, then
+app-local aliases on `:root`, then ordinary rules for the exact utility class
+vocabulary the markup uses. There is no build plugin, no `postcss.config`, no
+`tailwind.config` — **do not reintroduce one.**
+
+**The three imports, and why the order is load-bearing:**
+
+```css
+@import '@hanzo/ui/styles.css';            /* handles: mono, tnum, paper, row */
+@import '@hanzo/design/tokens/fonts.css';  /* the two @font-face + --font-*   */
+@import '@hanzo/design/tokens/colors.css'; /* the ladder — MUST be last       */
+```
+
+1. `@hanzo/ui/styles.css` inlines design's ladder near the top and then, ~160KB
+   later, the @hanzogui theme runtime emits a **bare `:root`** that re-declares
+   `--background` as `var(--t189)` = `hsla(0,0%,97%)`. Same specificity as the
+   design `:root` above it, so last-one-wins and dark mode renders a #f7f7f7
+   ground under #fafafa ink — white on white. Re-importing `colors.css` LAST
+   puts the ladder back on top. Colour still has exactly one home
+   (`@hanzo/design`); ui carries a generated copy we deliberately override.
+2. Fonts must be imported or nothing fails LOUDLY. `@hanzo/ui` 8.0.47 removed its
+   own `@font-face` (it duplicated design's and pointed at assets ui never
+   shipped), so ui only NAMES the faces — `.mono` asks for the literal family
+   `'Geist Mono'`. Without design's `fonts.css` the build is green, gui-css-check
+   is green, and every money figure silently falls back to `ui-monospace`: still
+   monospace, still tabular, wrong face, invisible in a screenshot.
+   **Do not use `next/font` here** — it mints a scoped family name
+   (`__Geist_Mono_abc123`) that `.mono` can never match. That was the bug.
+
+Money must be tabular. Numeric cells carry `mono` (Geist Mono +
+`font-variant-numeric: tabular-nums`); `tnum` is the same tabular figures
+without changing the face. Both come from `@hanzo/ui` — do not re-declare a
+local `.font-mono` or `.tabular-nums`, which is what they replaced.
 
 Four colour facts, each with ONE home. Markup must never spell a colour:
 
@@ -50,7 +92,7 @@ Four colour facts, each with ONE home. Markup must never spell a colour:
 | --- | --- | --- |
 | ground | `--color-bg` · `--color-bg-card` · `--color-bg-elevated` | `bg-bg` · `bg-bg-card` · `bg-bg-elevated` |
 | ink | `--color-text` (+ `-secondary` `-muted` `-dim`) | `text-text*`, and the `*-ink/α` family — `bg-ink/[0.06]`, `border-ink/[0.08]`, `text-ink/40` — which is ink mixed at α, NOT literal white |
-| brand | `--color-brand` · `--color-brand-foreground` · `--color-brand-hover` | `bg-brand` · `text-brand-foreground` · `hover:bg-brand-hover` |
+| brand | `--color-brand` · `--color-brand-foreground` · `--color-brand-hover` — all three alias design's **`--primary`** family, NOT its `--brand` family. `--primary` is the ink of the current theme and inverts; `--brand` is a fixed accent that does not restate under `.light`, so aliasing to it gave a light-grey button on a white page whose hover was one shade off itself. | `bg-brand` · `text-brand-foreground` · `hover:bg-brand-hover` |
 | status | `--color-success` `-warning` `-danger` `-info` | `text-success`, `bg-warning/15`, … |
 
 Inline `style={{}}` obeys the same rule — `color: 'var(--color-text)'`,
@@ -64,8 +106,7 @@ Colours that are deliberately literal, and why:
 - status hues themselves (`#f87171`, `#34d399`, `#4ade80`);
 - `lib/config.ts` per-org brand palettes (data, not theme);
 - `app/layout.tsx` `viewport.themeColor` (a `prefers-color-scheme` meta pair);
-- `lib/wallet-providers.tsx` RainbowKit `darkTheme()` and
-  `lib/components/animated-card.tsx` (a picture of a plastic card);
+- `lib/wallet-providers.tsx` RainbowKit `darkTheme()`;
 - **`lib/square.ts` `SQUARE_CARD_STYLE`** — the ONE surface that still ignores
   the theme. Square paints its fields in a cross-origin iframe and takes literal
   colour strings, so it cannot read a custom property. Fixing it means resolving
@@ -74,10 +115,20 @@ Colours that are deliberately literal, and why:
   load against sandbox credentials over plain http. Left alone deliberately —
   in light mode the card input renders light-on-light.
 
-A class with no rule in `global.css` is silently unstyled: same failure mode as
-an unrecognised style prop. After touching markup, check both directions —
-every class token used must resolve, and both themes must render. Nothing
-enforces this at build time.
+A class with no rule in any delivered sheet is silently unstyled: same failure
+mode as an unrecognised style prop. `postbuild` runs **`gui-css-check`** so that
+cannot ship green again — it compares every class in the rendered markup against
+the selectors in every sheet the page delivers, linked `.css` and inline
+`<style>` alike, and exits non-zero on a miss.
+
+One caveat worth knowing: this app is a client-rendered static export, so the
+HTML on disk is a near-empty shell and the postbuild run only sees the ~24
+classes in it. The authoritative run renders the app in a browser first. To
+reproduce it: serve `out/`, seed a token in `localStorage`, walk the ten section
+hashes at 390 and 1280 in both themes, write each `document.documentElement
+.outerHTML` to a directory, copy `out/_next/static/chunks/*.css` alongside, and
+point `gui-css-check` at that directory. The convergence run was 40 pages,
+**218/218 classes covered**.
 
 Because the SPA mounts at two roots (`/admin/billing` embedded in commerce, `/`
 standalone), **every self-navigation goes through `BASE_PATH`** — a bare `'/'`

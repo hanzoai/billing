@@ -103,7 +103,7 @@ export function SupportTiersPanel({ currentTier, onSubscribe }: SupportTiersPane
 
               <p className="text-lg font-semibold text-text">{tier.name}</p>
               <p className="mt-2 text-2xl font-bold text-text">
-                {tier.price === 0 ? 'Free' : money(tier.price, 'USD', 0)}
+                <span className="mono">{tier.price === 0 ? 'Free' : money(tier.price, 'USD', 0)}</span>
                 {tier.price > 0 && (
                   <span className="text-sm font-normal text-text-muted">/{tier.billingPeriod}</span>
                 )}

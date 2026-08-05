@@ -298,7 +298,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               </div>
               <div className="text-right">
                 <p className="text-[11px] text-ink/30 mb-1">{mtdSpend > 0 ? 'API spend' : 'Credits available'}</p>
-                <p className="text-xl font-semibold text-text tabular-nums">
+                <p className="text-xl font-semibold text-text mono">
                   {mtdSpend > 0 ? money(mtdSpend, currency) : totalCreditsRemaining > 0 ? money(totalCreditsRemaining, currency) : money(0, currency)}
                 </p>
                 <p className="text-[12px] text-ink/30 mt-1">{daysLeft}d until renewal</p>
@@ -322,13 +322,13 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
             <div className="mt-5 grid grid-cols-3 gap-3">
               <div className="rounded-xl border border-ink/[0.06] bg-ink/[0.02] p-3">
                 <p className="text-[11px] text-ink/30 mb-1">Tokens / period</p>
-                <p className="text-base font-semibold text-text tabular-nums">
+                <p className="text-base font-semibold text-text tnum">
                   {tokensThisPeriod > 0 ? fmtTokens(tokensThisPeriod) : '—'}
                 </p>
               </div>
               <div className="rounded-xl border border-ink/[0.06] bg-ink/[0.02] p-3">
                 <p className="text-[11px] text-ink/30 mb-1">API calls</p>
-                <p className="text-base font-semibold text-text tabular-nums">
+                <p className="text-base font-semibold text-text tnum">
                   {apiCallsThisPeriod > 0 ? fmtTokens(apiCallsThisPeriod) : '—'}
                 </p>
               </div>
@@ -338,7 +338,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 className="rounded-xl border border-ink/[0.06] bg-ink/[0.02] p-3 text-left transition-all hover:border-ink/[0.12] hover:bg-ink/[0.04]"
               >
                 <p className="text-[11px] text-ink/30 mb-1">Credits left</p>
-                <p className={`text-base font-semibold tabular-nums ${totalCreditsRemaining <= 0 ? 'text-amber-400' : 'text-text'}`}>
+                <p className={`text-base font-semibold tnum ${totalCreditsRemaining <= 0 ? 'text-amber-400' : 'text-text'}`}>
                   {totalCreditsRemaining <= 0 && !hasStarterCredit ? (
                     <span className="text-emerald-400 text-[13px] font-medium">Claim $5 free →</span>
                   ) : (
@@ -369,7 +369,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 </svg>
               </div>
             </div>
-            <p className="text-2xl font-bold text-text tabular-nums">{money(totalCreditsRemaining)}</p>
+            <p className="text-2xl font-bold text-text mono">{money(totalCreditsRemaining)}</p>
             <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
               {props.creditGrants.filter(g => g.active && !g.voided).length} active grant{props.creditGrants.filter(g => g.active && !g.voided).length !== 1 ? 's' : ''}
             </p>
@@ -474,7 +474,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                     <p className="text-[12px] text-ink/30">{new Date(inv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[13px] font-semibold text-text tabular-nums">{money(inv.total, inv.currency)}</p>
+                    <p className="text-[13px] font-semibold text-text mono">{money(inv.total, inv.currency)}</p>
                     <span className={`text-[11px] font-medium ${
                       inv.status === 'paid' ? 'text-emerald-400' :
                       inv.status === 'failed' ? 'text-red-400' : 'text-amber-400'

@@ -281,7 +281,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Current spend</p>
             <p className="mt-2 text-2xl font-semibold text-text">
-              {money(currentPlan?.price ?? 0, 'USD', 0)}
+              <span className="mono">{money(currentPlan?.price ?? 0, 'USD', 0)}</span>
               <span className="text-sm font-normal text-text-muted">/{currentPlan?.billingPeriod ?? 'monthly'}</span>
             </p>
           </div>
@@ -314,7 +314,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     setDiscountResult(null)
                   }}
                   placeholder="Enter promo code"
-                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm font-mono uppercase text-text outline-none transition focus:border-brand"
+                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text outline-none transition focus:border-brand"
                 />
                 <button
                   type="button"
@@ -538,7 +538,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
                 <div className="mt-4">
                   <p className="text-2xl font-bold text-text">
-                    {priceLabel}
+                    <span className="mono">{priceLabel}</span>
                     {priceSuffix && <span className="text-sm font-normal text-ink/40">{priceSuffix}</span>}
                   </p>
                   {plan.annualPrice && !isCurrent ? (

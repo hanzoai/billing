@@ -1,6 +1,7 @@
-# @hanzo/billing — the billing surface (Next.js). There is no `packageManager`
-# field; the committed pnpm-lock.yaml is what makes pnpm the one package manager
-# here. Targets call billing's own scripts wherever those scripts actually run.
+# @hanzo/billing — the billing surface (Next.js). package.json pins
+# `packageManager: pnpm@10.33.4` and the committed pnpm-lock.yaml agrees, so pnpm
+# is the one package manager here. Targets call billing's own scripts wherever
+# those scripts actually run.
 
 PNPM ?= pnpm
 
@@ -20,10 +21,13 @@ build: node_modules ## Build the Next.js app (next build).
 test: ## No test suite in this repo — says so, exits 0.
 	@echo ">> billing has NO tests (no test script, no spec files). Green here is not coverage."
 
-# Deliberately NOT the `lint` script: that one is literally `echo 'lint ok'` and
-# passes unconditionally. `tsc --noEmit` is the only real static check billing
-# has, so that is what the verb runs.
-lint: typecheck ## Static check — alias for typecheck (the `lint` script is a no-op stub).
+# Two real static checks, both required. `pnpm lint` is scripts/pci-scope.mjs —
+# the SAQ-A boundary, scanned against the source AND the built bundle, so it
+# needs `build` to have run or it refuses to pass on an empty scan. typecheck is
+# tsc --noEmit. Neither subsumes the other: one asks whether a raw PAN can reach
+# first-party JS, the other whether the types hold.
+lint: typecheck ## Static checks — tsc --noEmit, then the PCI scope scan.
+	$(PNPM) lint
 
 typecheck: node_modules ## tsc --noEmit.
 	$(PNPM) typecheck

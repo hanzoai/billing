@@ -89,7 +89,7 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
                         <td className="px-6 py-4 text-[13px] text-ink/50">
                           {inv.items?.length === 1 ? 'Single Purchase' : 'Monthly Invoice'}
                         </td>
-                        <td className="px-6 py-4 text-[13px] text-text font-semibold text-right tabular-nums">
+                        <td className="px-6 py-4 text-[13px] text-text font-semibold text-right mono">
                           {money(inv.total, inv.currency)}
                         </td>
                         <td className="px-6 py-4 text-right">

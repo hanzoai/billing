@@ -124,7 +124,7 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
                           {typeInfo.label}
                         </span>
                       </td>
-                      <td className={`px-4 py-3 text-right text-sm font-medium ${
+                      <td className={`mono px-4 py-3 text-right text-sm font-medium ${
                         isPositive ? 'text-emerald-500' : 'text-rose-500'
                       }`}>
                         {isPositive ? '+' : '-'}{money(Math.abs(tx.amountCents) / 100, tx.currency)}
@@ -132,7 +132,7 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
                       <td className="px-4 py-3 text-sm text-text-muted">
                         {tx.description || '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-text-secondary">
+                      <td className="mono px-4 py-3 text-right text-sm text-text-secondary">
                         {tx.balanceAfter != null ? money(tx.balanceAfter / 100, tx.currency) : '—'}
                       </td>
                     </tr>

@@ -1,8 +1,18 @@
-/** Every navigable panel in the billing shell. */
+/** Every navigable panel in the billing shell — the ten the sidebar offers and
+ *  the switch in `lib/components/billing-shell.tsx` has a case for.
+ *
+ *  Not listed, deliberately: cost, members, business, tax. Those four panels
+ *  exist (CostExplorer, AccountMembers, BusinessProfilePanel,
+ *  TaxCompliancePanel) but they render INSIDE usage, team and settings — they
+ *  are not destinations. Naming them here made the shell's SECTION_TITLES
+ *  incomplete, and the fix taken was to invent four titles for them, which
+ *  taught `getInitialSection` that `#cost` is a valid hash: it passes the
+ *  `hash in SECTION_TITLES` test, sets a section no case matches, and the
+ *  content area renders nothing. A section is a place you can navigate to. */
 export type BillingSection =
-  | 'overview' | 'usage' | 'cost' | 'invoices' | 'pricing'
-  | 'credits' | 'transactions' | 'alerts' | 'payment' | 'members'
-  | 'business' | 'tax' | 'team' | 'settings'
+  | 'overview' | 'usage' | 'invoices' | 'pricing'
+  | 'credits' | 'transactions' | 'alerts'
+  | 'payment' | 'team' | 'settings'
 
 export type BillingInterval = "monthly" | "yearly" | "quarterly" | "custom"
 

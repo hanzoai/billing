@@ -1,7 +1,25 @@
 /**
  * Hanzo Billing — the whole stylesheet. Plain CSS, no build plugin.
  *
- * COLOUR COMES FROM @hanzo/design — the same ladder every Hanzo surface reads.
+ * HANDLES come from @hanzo/ui/styles.css — mono, tnum, paper, row,
+ * elevation-1..4. COLOUR comes from @hanzo/design, imported AFTER it, and the
+ * order is load-bearing:
+ *
+ *   @hanzo/ui/styles.css inlines design's ladder near the top and then, ~160KB
+ *   later, the @hanzogui theme runtime emits a bare `:root` that re-declares
+ *   --background as var(--t189) — hsla(0,0%,97%). Same specificity as the
+ *   design `:root` above it, so the last one wins and dark mode renders
+ *   #f7f7f7 ground under #fafafa ink. White on white. The build is green, the
+ *   type-check is green, and gui-css-check is green at 100%, because none of
+ *   them look at what a custom property resolves to. Re-importing design's
+ *   colors.css last puts the ladder back on top of the runtime's default.
+ *
+ * So there is still exactly ONE home for colour — @hanzo/design. ui carries a
+ * generated copy this file deliberately overrides; it is not a second source of
+ * truth, it is a duplicate being put back in its place. (Reported upstream: the
+ * gui runtime should scope those defaults to .t_light/.t_dark, which is what
+ * every other rule in that block already does.)
+ *
  * Dark is the default (:root is the dark palette) and `.light` retunes it,
  * which is exactly what this app's html.light toggle adds. So the aliases below
  * are ONE ink and ONE ground: each names a design token and nothing more, and
@@ -12,14 +30,15 @@
  * hairlines. Consume them as `var(--x)`. `hsl(var(--x))` is invalid at
  * computed-value time and the browser drops the whole declaration silently.
  *
- * FONTS COME FROM @hanzo/design TOO, and they have to. @hanzo/ui NAMES the
- * faces — `.mono` is `font-family:'Geist Mono',ui-monospace,...` — but ships no
- * @font-face and no assets, so whoever renders must declare them. design's
- * fonts.css is the one place they are declared, with urls relative to the
- * package, and design ships the two woff2 files (SIL OFL-1.1). Miss this import
- * and nothing fails: the build is green, gui-css-check is green, and every
- * money figure quietly falls back to ui-monospace. Still monospace, still
- * tabular, wrong face, and no screenshot catches it.
+ * FONTS are the one thing @hanzo/ui does NOT carry, deliberately: 8.0.47 dropped
+ * its @font-face because it duplicated design's and pointed at assets ui does
+ * not ship. ui only NAMES the faces — `.mono` is `font-family:'Geist Mono',
+ * ui-monospace,...` — so whoever renders must declare them, and design's
+ * fonts.css is where they are declared, with urls relative to the package and
+ * the two woff2 files alongside (SIL OFL-1.1). Miss that import and nothing
+ * fails: the build is green, gui-css-check is green, and every money figure
+ * quietly falls back to ui-monospace. Still monospace, still tabular, wrong
+ * face, and no screenshot catches it.
  *
  * Everything below the reset is the exact utility vocabulary this app's markup
  * uses, written as ordinary rules. Order is load-bearing in two places, both of
@@ -27,24 +46,25 @@
  * `.text-*`, and `.border-dashed` after the border-width utilities, so the more
  * specific intent wins without any class-merging pass at runtime.
  */
+@import '@hanzo/ui/styles.css';
 @import '@hanzo/design/tokens/fonts.css';
 @import '@hanzo/design/tokens/colors.css';
-@import '@hanzo/design/tokens/typography.css';
-@import '@hanzo/design/tokens/spacing.css';
-@import '@hanzo/design/tokens/radius.css';
-@import '@hanzo/design/tokens/elevation.css';
-@import '@hanzo/design/tokens/motion.css';
-@import '@hanzo/design/tokens/z.css';
 
 /* ── tokens ──────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand — design's --brand is the ink of the current theme, so it inverts
-     with everything else instead of being restated per theme. */
-  --color-brand: var(--brand);
-  --color-brand-foreground: var(--brand-foreground);
+  /* Brand — the primary-button triple (`bg-brand` + `text-brand-foreground` +
+     `hover:bg-brand-hover`, 52 uses between them). It maps to design's PRIMARY
+     family, not its --brand family: --primary is the ink of the current theme
+     and inverts with everything else, while --brand is a fixed accent that does
+     not restate under `.light`. Mapping the base to --brand and only the hover
+     to --primary-hover — which is what this file did — gave a light-grey button
+     on a white page whose hover was one shade off itself. Muted is the same ink
+     at 10%, derived rather than restated, so it inverts for free. */
+  --color-brand: var(--primary);
+  --color-brand-foreground: var(--primary-foreground);
   --color-brand-hover: var(--primary-hover);
-  --color-brand-muted: var(--brand-muted);
+  --color-brand-muted: color-mix(in oklab, var(--primary) 10%, transparent);
 
   /* Semantic surfaces and text. */
   --color-bg: var(--background);
@@ -1115,9 +1135,6 @@ html.transitioning *::after {
 .text-right {
   text-align: right;
 }
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
 .text-2xl {
   font-size: 1.5rem;
   line-height: 1.333333;
@@ -1308,9 +1325,6 @@ html.transitioning *::after {
 }
 .uppercase {
   text-transform: uppercase;
-}
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
 }
 .underline {
   text-decoration-line: underline;

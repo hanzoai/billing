@@ -60,7 +60,7 @@ function UsageMeter({ record }: { record: UsageRecord }) {
           <p className="text-sm font-medium text-text">{record.label}</p>
         </div>
         {record.cost > 0 && (
-          <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
+          <span className="mono rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
             {money(record.cost)}
           </span>
         )}
@@ -141,7 +141,7 @@ export function UsagePanel(props: UsagePanelProps) {
           </div>
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-text-muted">Total cost</p>
-            <p className="mt-1 text-xl font-semibold text-text">
+            <p className="mono mt-1 text-xl font-semibold text-text">
               {money(usage.totalCost, usage.currency)}
             </p>
           </div>
