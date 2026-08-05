@@ -46,7 +46,7 @@ import type {
 import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
-import { type BillingOrgConfig, isAdminUser, BASE_PATH } from '@/lib/config'
+import { type BillingOrgConfig, isAdminUser, BASE_PATH, SALES_URL } from '@/lib/config'
 import { getCommerce } from '@/lib/commerce'
 
 import { OrgHeader } from '@hanzogui/shell'
@@ -258,6 +258,11 @@ function mapCommercePlan(p: Plan): SubscriptionPlan {
     if (typeof v === 'number') limits[k] = v
   }
   const perSeat = p.category === 'team'
+  // Same rule as the public projection (lib/plans.ts): a tier with NO price is
+  // sold by a person even when the catalog forgets to flag it. This is the
+  // AUTHENTICATED copy of that projection — commerce sends cents here, the
+  // gateway sends dollars there — and the two must agree on who sells what.
+  const sold = !!p.contactSales || p.price == null
   return {
     id: p.slug ?? '',
     name: p.name ?? '',
@@ -269,9 +274,9 @@ function mapCommercePlan(p: Plan): SubscriptionPlan {
     features: p.features ?? [],
     limits,
     highlighted: p.popular,
-    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
-    contactSales: p.contactSales,
-    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
+    badge: sold ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
+    contactSales: sold,
+    externalUrl: sold ? SALES_URL : undefined,
     trialDays: p.trialPeriodDays || undefined,
     trialCreditCents: limits.freeCredit ? limits.freeCredit * 100 : undefined,
     perSeat,
