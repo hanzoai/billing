@@ -36,7 +36,6 @@ function annualSavings(plan: PricingPlan): string | null {
 }
 
 function ctaLabel(plan: PricingPlan): string {
-  if (plan.priceMonthly === 0) return 'Start free'
   if (plan.contactSales || plan.priceMonthly >= 9999) return 'Talk to sales'
   return 'Get started'
 }

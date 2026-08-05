@@ -6,11 +6,11 @@ import type { PricingPlan } from './components/plan-card'
 
 export const metadata: Metadata = {
   title: 'Hanzo Commerce — Pricing & Plans',
-  description: 'Transparent AI compute pricing. Start free, scale infinitely. Earn 20% on idle compute resale.',
+  description: 'Transparent AI compute pricing. Pay for what you use, scale infinitely. Earn 20% on idle compute resale.',
   metadataBase: new URL('https://commerce.hanzo.ai'),
   openGraph: {
     title: 'Hanzo Commerce — Pricing & Plans',
-    description: 'Transparent AI compute pricing. Start free, scale infinitely.',
+    description: 'Transparent AI compute pricing. Pay for what you use, scale infinitely.',
     url: 'https://commerce.hanzo.ai',
     siteName: 'Hanzo',
   },
@@ -22,10 +22,10 @@ const FALLBACK_PLANS: PricingPlan[] = [
   {
     id: 'developer',
     name: 'Developer',
-    description: 'Get started for free. Explore the API with generous included credits.',
+    description: 'Explore the API. No monthly fee — usage is billed to your card.',
     priceMonthly: 0,
     priceAnnual: 0,
-    features: ['$5 free credit', '60 requests/min', '100K tokens/min', 'Community support', 'API access', 'Earn up to 20% on idle compute & LLM resale'],
+    features: ['60 requests/min', '100K tokens/min', 'Community support', 'API access', 'Earn up to 20% on idle compute & LLM resale'],
     payouts: { idleResalePercent: 20 },
   },
   {
@@ -215,7 +215,7 @@ export default async function CommercePage() {
           margin: '0 auto 44px',
           lineHeight: 1.65,
         }}>
-          Full-stack AI commerce infrastructure — billing, payments, subscriptions, usage metering, and analytics. Start free, no card required.
+          Full-stack AI commerce infrastructure — billing, payments, subscriptions, usage metering, and analytics.
         </p>
 
         {/* Coupon input (client component) */}
@@ -256,7 +256,7 @@ export default async function CommercePage() {
             Choose your plan
           </h2>
           <p style={{ fontSize: '15px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
-            All plans include $5 free credit to start. No card required on free tier.
+            Every plan bills to a card on file. Change or cancel at any time.
           </p>
         </div>
 

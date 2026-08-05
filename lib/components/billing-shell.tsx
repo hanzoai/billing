@@ -383,20 +383,18 @@ export function BillingShell({ org, user }: BillingShellProps) {
         if (grants.length > 0) {
           setCreditGrants(grants)
         } else if (txList.status === 'fulfilled') {
-          // The starter credit is recorded by commerce as a Deposit transaction
+          // Starter credits are no longer issued, but accounts that hold one
+          // still hold real money. Commerce recorded it as a Deposit transaction
           // tagged "starter-credit" (deliberately NOT a credit-grant — it nets
           // into the balance ledger), so getCreditGrants() is empty and we
-          // synthesize a grant from that transaction to surface it as claimed.
+          // synthesize a grant from that transaction to keep it visible.
           const txs = asList<Transaction>(txList.value)
           const creditTxs = txs.filter((tx) => tx.type === 'deposit' && (tx.tags === 'starter-credit' || (Array.isArray(tx.tags) && tx.tags.includes('starter-credit'))))
           setCreditGrants(creditTxs.map((tx): CreditGrant => ({
             id: tx.id ?? '',
-            // Name it "Starter Credit" (NOT the transaction's freeform notes, e.g.
-            // "Welcome credit: $100.00 USD …"): the credits UI recognises a claimed
-            // starter credit by name.includes('starter'), so notes-derived names
-            // left the grant showing an un-claimed "Claim $5 Starter Credit" button
-            // even though the credit was already granted. The starter-credit tag is
-            // the source of truth that this IS the starter credit.
+            // The tag is the source of truth for what this deposit is; the
+            // transaction's notes are freeform ("Welcome credit: $100.00 USD …")
+            // and make a poor row label.
             name: 'Starter Credit',
             amountCents: tx.amount ?? 0,
             remainingCents: tx.amount ?? 0,
@@ -494,28 +492,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
     loadBillingData()
     loadUsage()
   }, [loadBillingData, loadUsage])
-
-  // Auto-grant $5 starter credit for new users on first visit
-  // Guard: only attempt if no credits exist AND we haven't already tried this session
-  const starterCreditAttempted = typeof sessionStorage !== 'undefined'
-    && sessionStorage.getItem('hanzo_starter_credit_attempted') === 'true'
-  useEffect(() => {
-    if (loading || creditGrants.length > 0 || starterCreditAttempted) return
-    const autoGrant = async () => {
-      try {
-        sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
-        const token = getAccessToken()
-        if (!token) return
-        const commerce = getCommerce(org.commerceUrl, token)
-        const userId = user.commerceUserId || user.email || user.sub
-        await commerce.grantStarterCredit(userId)
-        await loadBillingData()
-      } catch {
-        // Starter credit may already exist or endpoint unavailable — idempotent server-side
-      }
-    }
-    autoGrant()
-  }, [loading, creditGrants.length, starterCreditAttempted, org, user, loadBillingData])
 
   const admin = isAdminUser(user.email)
 
@@ -719,23 +695,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setSpendAlerts((prev) => prev.filter((a) => a.id !== id))
   }, [org])
 
-  const [claimingCredit, setClaimingCredit] = useState(false)
-  const handleClaimStarterCredit = useCallback(async () => {
-    if (claimingCredit) return // Prevent double-click
-    setClaimingCredit(true)
-    try {
-      const token = getAccessToken()
-      if (!token) return
-      const commerce = getCommerce(org.commerceUrl, token)
-      const userId = user.commerceUserId || user.email || user.sub
-      await commerce.grantStarterCredit(userId)
-      sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
-      await loadBillingData()
-    } finally {
-      setClaimingCredit(false)
-    }
-  }, [org, user, loadBillingData, claimingCredit])
-
   const handleSubscribeSupport = useCallback(async (tierId: string) => {
     const token = getAccessToken()
     if (!token) return
@@ -827,19 +786,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  const starterCredit = creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null
-
-  // Show guided setup on overview when user hasn't added a payment method yet.
-  // Dismissed via sessionStorage so it doesn't reappear during the same session.
-  const [setupDismissed, setSetupDismissed] = useState(() =>
-    typeof sessionStorage !== 'undefined' && sessionStorage.getItem('hanzo_setup_dismissed') === 'true'
-  )
-  const showGuidedSetup = !setupDismissed && !loading && paymentMethods.length === 0
-
-  const handleDismissSetup = useCallback(() => {
-    sessionStorage.setItem('hanzo_setup_dismissed', 'true')
-    setSetupDismissed(true)
-  }, [])
+  // The overview IS the setup card until both required steps are done. There is
+  // no dismiss: a payment method and a plan are required to use Hanzo, so an
+  // account missing either has nothing honest to show on an overview. Every
+  // other section stays reachable from the sidebar.
+  const setupIncomplete = paymentMethods.length === 0 || !subscription.id
 
   if (loading) {
     return (
@@ -883,18 +834,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const renderSection = () => {
     switch (activeSection) {
       case 'overview':
-        if (showGuidedSetup) {
+        if (setupIncomplete) {
           return (
             <GuidedSetup
               hasPaymentMethod={paymentMethods.length > 0}
               hasSubscription={!!subscription.id}
               hasSpendAlert={spendAlerts.length > 0}
-              hasCredits={creditBalance > 0}
               onAddPaymentMethod={() => navigate('payment')}
               onPickPlan={() => navigate('pricing')}
               onSetSpendLimit={() => navigate('alerts')}
-              onBuyCredits={() => navigate('credits')}
-              onDismiss={handleDismissSetup}
             />
           )
         }
@@ -908,9 +856,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             balance={balance}
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            starterCredit={starterCredit}
             onAddFunds={handleAddFunds}
-            onClaimStarterCredit={handleClaimStarterCredit}
             isAdmin={admin}
             onGrantCredit={admin ? handleGrantCredit : undefined}
             userEmail={user.email}
@@ -957,7 +903,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <CreditsPanel
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            onClaimStarterCredit={handleClaimStarterCredit}
           />
         )
       case 'transactions':

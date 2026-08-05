@@ -575,6 +575,9 @@ html.transitioning *::after {
 .min-w-0 {
   min-width: 0;
 }
+.min-w-\[160px\] {
+  min-width: 160px;
+}
 .min-w-\[200px\] {
   min-width: 200px;
 }

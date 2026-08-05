@@ -25,9 +25,7 @@ export interface OverviewDashboardProps {
   balance: Balance | null
   creditGrants: CreditGrant[]
   creditBalance: number
-  starterCredit: CreditGrant | null
   onAddFunds: (amount: number) => Promise<void>
-  onClaimStarterCredit?: () => Promise<void>
   isAdmin: boolean
   onGrantCredit?: (email: string, amount: number) => Promise<void>
   userEmail: string
@@ -138,39 +136,13 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     ),
   [mtdSpend])
 
-  const hasStarterCredit = !!props.starterCredit
-  const needsCredit = totalCreditsRemaining <= 0 && !hasStarterCredit
   const zeroUsage = tokensThisPeriod === 0 && !props.usageLoading
 
   return (
     <div className="space-y-5">
 
-      {/* ── Starter credit claim banner ── */}
-      {needsCredit && props.onClaimStarterCredit && (
-        <FadeIn delay={0}>
-          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-5 flex items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-400">
-                  <circle cx="12" cy="12" r="10" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 18V6" />
-                </svg>
-                <span className="text-sm font-semibold text-emerald-400">Claim your $5 starter credit</span>
-              </div>
-              <p className="text-[13px] text-ink/50">Get $5 free credit to try all Hanzo AI models — no payment method required.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => props.onClaimStarterCredit?.()}
-              className="rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-400 active:scale-[0.97] flex-shrink-0"
-            >
-              Claim $5 credit
-            </button>
-          </div>
-        </FadeIn>
-      )}
-
-      {/* ── Add funds banner (has starter credit but it's spent) ── */}
-      {totalCreditsRemaining <= 0 && hasStarterCredit && (
+      {/* ── Add funds banner ── */}
+      {totalCreditsRemaining <= 0 && (
         <FadeIn delay={0}>
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5 flex items-center justify-between gap-4">
             <div>
@@ -339,11 +311,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               >
                 <p className="text-[11px] text-ink/30 mb-1">Credits left</p>
                 <p className={`text-base font-semibold tnum ${totalCreditsRemaining <= 0 ? 'text-amber-400' : 'text-text'}`}>
-                  {totalCreditsRemaining <= 0 && !hasStarterCredit ? (
-                    <span className="text-emerald-400 text-[13px] font-medium">Claim $5 free →</span>
-                  ) : (
-                    money(totalCreditsRemaining)
-                  )}
+                  {money(totalCreditsRemaining)}
                 </p>
               </button>
             </div>

@@ -166,6 +166,21 @@ Because the SPA mounts at two roots (`/admin/billing` embedded in commerce, `/`
 standalone), **every self-navigation goes through `BASE_PATH`** — a bare `'/'`
 walks the browser out of the embedded app.
 
+## Free credit is retired — do not restore it
+
+There is no starter credit: no auto-grant on first visit, no claim button, no
+`grantStarterCredit` on the commerce client. Onboarding at hanzo.id requires a
+payment method AND a plan, so nothing here may advertise credit or call paying
+optional. The guided setup card has no "Skip setup" — the overview IS that card
+until both required steps are done (`setupIncomplete` in `billing-shell.tsx`),
+and every other section stays reachable from the sidebar. The card only stops
+CLAIMING setup is optional; enforcement is server-side in commerce, not here.
+
+Accounts that already hold a starter credit keep it. It is a real Deposit
+transaction tagged `starter-credit`, and `loadBillingData` still synthesizes a
+grant row from it so the money stays visible — showing a past grant is not
+advertising a current offer.
+
 ## Payment flows (one way each)
 
 - **Money is formatted in ONE place**: `lib/money.ts` — `money(value, currency,

@@ -1,14 +1,11 @@
 'use client'
 
-import * as React from 'react'
-
 import type { CreditGrant } from './types'
 import { money } from '@/lib/money'
 
 export interface CreditsPanelProps {
   creditGrants: CreditGrant[]
   creditBalance?: number
-  onClaimStarterCredit?: () => Promise<void>
 }
 
 function formatCountdown(expiresAt: string): string {
@@ -29,29 +26,9 @@ function formatDate(dateStr: string) {
   }).format(new Date(dateStr))
 }
 
-export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCredit }: CreditsPanelProps) {
-  const [claiming, setClaiming] = React.useState(false)
-  const [claimError, setClaimError] = React.useState<string | null>(null)
-
-  const hasStarterCredit = creditGrants.some(
-    (g) => g.name.toLowerCase().includes('starter') && g.active,
-  )
-
+export function CreditsPanel({ creditGrants, creditBalance = 0 }: CreditsPanelProps) {
   const activeGrants = creditGrants.filter((g) => g.active && !g.voided)
   const expiredGrants = creditGrants.filter((g) => !g.active || g.voided)
-
-  const handleClaim = React.useCallback(async () => {
-    if (!onClaimStarterCredit) return
-    setClaiming(true)
-    setClaimError(null)
-    try {
-      await onClaimStarterCredit()
-    } catch (err) {
-      setClaimError(err instanceof Error ? err.message : 'Failed to claim credit')
-    } finally {
-      setClaiming(false)
-    }
-  }, [onClaimStarterCredit])
 
   return (
     <div className="space-y-4">
@@ -59,7 +36,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
       <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
         <div className="border-b border-border p-4">
           <h3 className="text-lg font-semibold text-text">Credits</h3>
-          <p className="text-sm text-text-muted">View your credit grants, starter credits, and promotional balances</p>
+          <p className="text-sm text-text-muted">View your credit grants and promotional balances</p>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 p-4">
@@ -71,24 +48,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
               {money(creditBalance / 100)}
             </p>
           </div>
-
-          {onClaimStarterCredit && !hasStarterCredit && (
-            <button
-              type="button"
-              disabled={claiming}
-              onClick={handleClaim}
-              className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {claiming ? 'Claiming...' : 'Claim $5 Starter Credit'}
-            </button>
-          )}
         </div>
-
-        {claimError && (
-          <div className="border-t border-border px-4 py-2">
-            <p className="text-sm text-danger">{claimError}</p>
-          </div>
-        )}
       </div>
 
       {/* Active grants */}
@@ -174,9 +134,6 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
       {creditGrants.length === 0 && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-text-muted">No credit grants yet.</p>
-          {onClaimStarterCredit && !hasStarterCredit && (
-            <p className="mt-2 text-xs text-text-dim">Claim your $5 starter credit above to get started.</p>
-          )}
         </div>
       )}
     </div>
