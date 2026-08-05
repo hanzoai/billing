@@ -52,26 +52,18 @@ billing/
 
 ## Styling (one way)
 
-Plain CSS. `app/global.css` is the entire stylesheet: three `@import`s, then
+Plain CSS. `app/global.css` is the entire stylesheet: two `@import`s, then
 app-local aliases on `:root`, then ordinary rules for the exact utility class
 vocabulary the markup uses. There is no build plugin, no `postcss.config`, no
 `tailwind.config` — **do not reintroduce one.**
 
-**The three imports, and why the order is load-bearing:**
-
 ```css
-@import '@hanzo/ui/styles.css';            /* handles: mono, tnum, paper, row */
-@import '@hanzo/design/tokens/fonts.css';  /* the two @font-face + --font-*   */
-@import '@hanzo/design/tokens/colors.css'; /* the ladder — MUST be last       */
+@import '@hanzo/ui/styles.css';            /* tokens AND handles — one home  */
+@import '@hanzo/design/tokens/fonts.css';  /* the two @font-face + --font-*  */
 ```
 
-1. `@hanzo/ui/styles.css` inlines design's ladder near the top and then, ~160KB
-   later, the @hanzogui theme runtime emits a **bare `:root`** that re-declares
-   `--background` as `var(--t189)` = `hsla(0,0%,97%)`. Same specificity as the
-   design `:root` above it, so last-one-wins and dark mode renders a #f7f7f7
-   ground under #fafafa ink — white on white. Re-importing `colors.css` LAST
-   puts the ladder back on top. Colour still has exactly one home
-   (`@hanzo/design`); ui carries a generated copy we deliberately override.
+1. `@hanzo/ui/styles.css` carries design's ladder inlined verbatim (88 tokens,
+   byte-identical) plus the handles. It is the only colour import.
 2. Fonts must be imported or nothing fails LOUDLY. `@hanzo/ui` 8.0.47 removed its
    own `@font-face` (it duplicated design's and pointed at assets ui never
    shipped), so ui only NAMES the faces — `.mono` asks for the literal family
@@ -80,6 +72,46 @@ vocabulary the markup uses. There is no build plugin, no `postcss.config`, no
    monospace, still tabular, wrong face, invisible in a screenshot.
    **Do not use `next/font` here** — it mints a scoped family name
    (`__Geist_Mono_abc123`) that `.mono` can never match. That was the bug.
+
+### `--page`: the one token taken back from gui
+
+The page ground reads **`--page`**, never `--background`. This is deliberate and
+temporary, and it is the same answer `hanzo.industries` reached:
+
+```css
+:root  { --page: var(--neutral-950); }   /* #0A0A0A — design's dark ground  */
+.light { --page: var(--pure-white); }    /* #FFFFFF — design's light ground */
+```
+
+`@hanzo/ui/styles.css` inlines design's ladder, then ~160KB later the @hanzogui
+theme runtime redeclares `--background` for its own themes — `:root.t_dark` →
+`var(--t8)`, `:root.t_light` → `var(--t189)` = `hsla(0,0%,97%)` — each with a
+**bare `:root` fallback** beside it, light block last. So with no gui class the
+ground is near-white in both themes and dark measures **1.03:1**.
+
+Re-importing design's `colors.css` last reclaims it (1.0.9 shipped that) but
+**only while no gui theme class exists on `<html>`**. `:root.t_light` is (0,2,0),
+design's `.light` is (0,1,0) — the moment GuiProvider writes its class, gui wins
+on specificity and import order stops mattering. Measured on 1.0.9 with the class
+forced on: dark+`t_light` **1.03:1**, light+`t_dark` **1.07:1**, and even the
+agreeing pairs drift (`t_dark` grounds at `#141414`). A fix that holds only while
+a different bug stays unfixed is not a fix.
+
+`--page` is a name gui never writes at any specificity, resolving to design base
+rungs (`--neutral-950`, `--pure-white`) that are each declared exactly **once** in
+the whole delivered sheet. Verified in all four combinations of {dark, light} ×
+{gui class, none} — plus the two mismatched crosses — at a constant **18.97:1**
+dark and **19.80:1** light.
+
+**Only `--background` needs this.** `--foreground`, `--card`, `--accent`,
+`--border*`, `--primary*`, `--text-*` and `--state-*` were all measured unchanged
+with the gui classes forced on, so they read ui's inlined ladder directly and are
+not restated here. Do not "defensively" wrap the others; that would be a second
+mechanism for a problem they do not have.
+
+**Removable once `@hanzo/ui` 8.0.48 lands** — it stops ui/gui shadowing design's
+`--background` / `--black` / `--white`. At that point `--page` can become
+`var(--background)` and then disappear entirely.
 
 Money must be tabular. Numeric cells carry `mono` (Geist Mono +
 `font-variant-numeric: tabular-nums`); `tnum` is the same tabular figures
@@ -90,7 +122,7 @@ Four colour facts, each with ONE home. Markup must never spell a colour:
 
 | fact | token | utilities |
 | --- | --- | --- |
-| ground | `--color-bg` · `--color-bg-card` · `--color-bg-elevated` | `bg-bg` · `bg-bg-card` · `bg-bg-elevated` |
+| ground | `--color-bg` (and `--color-bg-input`) read **`--page`**, see above · `--color-bg-card` → `--card` · `--color-bg-elevated` → `--accent` | `bg-bg` · `bg-bg-card` · `bg-bg-elevated` |
 | ink | `--color-text` (+ `-secondary` `-muted` `-dim`) | `text-text*`, and the `*-ink/α` family — `bg-ink/[0.06]`, `border-ink/[0.08]`, `text-ink/40` — which is ink mixed at α, NOT literal white |
 | brand | `--color-brand` · `--color-brand-foreground` · `--color-brand-hover` — all three alias design's **`--primary`** family, NOT its `--brand` family. `--primary` is the ink of the current theme and inverts; `--brand` is a fixed accent that does not restate under `.light`, so aliasing to it gave a light-grey button on a white page whose hover was one shade off itself. | `bg-brand` · `text-brand-foreground` · `hover:bg-brand-hover` |
 | status | `--color-success` `-warning` `-danger` `-info` | `text-success`, `bg-warning/15`, … |

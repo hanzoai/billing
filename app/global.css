@@ -1,24 +1,44 @@
 /**
  * Hanzo Billing — the whole stylesheet. Plain CSS, no build plugin.
  *
- * HANDLES come from @hanzo/ui/styles.css — mono, tnum, paper, row,
- * elevation-1..4. COLOUR comes from @hanzo/design, imported AFTER it, and the
- * order is load-bearing:
+ * TOKENS AND HANDLES both come from @hanzo/ui/styles.css — mono, tnum, paper,
+ * row, elevation-1..4, plus @hanzo/design's ladder inlined verbatim (88 tokens,
+ * byte-identical values). ONE import, ONE home for colour.
  *
- *   @hanzo/ui/styles.css inlines design's ladder near the top and then, ~160KB
- *   later, the @hanzogui theme runtime emits a bare `:root` that re-declares
- *   --background as var(--t189) — hsla(0,0%,97%). Same specificity as the
- *   design `:root` above it, so the last one wins and dark mode renders
- *   #f7f7f7 ground under #fafafa ink. White on white. The build is green, the
- *   type-check is green, and gui-css-check is green at 100%, because none of
- *   them look at what a custom property resolves to. Re-importing design's
- *   colors.css last puts the ladder back on top of the runtime's default.
+ * ONE token has to be taken back, and only one: --background.
  *
- * So there is still exactly ONE home for colour — @hanzo/design. ui carries a
- * generated copy this file deliberately overrides; it is not a second source of
- * truth, it is a duplicate being put back in its place. (Reported upstream: the
- * gui runtime should scope those defaults to .t_light/.t_dark, which is what
- * every other rule in that block already does.)
+ *   ui/styles.css inlines design's ladder near the top and then, ~160KB later,
+ *   the @hanzogui theme runtime redeclares --background for its own themes —
+ *   `:root.t_dark` -> var(--t8) = hsla(0,0%,8%), `:root.t_light` -> var(--t189)
+ *   = hsla(0,0%,97%) — each with a BARE `:root` fallback beside it, and the
+ *   light block comes last. So with no gui class on <html> the ground is
+ *   near-white in both themes; billing renders #fafafa ink on it and dark mode
+ *   measures 1.03:1.
+ *
+ *   Re-importing design's colors.css last DOES reclaim it, and that is what
+ *   1.0.9 shipped — but only while no gui theme class exists on <html>.
+ *   `:root.t_light` is (0,2,0) and design's `.light` is (0,1,0), so the moment
+ *   GuiProvider writes its class gui wins on SPECIFICITY and import order stops
+ *   mattering. Measured, forcing the class on 1.0.9: dark+t_light = 1.03:1,
+ *   light+t_dark = 1.07:1, and even the agreeing pairs drift (t_dark grounds at
+ *   #141414, not #0a0a0a). A fix that depends on a separate bug staying
+ *   unfixed is not a fix.
+ *
+ *   --page is the durable answer: a name gui never writes at any specificity,
+ *   so nothing can outrank it. It resolves to design's BASE ladder — the rungs
+ *   the runtime does not touch — rather than to a second hex. Verified in all
+ *   four combinations of {dark,light} x {gui class, none}; the ground holds at
+ *   18.97:1 / 19.80:1 in every one. Matches hanzo.industries, which hit this
+ *   first; the estate has one downstream answer, not three.
+ *
+ *   Only --background needs this. Every other token billing reads —
+ *   --foreground, --card, --accent, --border*, --primary*, --text-*, --state-*
+ *   — was measured unchanged with the gui classes forced on, so they still come
+ *   straight from ui's inlined ladder and are NOT restated here.
+ *
+ *   Removable once @hanzo/ui 8.0.48 lands: it stops ui/gui shadowing design's
+ *   --background/--black/--white, after which --page can go back to being
+ *   var(--background) and then disappear.
  *
  * Dark is the default (:root is the dark palette) and `.light` retunes it,
  * which is exactly what this app's html.light toggle adds. So the aliases below
@@ -48,11 +68,16 @@
  */
 @import '@hanzo/ui/styles.css';
 @import '@hanzo/design/tokens/fonts.css';
-@import '@hanzo/design/tokens/colors.css';
 
 /* ── tokens ──────────────────────────────────────────────────────────────── */
 
 :root {
+  /* The page surface. See the header: gui redeclares --background out from
+     under us at a specificity we cannot outrank, so the ground reads a name gui
+     never writes. --neutral-950 IS design's dark ground (#0A0A0A — the same
+     value --background carries), and it is declared exactly once in the whole
+     delivered sheet, so no theme runtime can move it. */
+  --page: var(--neutral-950);
   /* Brand — the primary-button triple (`bg-brand` + `text-brand-foreground` +
      `hover:bg-brand-hover`, 52 uses between them). It maps to design's PRIMARY
      family, not its --brand family: --primary is the ink of the current theme
@@ -66,11 +91,12 @@
   --color-brand-hover: var(--primary-hover);
   --color-brand-muted: color-mix(in oklab, var(--primary) 10%, transparent);
 
-  /* Semantic surfaces and text. */
-  --color-bg: var(--background);
+  /* Semantic surfaces and text. The two that were --background read --page;
+     card and elevated keep their design tokens, which gui leaves alone. */
+  --color-bg: var(--page);
   --color-bg-card: var(--card);
   --color-bg-elevated: var(--accent);
-  --color-bg-input: var(--background);
+  --color-bg-input: var(--page);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-text: var(--foreground);
@@ -84,6 +110,13 @@
   --color-warning: #f59e0b;
   --color-danger: var(--state-error);
   --color-info: #3b82f6;
+}
+
+/* The light ground. --pure-white is design's own #FFFFFF and, like
+   --neutral-950, is declared once in the delivered sheet — the gui runtime
+   never restates either, which is exactly why the ground reads them. */
+.light {
+  --page: var(--pure-white);
 }
 
 html {
