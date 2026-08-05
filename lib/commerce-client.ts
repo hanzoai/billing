@@ -618,13 +618,18 @@ export class Commerce {
   }
 
   // ── Payment Processing ──────────────────────────────────────────────
+  //
+  // Taking money is POST /v1/payments (cloud apps/commerce payments.go), NOT
+  // /v1/billing/payment. Unlike the reads above, neither of these catches, so
+  // the retired address surfaced to the customer as a raw "Not Found" on every
+  // crypto and wire top-up.
 
   /** Record a crypto payment (on-chain tx already sent by the client) */
   async recordCryptoPayment(
     params: { txHash: string; network: string; chainId?: number; amount: number; currency: string; userId?: string; fromAddress: string; toAddress: string },
     token?: string,
   ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
+    return this.request<Payment>('/v1/payments', {
       method: 'POST', body: { ...params, method: 'crypto' }, token,
     })
   }
@@ -654,7 +659,7 @@ export class Commerce {
     params: { userId?: string; amount: number; currency?: string; reference?: string },
     token?: string,
   ): Promise<Payment> {
-    return this.request<Payment>('/v1/billing/payment', {
+    return this.request<Payment>('/v1/payments', {
       method: 'POST', body: { ...params, method: 'wire' }, token,
     })
   }
