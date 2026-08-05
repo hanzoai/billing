@@ -1,4 +1,5 @@
 import type { SubscriptionPlan } from './billing/types'
+import { SALES_URL } from './config'
 
 /**
  * Public plan catalog — the ONE logged-out source of pricing.
@@ -42,10 +43,20 @@ function mapPublicPlan(p: PublicPlan): SubscriptionPlan {
     if (typeof v === 'number') limits[k] = v
   }
   const perSeat = p.price_ref?.recurring?.per_seat ?? p.category === 'team'
+  // A tier with NO price is sold by a person, whether or not the catalog also
+  // flags it. Deriving it here is what keeps the fact alive past `?? 0` below —
+  // otherwise a plan priced `null` and unflagged reaches the cards as a zero and
+  // renders as "Free".
+  const sold = !!p.contactSales || p.priceMonthly == null
   return {
     id: p.id ?? '',
     name: p.name ?? '',
     description: p.description ?? '',
+    // A tier sold by a person has NO price, and `?? 0` erased that distinction:
+    // Enterprise arrives as `priceMonthly: null` and every downstream reader
+    // then saw a zero, which renders as "Free". The zero is kept — the shape
+    // wants a number — but `contactSales` below carries the fact that survives
+    // it, and every price-rendering site asks that FIRST.
     price: p.priceMonthly ?? 0,
     annualPrice: p.priceAnnual || undefined,
     billingPeriod: 'monthly',
@@ -53,9 +64,9 @@ function mapPublicPlan(p: PublicPlan): SubscriptionPlan {
     features: p.features ?? [],
     limits,
     highlighted: p.popular,
-    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
-    contactSales: p.contactSales,
-    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
+    badge: sold ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
+    contactSales: sold,
+    externalUrl: sold ? SALES_URL : undefined,
     trialDays: p.trialPeriodDays || undefined,
     perSeat,
     // commerce rejects fewer than 2 seats on per-seat tiers; the selector floor

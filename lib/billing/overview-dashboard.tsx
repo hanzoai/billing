@@ -14,7 +14,7 @@ import type {
   BusinessProfile,
 } from './types'
 import type { Balance } from '../commerce-client'
-import { money } from '@/lib/money'
+import { annualSaving, money } from '@/lib/money'
 
 export interface OverviewDashboardProps {
   subscription: Subscription
@@ -199,8 +199,14 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 </svg>
                 <span className="text-sm font-semibold text-sky-400">Unlock the full Hanzo AI suite</span>
               </div>
+              {/* THE PRICE IS THE PLAN'S PRICE. This read "$20/mo" as a literal
+                  beside a plan object that costs something else, and named a
+                  tier ("Unified AI") that exists in no catalog — so the banner
+                  advertised a price nobody could buy at, for a product with no
+                  name. Everything here now comes from the plan it links to. */}
               <p className="text-[22px] font-bold text-text mb-1">
-                All AI models. One plan. <span className="text-sky-400">$20/mo.</span>
+                All AI models. One plan.{' '}
+                <span className="text-sky-400">{money(recommendedPlan.price, recommendedPlan.currency, 0)}/mo.</span>
               </p>
               <p className="text-[13px] text-ink/50 mb-5">
                 14+ Zen AI models · 1M+ token context · Unlimited chat · MCP tools · Priority inference
@@ -212,7 +218,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                   onClick={() => props.onUpgrade?.(recommendedPlan.id)}
                   className="rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97]"
                 >
-                  {recommendedPlan.trialDays ? `Start ${recommendedPlan.trialDays}-day free trial` : 'Upgrade to Unified AI'}
+                  {recommendedPlan.trialDays
+                    ? `Start ${recommendedPlan.trialDays}-day free trial`
+                    : `Upgrade to ${recommendedPlan.name}`}
                 </button>
                 <button
                   type="button"
@@ -222,9 +230,17 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                   View all plans →
                 </button>
               </div>
-              {(recommendedPlan.annualPrice ?? 0) > 0 && (
+              {/* `annualPrice` is the MONTHLY rate when billed for a year, not a
+                  yearly total, and reading it as one produced a sentence that
+                  could not be true: "$41.5/yr — save $546.5" against $49/mo,
+                  where the claimed saving exceeded the whole annual cost. Both
+                  halves came from the same unit error; the saving is twelve
+                  times the monthly difference, which is what the plan cards
+                  already computed correctly two files away. */}
+              {annualSaving(recommendedPlan) && (
                 <p className="mt-3 text-[12px] text-emerald-400">
-                  Or go annual for ${recommendedPlan.annualPrice}/yr — save ${(recommendedPlan.price * 12) - recommendedPlan.annualPrice!}
+                  Or {money(recommendedPlan.annualPrice!, recommendedPlan.currency, 0)}/mo billed annually — save{' '}
+                  {money(annualSaving(recommendedPlan)!, recommendedPlan.currency, 0)} a year
                 </p>
               )}
             </div>

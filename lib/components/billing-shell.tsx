@@ -306,6 +306,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [spendAlerts, setSpendAlerts] = useState<SpendAlert[]>([])
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
+  const [usageError, setUsageError] = useState<string | null>(null)
   const [creditGrants, setCreditGrants] = useState<CreditGrant[]>([])
   const [creditBalance, setCreditBalance] = useState(0)
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
@@ -455,6 +456,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const token = getAccessToken()
       if (!token) return
       setUsageLoading(true)
+      setUsageError(null)
 
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.commerceUserId || user.email || user.sub
@@ -480,8 +482,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
           })),
         })
       }
-    } catch {
-      // Usage data is optional — don't block the UI
+    } catch (e) {
+      // Usage does not block the UI, but a FAILURE is not an absence. Swallowing
+      // it left `usage` null, and null already meant "no usage this period" — so
+      // a 502 from the meter rendered as "No usage data available", telling a
+      // customer their account was idle while the service that knows was down.
+      // The two facts get two values now, and the panel says which one it has.
+      setUsageError(e instanceof Error ? e.message : 'Usage is unavailable right now.')
     } finally {
       setUsageLoading(false)
     }
@@ -876,7 +883,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       case 'usage':
         return (
           <div className="space-y-6">
-            <UsagePanel usage={usage} loading={usageLoading} />
+            <UsagePanel usage={usage} loading={usageLoading} error={usageError} onRetry={loadUsage} />
             <CostExplorer usage={usage} usageLoading={usageLoading} />
           </div>
         )

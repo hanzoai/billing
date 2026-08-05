@@ -3,6 +3,15 @@
 // Raw <a href> / window.location targets must carry it themselves.
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/admin/billing'
 
+/**
+ * Where a tier that is sold by a person sends the buyer.
+ *
+ * ONE address, because it was written in two files and a third surface linked
+ * somewhere else entirely — so "talk to sales" meant three destinations. Moving
+ * it is one edit here.
+ */
+export const SALES_URL = 'https://cal.com/hanzo'
+
 export interface BillingOrgConfig {
   id: string
   displayName: string

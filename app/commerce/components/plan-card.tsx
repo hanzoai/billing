@@ -4,7 +4,8 @@ export interface PricingPlan {
   id: string
   name: string
   description: string
-  priceMonthly: number
+  /** DOLLARS. `null` on a tier sold by a person — not zero, and not free. */
+  priceMonthly: number | null
   priceAnnual?: number
   category?: string
   popular?: boolean
@@ -21,34 +22,56 @@ interface PlanCardProps {
 const BILLING_URL = 'https://billing.hanzo.ai'
 const CAL_URL = 'https://cal.com/hanzo'
 
+/**
+ * Sold by a person — no self-serve price, and the CTA books a conversation.
+ *
+ * This test was written out four times (the price, the CTA's words, the CTA's
+ * destination, and the card's own layout), which is how they came to disagree.
+ * Stated once, they cannot.
+ */
+function bySales(plan: PricingPlan): boolean {
+  return !!plan.contactSales || plan.priceMonthly == null || plan.priceMonthly >= 9999
+}
+
+/**
+ * Costs nothing — which is NOT the same fact as having no price.
+ *
+ * Enterprise advertised itself as "Free". The catalog gives it
+ * `priceMonthly: null`, the projection turned that into 0, and 0 read as free —
+ * on the one tier nobody may self-serve. Only one of those two is a discount.
+ */
+function isFreePlan(plan: PricingPlan): boolean {
+  return !bySales(plan) && plan.priceMonthly === 0
+}
+
 function price(plan: PricingPlan, interval: 'monthly' | 'annual'): string {
-  if (plan.priceMonthly === 0) return 'Free'
-  if (plan.contactSales || plan.priceMonthly >= 9999) return 'Contact sales'
-  const amt = interval === 'annual' && plan.priceAnnual ? plan.priceAnnual : plan.priceMonthly
+  if (bySales(plan)) return 'Contact sales'
+  if (isFreePlan(plan)) return 'Free'
+  const amt = interval === 'annual' && plan.priceAnnual ? plan.priceAnnual : plan.priceMonthly!
   return `$${amt}/mo`
 }
 
+// `priceAnnual` is the MONTHLY rate when billed for a year, not a yearly total,
+// so a year's saving is twelve times the difference.
 function annualSavings(plan: PricingPlan): string | null {
-  if (!plan.priceAnnual || plan.priceMonthly <= 0) return null
+  if (bySales(plan) || !plan.priceAnnual || !plan.priceMonthly) return null
   const saved = (plan.priceMonthly - plan.priceAnnual) * 12
   if (saved <= 0) return null
   return `Save $${saved}/yr`
 }
 
 function ctaLabel(plan: PricingPlan): string {
-  if (plan.contactSales || plan.priceMonthly >= 9999) return 'Talk to sales'
-  return 'Get started'
+  return bySales(plan) ? 'Talk to sales' : 'Get started'
 }
 
 function ctaHref(plan: PricingPlan): string {
-  if (plan.contactSales || plan.priceMonthly >= 9999) return CAL_URL
-  return `${BILLING_URL}#pricing`
+  return bySales(plan) ? CAL_URL : `${BILLING_URL}#pricing`
 }
 
 export function PlanCard({ plan, billingInterval }: PlanCardProps) {
   const isPopular = plan.popular
-  const isFree = plan.priceMonthly === 0
-  const isSales = plan.contactSales || plan.priceMonthly >= 9999
+  const isFree = isFreePlan(plan)
+  const isSales = bySales(plan)
   const savings = annualSavings(plan)
 
   return (
