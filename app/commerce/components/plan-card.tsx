@@ -1,5 +1,7 @@
 'use client'
 
+import { SALES_URL } from '@/lib/config'
+
 export interface PricingPlan {
   id: string
   name: string
@@ -20,7 +22,7 @@ interface PlanCardProps {
 }
 
 const BILLING_URL = 'https://billing.hanzo.ai'
-const CAL_URL = 'https://cal.com/hanzo'
+const CAL_URL = SALES_URL
 
 /**
  * Sold by a person — no self-serve price, and the CTA books a conversation.
