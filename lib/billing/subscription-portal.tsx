@@ -107,7 +107,14 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     defaultView = 'overview',
   } = props
 
-  const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
+  const [viewChoice, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
+  // Signed out, the portal IS the catalog. The subscription card and the
+  // Overview / History views describe a subscription the viewer does not have
+  // yet — dead chrome before sign-in — so they exist only for a signed-in
+  // subject, and the plans grid still marks the current plan whenever the
+  // caller could detect one.
+  const signedOut = !!onRequireAuth
+  const view = signedOut ? 'plans' : viewChoice
   // AUDIENCE and INTERVAL are the two axes the catalog already carries, surfaced
   // as controls instead of as more cards. Six tiers in one row asked a visitor to
   // compare a $9 personal plan against a negotiated enterprise contract; they are
@@ -241,6 +248,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
   return (
     <div className="space-y-6">
+      {!signedOut && (
       <div className="overflow-hidden rounded-2xl border border-border bg-bg-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -314,6 +322,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           </button>
         </div>
       </div>
+      )}
 
       {view === 'overview' && (
         <div className="grid gap-4 md:grid-cols-3">
