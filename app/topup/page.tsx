@@ -137,7 +137,12 @@ export default function TopupPage() {
   const [walletSent, setWalletSent] = useState<Sent | null>(null)
 
   // ── Crypto receive address (Hanzo's deposit wallet) ──────────────────────
-  const HANZO_ETH_ADDRESS = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
+  // Read from config, never a literal. An unset value renders the tab's honest
+  // unavailable state rather than a wrong address — the same discipline the
+  // HUSD tab already uses (topupConfigured). A hardcoded address here once was
+  // a third party's wallet, so a customer following the happy path would have
+  // sent USDC to someone else and lost it. The address must be operator-supplied.
+  const HANZO_ETH_ADDRESS = (process.env.NEXT_PUBLIC_HANZO_ETH_TREASURY ?? '').trim()
 
   // ── Success handler ──────────────────────────────────────────────────────
   const handleSuccess = useCallback(
@@ -197,6 +202,12 @@ export default function TopupPage() {
   const handleCryptoSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
+      // No configured deposit address means no crypto flow at all; refuse to
+      // record a payment against an address we did not publish.
+      if (!HANZO_ETH_ADDRESS) {
+        setStatus({ type: 'error', message: 'Crypto deposits are not available yet.' })
+        return
+      }
       if (!params.token) {
         setStatus({ type: 'error', message: 'Authentication required.' })
         return
@@ -506,6 +517,15 @@ export default function TopupPage() {
         {/* ── Crypto tab ────────────────────────────────────────────────── */}
         {tab === 'crypto' && (
           <ErrorBoundary fallback={walletTabFallback}>
+          {!HANZO_ETH_ADDRESS ? (
+            // No operator-supplied deposit address means there is nowhere safe
+            // to send funds, so the tab says so instead of showing an address.
+            // Never render a fallback address here: a wrong one loses real money.
+            <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
+              Crypto deposits are coming soon. Fund your balance with a card meanwhile — the
+              Card tab is instant.
+            </p>
+          ) : (
           <form onSubmit={handleCryptoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
               Send USDC or ETH to the address below, then paste your transaction hash to confirm.
@@ -564,6 +584,7 @@ export default function TopupPage() {
               {isLoading ? 'Verifying...' : `Confirm ${moneyFromCents(amountCents)} crypto payment`}
             </button>
           </form>
+          )}
           </ErrorBoundary>
         )}
 
