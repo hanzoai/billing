@@ -50,7 +50,7 @@ import { type BillingOrgConfig, isAdminUser, BASE_PATH, SALES_URL } from '@/lib/
 import { topupHref } from '@/lib/topup'
 import { getCommerce } from '@/lib/commerce'
 
-import { OrgHeader } from '@hanzogui/shell'
+import { OrgHeader, type HanzoOrg } from '@hanzogui/shell'
 
 /* ── Sidebar section config ───────────────────────────────────── */
 const SIDEBAR_SECTIONS: Array<{ id: BillingSection; label: string; icon: React.ReactNode; group: 'main' | 'manage' }> = [
@@ -326,6 +326,9 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [billingAccounts, setBillingAccounts] = useState<BillingAccount[]>([])
   const [activeBillingAccountId, setActiveBillingAccountId] = useState<string | null>(null)
+  // The org the customer switched the header to — null is the signed-in
+  // subject (the token's owner slug, which every read below is keyed on).
+  const [subjectOrgId, setSubjectOrgId] = useState<string | null>(null)
   const [accountMembers, setAccountMembers] = useState<BillingAccountMember[]>([])
   const [userRole, setUserRole] = useState<BillingRole>('owner')
   const [loading, setLoading] = useState(true)
@@ -809,6 +812,48 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setAccountMembers((prev) => prev.filter((m) => m.id !== memberId))
   }, [org, activeBillingAccountId])
 
+  // ── Subject switcher ─────────────────────────────────────────────────
+  //
+  // ONE switcher: the shell header's own dropdown, the same control every
+  // Hanzo app switches subject with. It is fed every subject billing can
+  // name — the signed-in subject first (the token's owner slug, named by
+  // what it is), then each billing account's org. An account scoped to the
+  // signed-in subject's own org enriches that row rather than appearing
+  // twice.
+  const organizations = useMemo<HanzoOrg[]>(() => {
+    const orgs: HanzoOrg[] = [
+      { id: user.commerceUserId, name: user.commerceUserId, slug: user.commerceUserId },
+    ]
+    for (const a of billingAccounts) {
+      if (!a.orgId) continue
+      const existing = orgs.find((o) => o.id === a.orgId)
+      if (existing) {
+        existing.role = a.role
+        continue
+      }
+      orgs.push({ id: a.orgId, name: a.orgName || a.name, role: a.role })
+    }
+    return orgs
+  }, [billingAccounts, user.commerceUserId])
+
+  // Switching re-scopes what the client can re-scope today: the account
+  // plane (role, members) switches for real, and every read is re-issued.
+  // commerce's EdgeAuth locks the money reads' subject to the token's owner
+  // claim server-side, so those follow the signed-in subject until commerce
+  // honors an org scope — the switch never pretends otherwise.
+  const handleOrgSwitch = useCallback(
+    (orgId: string) => {
+      setSubjectOrgId(orgId === user.commerceUserId ? null : orgId)
+      const account = billingAccounts.find((a) => a.orgId === orgId)
+      if (account) {
+        void handleSwitchAccount(account.id)
+      } else {
+        void loadBillingData()
+      }
+    },
+    [billingAccounts, handleSwitchAccount, loadBillingData, user.commerceUserId],
+  )
+
   const handleLogout = useCallback(() => {
     logout()
     window.location.href = `${BASE_PATH}/`
@@ -1015,6 +1060,9 @@ export function BillingShell({ org, user }: BillingShellProps) {
         currentApp="Billing"
         currentAppId="billing"
         user={{ name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
+        organizations={organizations}
+        currentOrgId={subjectOrgId ?? user.commerceUserId}
+        onOrgSwitch={handleOrgSwitch}
         onSignOut={handleLogout}
         headerRight={
           <button
