@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { useSquareCard } from '@/lib/square'
 import { CommerceApiError, type CardInput } from '@/lib/commerce-client'
+import { chargeKey, clearChargeKey } from '@/lib/charge'
 
 // One card element at a time in the pricing grid (only one plan's checkout panel
 // is ever open), so a single stable container id is safe.
@@ -33,20 +34,9 @@ export interface SubscribeCardFormProps {
   onNoProcessor: () => void
 }
 
-/** Stable idempotency key per checkout attempt (plan × seats), in sessionStorage. */
-function idemStorageKey(planId: string, quantity: number): string {
-  return `hanzo_sub_idem:${planId}:${quantity}`
-}
-function getOrCreateIdemKey(planId: string, quantity: number): string {
-  const k = idemStorageKey(planId, quantity)
-  const existing = sessionStorage.getItem(k)
-  if (existing) return existing
-  const fresh = crypto.randomUUID()
-  sessionStorage.setItem(k, fresh)
-  return fresh
-}
-function clearIdemKey(planId: string, quantity: number): void {
-  sessionStorage.removeItem(idemStorageKey(planId, quantity))
+/** A checkout is keyed by what it buys: this plan, these seats. */
+function subscribeScope(planId: string, quantity: number): string {
+  return `subscribe:${planId}:${quantity}`
 }
 
 export function SubscribeCardForm({
@@ -93,10 +83,11 @@ export function SubscribeCardForm({
 
     // Reuse the key across a same-attempt retry (network/500 replay-safe); rotate
     // only when a genuine re-attempt is needed (a declined card = new charge).
-    const idempotencyKey = getOrCreateIdemKey(planId, quantity)
+    const scope = subscribeScope(planId, quantity)
+    const idempotencyKey = chargeKey(scope)
     try {
       await onSubscribe(card, idempotencyKey)
-      clearIdemKey(planId, quantity)
+      clearChargeKey(scope)
       onSuccess()
     } catch (err) {
       if (err instanceof CommerceApiError) {
@@ -105,14 +96,14 @@ export function SubscribeCardForm({
             onNoProcessor()
             return
           case 402:
-            clearIdemKey(planId, quantity)
+            clearChargeKey(scope)
             setError('Card declined. Try another card.')
             return
           case 409:
             setError('A checkout is already in progress — give it a moment, then retry.')
             return
           case 404:
-            clearIdemKey(planId, quantity)
+            clearChargeKey(scope)
             setError('That saved card is no longer available — use a new card.')
             return
           case 401:

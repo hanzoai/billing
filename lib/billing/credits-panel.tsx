@@ -1,8 +1,8 @@
 'use client'
 
 import type { CreditGrant } from './types'
-import { money } from '@/lib/money'
-import { BASE_PATH } from '@/lib/config'
+import { cents, moneyFromCents } from '@/lib/money'
+import { TOPUP_AMOUNTS, topupHref } from '@/lib/topup'
 
 export interface CreditsPanelProps {
   /** Why the grants could not be read. Distinct from holding none. */
@@ -48,17 +48,31 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: 
               Total credit balance
             </p>
             <p className="mono mt-1 text-3xl font-bold text-text">
-              {money(creditBalance / 100)}
+              {moneyFromCents(creditBalance)}
             </p>
           </div>
           {/* The standing money-in. This section only DISPLAYS grants; without
-              this door the whole product had no reachable way to add funds. */}
-          <a
-            href={`${BASE_PATH}/topup/`}
-            className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97]"
-          >
-            Add credit
-          </a>
+              this door the whole product had no reachable way to add funds.
+
+              The amount rides along: the link used to name none, so a customer
+              who had already decided on $100 arrived at the page's default and
+              decided again. The top-up page still takes a custom amount. */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Add credit
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {TOPUP_AMOUNTS.map((c) => (
+                <a
+                  key={c}
+                  href={topupHref(c)}
+                  className="mono rounded-full bg-brand px-4 py-2 text-sm font-bold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97]"
+                >
+                  {moneyFromCents(c, 'USD', cents(c / 100))}
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -81,7 +95,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: 
                       <p className="text-sm font-medium text-text">{grant.name}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span>
-                          {money(grant.remainingCents / 100, grant.currency)} of {money(grant.amountCents / 100, grant.currency)} remaining
+                          {moneyFromCents(grant.remainingCents, grant.currency)} of {moneyFromCents(grant.amountCents, grant.currency)} remaining
                         </span>
                         {grant.createdAt && (
                           <span>Granted {formatDate(grant.createdAt)}</span>
@@ -128,7 +142,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: 
                 <div>
                   <p className="text-sm font-medium text-text-muted">{grant.name}</p>
                   <p className="text-xs text-text-dim">
-                    {money(grant.amountCents / 100, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
+                    {moneyFromCents(grant.amountCents, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
                   </p>
                 </div>
                 {grant.expiresAt && (

@@ -47,6 +47,7 @@ import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccount
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, BASE_PATH, SALES_URL } from '@/lib/config'
+import { topupHref } from '@/lib/topup'
 import { getCommerce } from '@/lib/commerce'
 
 import { OrgHeader } from '@hanzogui/shell'
@@ -536,7 +537,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     // money-in is the Square top-up page — send everyone else there instead
     // of firing a deposit that 403s.
     if (!admin) {
-      window.location.href = `${BASE_PATH}/topup/?amount=${cents}`
+      window.location.href = topupHref(cents)
       return
     }
     const token = getAccessToken()

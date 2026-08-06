@@ -14,8 +14,8 @@ import type {
   BusinessProfile,
 } from './types'
 import type { Balance } from '../commerce-client'
-import { annualSaving, money } from '@/lib/money'
-import { BASE_PATH } from '@/lib/config'
+import { annualSaving, cents, money, moneyFromCents } from '@/lib/money'
+import { TOPUP_AMOUNTS, topupHref } from '@/lib/topup'
 
 export interface OverviewDashboardProps {
   subscription: Subscription
@@ -168,7 +168,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 Credits section shows grants; it cannot take money, and routing
                 an empty account there was a dead end measured on the live site. */}
             <a
-              href={`${BASE_PATH}/topup/`}
+              href={topupHref()}
               className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-bold text-black transition hover:bg-amber-400 active:scale-[0.97] flex-shrink-0"
             >
               Add funds
@@ -356,24 +356,34 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
           {/* Credit Balance — the tile IS the standing way in to add money.
               Viewing grants stays one hop away (the hero's Credits-left chip
               and the sidebar); adding funds was reachable from nowhere, which
-              is the defect a funded account reported from the live site. */}
-          <a
-            href={`${BASE_PATH}/topup/`}
-            className="rounded-2xl border border-ink/[0.08] bg-bg-card p-5 text-left transition-all hover:border-ink/[0.14] hover:bg-bg-elevated group active:scale-[0.99] block"
-          >
+              is the defect a funded account reported from the live site.
+
+              The amount is chosen HERE. The tile used to link to a bare
+              /topup/, so every customer landed on the page's own default and
+              picked again — the click knew an amount and dropped it. */}
+          <div className="rounded-2xl border border-ink/[0.08] bg-bg-card p-5 text-left">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] uppercase tracking-widest text-ink/30">Credit Balance</p>
-              <div className="text-ink/20 group-hover:text-ink/40 transition-colors">
+              <div className="text-ink/20">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
                 </svg>
               </div>
             </div>
             <p className="text-2xl font-bold text-text mono">{money(totalCreditsRemaining)}</p>
-            <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
-              Add credit →
-            </p>
-          </a>
+            <p className="text-[11px] text-ink/30 mt-3 mb-2">Add credit</p>
+            <div className="flex flex-wrap gap-1.5">
+              {TOPUP_AMOUNTS.map((c) => (
+                <a
+                  key={c}
+                  href={topupHref(c)}
+                  className="mono rounded-lg border border-ink/[0.12] px-3 py-1.5 text-[12px] font-semibold text-ink/60 transition-all hover:border-ink/[0.2] hover:bg-ink/[0.04] hover:text-text active:scale-[0.97]"
+                >
+                  {moneyFromCents(c, 'USD', cents(c / 100))}
+                </a>
+              ))}
+            </div>
+          </div>
 
           {/* Current Plan */}
           <button

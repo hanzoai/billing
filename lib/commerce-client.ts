@@ -132,6 +132,13 @@ export type CommercePaymentMethod = {
   userId?: string
   type?: string
   isDefault?: boolean
+  /**
+   * The vaulted card behind this method — what a charge actually names. Commerce
+   * omits it when the method has none and refuses to charge such a method (422),
+   * so a chooser that offers cards must read it: an option without a
+   * providerRef is an option that cannot pay.
+   */
+  providerRef?: string
   card?: {
     brand?: string
     last4?: string
@@ -625,14 +632,35 @@ export class Commerce {
     )
   }
 
-  /** Charge a card the subject already saved (card-on-file) and credit balance */
+  /**
+   * Charge a card the subject already saved (card-on-file) and credit balance.
+   *
+   * The card is named by its commerce payment-method id, NOT by the vaulted
+   * card id: the server reads the method's providerRef and its Square customer
+   * from the method row, and refuses a method that is not the paying subject's
+   * own. Nothing about the card crosses this call.
+   *
+   * Pass a stable `idempotencyKey` per attempt. Without one the server falls
+   * back to a 15-minute window over (card, amount, currency), which replays the
+   * first receipt for a deliberate second top-up of the same amount.
+   *
+   * Errors surface as CommerceApiError with the status the UI branches on:
+   *   400 amount out of bounds   401 unauthenticated       402 declined
+   *   404 no such card for you   409 top-up in progress    422 not chargeable
+   *   500 charged but not credited                         503 guard unavailable
+   */
   async topupWithMethod(
-    params: { paymentMethodId: string; amountCents: number; currency?: string },
-    token?: string,
+    params: { paymentMethodId: string; amountCents: number; userId?: string; currency?: string },
+    opts?: { idempotencyKey?: string; token?: string },
   ): Promise<{ transactionId: string; balanceCents: number; status: string }> {
     return this.request<{ transactionId: string; balanceCents: number; status: string }>(
       '/v1/billing/topup',
-      { method: 'POST', body: params, token },
+      {
+        method: 'POST',
+        body: params,
+        token: opts?.token,
+        headers: opts?.idempotencyKey ? { 'X-Idempotency-Key': opts.idempotencyKey } : undefined,
+      },
     )
   }
 

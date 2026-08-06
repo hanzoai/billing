@@ -14,6 +14,9 @@ import {
   type Sent,
 } from '@/lib/wallet-topup'
 import { moneyFromCents } from '@/lib/money'
+import { CommerceApiError, type CommercePaymentMethod } from '@/lib/commerce-client'
+import { chargeKey, clearChargeKey } from '@/lib/charge'
+import { TOPUP_AMOUNTS, TOPUP_DEFAULT } from '@/lib/topup'
 
 // ── Wire transfer bank details ──────────────────────────────────────────────
 
@@ -40,6 +43,75 @@ function walletTabFallback(_error: Error, reset: () => void) {
       </button>
     </div>
   )
+}
+
+// ── Cards on file ────────────────────────────────────────────────────────────
+
+/** A card the customer already saved, offered instead of typing one again. */
+interface SavedCard {
+  id: string
+  /** e.g. "Visa ending in 4242", or a generic that is still honest. */
+  label: string
+  isDefault: boolean
+}
+
+/** The choice that opens the Square form. Never a payment-method id. */
+const NEW_CARD = 'new'
+
+/**
+ * The saved methods this page can actually charge.
+ *
+ * Card type AND a providerRef: commerce refuses a method with no vaulted card
+ * behind it (422), so listing one would be offering a button that cannot pay.
+ * The label is the card facts commerce reports, falling back to a generic
+ * rather than inventing a brand.
+ */
+function chargeableCards(methods: unknown): SavedCard[] {
+  if (!Array.isArray(methods)) return []
+  const cards: SavedCard[] = []
+  for (const m of methods as CommercePaymentMethod[]) {
+    if (m?.type !== 'card' || !m.id || !m.providerRef) continue
+    cards.push({
+      id: m.id,
+      label: m.card?.brand && m.card?.last4 ? `${m.card.brand} ending in ${m.card.last4}` : 'Saved card',
+      isDefault: m.isDefault ?? false,
+    })
+  }
+  return cards
+}
+
+/**
+ * What a refused charge means, in words the customer can act on.
+ *
+ * Statuses commerce raises for a money move; anything else keeps the server's
+ * own sentence, which is the useful one for a bad amount ("amountCents must be
+ * between …") and for a card that carries no vaulted card.
+ */
+function chargeMessage(err: unknown): string {
+  if (err instanceof CommerceApiError) {
+    switch (err.status) {
+      case 401:
+        return 'Your session expired. Please sign in again.'
+      case 402:
+        return 'Card declined. Try another card.'
+      case 404:
+        return 'That saved card is no longer available — use a new card.'
+      case 409:
+        return 'A top-up is already in progress — give it a moment, then retry.'
+      case 500:
+        return 'Your card was charged but the credit did not land. Contact billing@hanzo.ai — do not retry.'
+      case 503:
+        return 'Billing is temporarily unavailable. Please retry in a moment.'
+      default:
+        return err.message || 'Payment failed.'
+    }
+  }
+  return err instanceof Error ? err.message : 'Payment failed.'
+}
+
+/** A charge is keyed by what it buys: this card, this amount. */
+function cardChargeScope(card: string, amountCents: number): string {
+  return `topup:${card}:${amountCents}`
 }
 
 // ── Topup page ───────────────────────────────────────────────────────────────
@@ -80,40 +152,87 @@ export default function TopupPage() {
     token: string | null
   }>({ amount: null, userId: null, token: null })
 
-  useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get('amount')
-    setParams({
-      amount: raw ? parseInt(raw, 10) : null,
-      userId: getCurrentUser()?.commerceUserId ?? null,
-      token: getAccessToken(),
-    })
-  }, [])
-
   // ── State ────────────────────────────────────────────────────────────────
   const [tab, setTab] = useState<PayTab>('card')
   const [customAmountCents, setCustomAmountCents] = useState<number | null>(null)
   const [status, setStatus] = useState<Status>({ type: 'idle' })
   const [copyMsg, setCopyMsg] = useState('')
 
-  const amountCents = customAmountCents ?? params.amount ?? 2500 // default $25
+  // ── Cards on file ────────────────────────────────────────────────────────
+  //
+  // A returning customer keys their card in again on every top-up, which is the
+  // whole cost of not asking. So we ask — and the answer is never allowed to
+  // stand between the customer and paying: no cards, an unreadable list, no
+  // session, any failure at all leaves `cards` empty and the page is exactly
+  // the blank Square form it was.
+  const [cards, setCards] = useState<SavedCard[]>([])
+  const [cardsLoading, setCardsLoading] = useState(true)
+  const [chosen, setChosen] = useState<string>(NEW_CARD)
 
-  const QUICK_AMOUNTS = [1000, 2500, 5000, 10000] // cents
+  const amountCents = customAmountCents ?? params.amount ?? TOPUP_DEFAULT
 
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Square card element (shared hook) — only init on the Card tab ─────────
+  // ── Who is paying, how much, and with which card ─────────────────────────
   //
-  // A card on file is NOT offered here. It was, defaulting to the stored card,
-  // but the charge behind it — POST /v1/billing/topup — is not a route commerce
-  // serves: it answers 404 to an authenticated caller on both the gateway and
-  // commerce directly, while the nonce path beside it answers 400 "sourceId is
-  // required". So the option could only ever fail, and picking it by default
-  // made failing the DEFAULT. One money-in path here, the one that works:
-  // Square holds the card, returns a nonce, the server charges it.
+  // One pass, on mount: the session is read synchronously and the cards it can
+  // charge are fetched with the same identity, so the page never renders the
+  // new-card form for a moment and then swaps it out from under a customer who
+  // had already started typing.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('amount')
+    // A suggested amount arrives from a link, so it is checked like any other
+    // outside input: a junk `?amount=` falls back to the page's own default
+    // rather than rendering "$NaN" on the Pay button.
+    const suggested = raw ? Number.parseInt(raw, 10) : Number.NaN
+    const userId = getCurrentUser()?.commerceUserId ?? null
+    const token = getAccessToken()
+    setParams({
+      amount: Number.isFinite(suggested) && suggested > 0 ? suggested : null,
+      userId,
+      token,
+    })
+
+    // No identity means no cards to list — and an unscoped read is not a thing
+    // this page asks for.
+    if (!token || !userId) {
+      setCardsLoading(false)
+      return
+    }
+
+    let live = true
+    getCommerce(commerceUrl, token)
+      .getPaymentMethods(userId, token)
+      .then((methods) => {
+        if (!live) return
+        const saved = chargeableCards(methods)
+        setCards(saved)
+        // The card the customer marked default is the opening choice, else the
+        // most recent. Only 'new' when there is genuinely nothing to charge.
+        if (saved.length > 0) setChosen((saved.find((c) => c.isDefault) ?? saved[0]).id)
+      })
+      .catch(() => {
+        if (live) setCards([])
+      })
+      .finally(() => {
+        if (live) setCardsLoading(false)
+      })
+    return () => {
+      live = false
+    }
+  }, [commerceUrl])
+
+  const useNewCard = chosen === NEW_CARD
+  const chosenCard = cards.find((c) => c.id === chosen)
+
+  // ── Square card element (shared hook) ─────────────────────────────────────
+  //
+  // Only for a card being typed: a saved-card top-up never loads the SDK, and
+  // neither does the wait while we are still finding out whether there is one.
   const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
     'sq-card-container',
-    tab === 'card',
+    tab === 'card' && useNewCard && !cardsLoading,
   )
 
   // ── Crypto payment state ─────────────────────────────────────────────────
@@ -137,7 +256,11 @@ export default function TopupPage() {
     setStatus({ type: 'success', balance: newBalance })
   }, [])
 
-  // ── Card submit: tokenize with Square, then charge the nonce ─────────────
+  // ── Card submit ───────────────────────────────────────────────────────────
+  //
+  // Two doors, one form. A saved card is charged by its payment-method id and
+  // nothing is re-entered; a new card goes through Square's hosted fields for a
+  // single-use nonce. Either way the card itself never reaches this code.
   const handleCardSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -145,26 +268,56 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
         return
       }
-      if (!sqReady) {
+      if (useNewCard && !sqReady) {
         setStatus({ type: 'error', message: 'Card form not ready. Please wait.' })
         return
       }
 
       setStatus({ type: 'loading' })
+      const commerce = getCommerce(commerceUrl, params.token)
+
+      // A nonce is single-use, so the tokenized path needs no idempotency key —
+      // spending one twice is not something Square permits, and re-tokenizing
+      // mints a different nonce anyway. Only the reusable saved card needs one.
+      if (useNewCard) {
+        try {
+          const payment = await commerce.topupWithSquareToken({
+            sourceId: await sqTokenize(),
+            amountCents,
+            userId: params.userId || undefined,
+            currency: 'usd',
+          })
+          handleSuccess(payment.balanceCents)
+        } catch (err) {
+          setStatus({ type: 'error', message: chargeMessage(err) })
+        }
+        return
+      }
+
+      const scope = cardChargeScope(chosen, amountCents)
       try {
-        const commerce = getCommerce(commerceUrl, params.token)
-        const payment = await commerce.topupWithSquareToken({
-          sourceId: await sqTokenize(),
-          amountCents,
-          userId: params.userId || undefined,
-          currency: 'usd',
-        })
+        const payment = await commerce.topupWithMethod(
+          {
+            paymentMethodId: chosen,
+            amountCents,
+            userId: params.userId || undefined,
+            currency: 'usd',
+          },
+          { idempotencyKey: chargeKey(scope) },
+        )
+        clearChargeKey(scope)
         handleSuccess(payment.balanceCents)
       } catch (err) {
-        setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
+        // A refusal the customer can act on ends the attempt: the next submit is
+        // a NEW charge and must not replay this one's answer. A lost response
+        // keeps its key, which is the case the key exists for.
+        if (err instanceof CommerceApiError && err.status !== 409 && err.status < 500) {
+          clearChargeKey(scope)
+        }
+        setStatus({ type: 'error', message: chargeMessage(err) })
       }
     },
-    [params, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
+    [params, useNewCard, chosen, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────
@@ -319,6 +472,11 @@ export default function TopupPage() {
 
   const isLoading = status.type === 'loading'
 
+  // Paying is off while a charge is in flight, while we still do not know which
+  // cards exist, and — for a card being typed — until Square's fields are live.
+  // A saved card needs none of that: it is chargeable the moment it is chosen.
+  const payDisabled = isLoading || cardsLoading || (useNewCard && !sqReady)
+
   // ── Render: main form ──────────────────────────────────────────────────────
   return (
     <div style={ROOT}>
@@ -329,7 +487,7 @@ export default function TopupPage() {
             Amount
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '8px' }}>
-            {QUICK_AMOUNTS.map((c) => (
+            {TOPUP_AMOUNTS.map((c) => (
               <button
                 key={c}
                 type="button"
@@ -399,43 +557,78 @@ export default function TopupPage() {
         {/* ── Card tab ─────────────────────────────────────────────────── */}
         {tab === 'card' && (
           <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Square card container */}
-            <div
-              id="sq-card-container"
-              style={{
-                minHeight: '96px',
-                borderRadius: '8px',
-                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-                background: 'var(--color-bg)',
-                padding: '10px 12px',
-                position: 'relative',
-              }}
-            >
-              {sqLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-                  <div style={{
-                    width: '18px', height: '18px',
-                    border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
-                    borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
-                    borderRadius: '50%',
-                    animation: 'sq-spin 0.8s linear infinite',
-                  }} />
-                  <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
-                </div>
-              )}
-              {sqError && !sqLoading && (
-                <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
-                  {sqError}
-                </div>
-              )}
-            </div>
+            {/* Cards on file — the chooser only appears when there is a choice.
+                While the answer is unknown the page says so rather than showing
+                a blank form it may be about to replace. */}
+            {cardsLoading ? (
+              <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', margin: 0 }}>
+                Checking for cards on file…
+              </p>
+            ) : cards.length > 0 ? (
+              <div role="radiogroup" aria-label="Pay with" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {[...cards, { id: NEW_CARD, label: 'Use a new card', isDefault: false }].map((opt) => (
+                  <label key={opt.id} style={choiceStyle(chosen === opt.id)}>
+                    <input
+                      type="radio"
+                      name="topup-card"
+                      checked={chosen === opt.id}
+                      onChange={() => setChosen(opt.id)}
+                      style={{ accentColor: 'currentColor' }}
+                    />
+                    <span>{opt.label}</span>
+                    {opt.isDefault && (
+                      <span style={{ marginLeft: 'auto', fontSize: '10px', borderRadius: '999px', padding: '2px 8px', border: '1px solid color-mix(in oklab, var(--color-text) 12%, transparent)', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)' }}>
+                        Default
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Square card container — mounted only for a card being typed */}
+            {!cardsLoading && useNewCard && (
+              <div
+                id="sq-card-container"
+                style={{
+                  minHeight: '96px',
+                  borderRadius: '8px',
+                  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+                  background: 'var(--color-bg)',
+                  padding: '10px 12px',
+                  position: 'relative',
+                }}
+              >
+                {sqLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+                    <div style={{
+                      width: '18px', height: '18px',
+                      border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
+                      borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
+                      borderRadius: '50%',
+                      animation: 'sq-spin 0.8s linear infinite',
+                    }} />
+                    <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
+                  </div>
+                )}
+                {sqError && !sqLoading && (
+                  <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
+                    {sqError}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"
-              style={submitStyle(isLoading || !sqReady)}
-              disabled={isLoading || !sqReady}
+              style={submitStyle(payDisabled)}
+              disabled={payDisabled}
             >
-              {isLoading ? 'Processing...' : `Pay ${moneyFromCents(amountCents)}`}
+              {isLoading
+                ? 'Processing...'
+                : chosenCard
+                  ? `Pay ${moneyFromCents(amountCents)} with ${chosenCard.label}`
+                  : `Pay ${moneyFromCents(amountCents)}`}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>
@@ -730,6 +923,22 @@ const INPUT: React.CSSProperties = {
   color: 'var(--color-text)',
   outline: 'none',
   fontFamily: 'inherit',
+}
+
+/** One row of the pay-with chooser: a saved card, or the new-card option. */
+function choiceStyle(selected: boolean): React.CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+    borderRadius: '8px',
+    padding: '9px 12px',
+    fontSize: '13px',
+    border: `1px solid ${selected ? 'color-mix(in oklab, var(--color-text) 35%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
+    background: selected ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'transparent',
+    color: selected ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 55%, transparent)',
+  }
 }
 
 function submitStyle(disabled: boolean): React.CSSProperties {

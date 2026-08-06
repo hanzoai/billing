@@ -49,6 +49,10 @@ billing/
 - `app/global.css` -- tokens + the exact utility vocabulary the markup uses
 - `lib/money.ts` -- the ONE money formatter
 - `lib/config.ts` -- `BASE_PATH`, the app's own root
+- `lib/topup.ts` -- the standing top-up amounts and `topupHref()`, the ONE way
+  to link to `/topup` (it carries `?amount=` so a click never drops what it knew)
+- `lib/charge.ts` -- the ONE idempotency key per money-move attempt, shared by
+  the top-up and subscribe card paths
 
 ## Styling (one way)
 
