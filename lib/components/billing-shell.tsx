@@ -811,11 +811,16 @@ export function BillingShell({ org, user }: BillingShellProps) {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  // The overview IS the setup card until both required steps are done. There is
-  // no dismiss: a payment method and a plan are required to use Hanzo, so an
-  // account missing either has nothing honest to show on an overview. Every
-  // other section stays reachable from the sidebar.
-  const setupIncomplete = paymentMethods.length === 0 || !subscription.id
+  // The overview IS the setup card until the account can pay — but only until
+  // then. An account holding real credit has plenty honest to show (its
+  // balance, its usage, its invoices), and walling that behind "choose a plan"
+  // once trapped a six-figure prepaid account in onboarding and swallowed its
+  // Add-credit click. So: funded accounts always see the dashboard; the card
+  // remains the whole overview for accounts with no way to pay yet, which is
+  // where "paying is not optional" genuinely applies. There is still no
+  // dismiss, and every other section stays reachable from the sidebar.
+  const funded = (balance?.available ?? 0) > 0 || creditBalance > 0
+  const setupIncomplete = !funded && (paymentMethods.length === 0 || !subscription.id)
 
   if (loading) {
     return (

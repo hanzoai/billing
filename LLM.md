@@ -171,10 +171,15 @@ walks the browser out of the embedded app.
 There is no starter credit: no auto-grant on first visit, no claim button, no
 `grantStarterCredit` on the commerce client. Onboarding at hanzo.id requires a
 payment method AND a plan, so nothing here may advertise credit or call paying
-optional. The guided setup card has no "Skip setup" — the overview IS that card
-until both required steps are done (`setupIncomplete` in `billing-shell.tsx`),
-and every other section stays reachable from the sidebar. The card only stops
-CLAIMING setup is optional; enforcement is server-side in commerce, not here.
+optional. The guided setup card has no "Skip setup" — for an UNFUNDED account
+the overview IS that card until both required steps are done (`setupIncomplete`
+in `billing-shell.tsx`), and every other section stays reachable from the
+sidebar. A FUNDED account (positive available balance or credit) always sees
+the dashboard: it has already established a way to pay, its money is the honest
+thing to show, and walling it behind "choose a plan" once trapped a six-figure
+prepaid account in onboarding and swallowed its Add-credit click. The card only
+stops CLAIMING setup is optional; enforcement is server-side in commerce, not
+here.
 
 Accounts that already hold a starter credit keep it. It is a real Deposit
 transaction tagged `starter-credit`, and `loadBillingData` still synthesizes a
