@@ -161,7 +161,7 @@ jobs:
           # the identical bug, fixed the identical way).
           PIN_TOKEN=$(curl -sS \
             "${KMS_ENDPOINT}/v1/kms/secrets/deploy/UNIVERSE_PIN_TOKEN?env=${KMS_SECRET_ENV}" \
-            -H "Authorization: Bearer ${KMS_TOKEN}" | jq -r '.secret.value // empty' || true)
+            -H "Authorization: Bearer ${KMS_TOKEN}" | jq -r '.value // .secret.value // empty' || true)
           [ -n "$PIN_TOKEN" ] || { echo "::error::UNIVERSE_PIN_TOKEN missing in KMS at deploy/ (env ${KMS_SECRET_ENV}, org from the KMS credential)"; exit 1; }
           echo "::add-mask::${PIN_TOKEN}"
 
