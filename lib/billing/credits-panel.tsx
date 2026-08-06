@@ -2,6 +2,7 @@
 
 import type { CreditGrant } from './types'
 import { money } from '@/lib/money'
+import { BASE_PATH } from '@/lib/config'
 
 export interface CreditsPanelProps {
   creditGrants: CreditGrant[]
@@ -48,6 +49,14 @@ export function CreditsPanel({ creditGrants, creditBalance = 0 }: CreditsPanelPr
               {money(creditBalance / 100)}
             </p>
           </div>
+          {/* The standing money-in. This section only DISPLAYS grants; without
+              this door the whole product had no reachable way to add funds. */}
+          <a
+            href={`${BASE_PATH}/topup/`}
+            className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97]"
+          >
+            Add credit
+          </a>
         </div>
       </div>
 

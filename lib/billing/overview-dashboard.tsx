@@ -15,6 +15,7 @@ import type {
 } from './types'
 import type { Balance } from '../commerce-client'
 import { annualSaving, money } from '@/lib/money'
+import { BASE_PATH } from '@/lib/config'
 
 export interface OverviewDashboardProps {
   subscription: Subscription
@@ -127,7 +128,11 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   const apiCallsRecord = props.usage?.records.find(r => r.meterId === 'api_calls')
   const apiCallsThisPeriod = apiCallsRecord?.current ?? 0
 
-  const tier = currentPlan ? (PLAN_TIERS[currentPlan.id] ?? PLAN_TIERS['developer']) : PLAN_TIERS['developer']
+  // No subscription is a real state, not a default tier: a prepaid account
+  // funds usage from credit and has no plan, no renewal, and nothing to call
+  // "Developer". Falling back to PLAN_TIERS['developer'] here once printed a
+  // plan name and a renewal countdown the backend contradicted.
+  const tier = currentPlan ? (PLAN_TIERS[currentPlan.id] ?? PLAN_TIERS['developer']) : { label: 'Prepaid', color: 'text-ink/50', glow: '' }
 
   // Spend bar heights (deterministic)
   const barHeights = React.useMemo(() =>
@@ -154,13 +159,15 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               </div>
               <p className="text-[13px] text-ink/50">Add funds to continue using Hanzo AI models and API.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => props.onNavigate('credits')}
+            {/* Straight to the top-up page — the one self-serve money-in. The
+                Credits section shows grants; it cannot take money, and routing
+                an empty account there was a dead end measured on the live site. */}
+            <a
+              href={`${BASE_PATH}/topup/`}
               className="rounded-full bg-amber-500 px-5 py-2.5 text-sm font-bold text-black transition hover:bg-amber-400 active:scale-[0.97] flex-shrink-0"
             >
               Add funds
-            </button>
+            </a>
           </div>
         </FadeIn>
       )}
@@ -256,7 +263,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               <div>
                 <div className="flex items-center gap-2.5 mb-1">
                   <span className={`text-[11px] font-semibold uppercase tracking-widest ${tier.color}`}>
-                    {tier.label} Plan
+                    {currentPlan ? `${tier.label} Plan` : 'Prepaid credit'}
                   </span>
                   {hasActivePlan && (
                     <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">Active</span>
@@ -289,7 +296,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 <p className="text-xl font-semibold text-text mono">
                   {mtdSpend > 0 ? money(mtdSpend, currency) : totalCreditsRemaining > 0 ? money(totalCreditsRemaining, currency) : money(0, currency)}
                 </p>
-                <p className="text-[12px] text-ink/30 mt-1">{daysLeft}d until renewal</p>
+                <p className="text-[12px] text-ink/30 mt-1">
+                  {props.subscription.id ? `${daysLeft}d until renewal` : 'prepaid — no renewal'}
+                </p>
               </div>
             </div>
 
@@ -339,11 +348,13 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       {/* ── Stats row ── */}
       <FadeIn delay={80}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Credit Balance */}
-          <button
-            type="button"
-            onClick={() => props.onNavigate('credits')}
-            className="rounded-2xl border border-ink/[0.08] bg-bg-card p-5 text-left transition-all hover:border-ink/[0.14] hover:bg-bg-elevated group active:scale-[0.99]"
+          {/* Credit Balance — the tile IS the standing way in to add money.
+              Viewing grants stays one hop away (the hero's Credits-left chip
+              and the sidebar); adding funds was reachable from nowhere, which
+              is the defect a funded account reported from the live site. */}
+          <a
+            href={`${BASE_PATH}/topup/`}
+            className="rounded-2xl border border-ink/[0.08] bg-bg-card p-5 text-left transition-all hover:border-ink/[0.14] hover:bg-bg-elevated group active:scale-[0.99] block"
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] uppercase tracking-widest text-ink/30">Credit Balance</p>
@@ -355,9 +366,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
             </div>
             <p className="text-2xl font-bold text-text mono">{money(totalCreditsRemaining)}</p>
             <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
-              {props.creditGrants.filter(g => g.active && !g.voided).length} active grant{props.creditGrants.filter(g => g.active && !g.voided).length !== 1 ? 's' : ''}
+              Add credit →
             </p>
-          </button>
+          </a>
 
           {/* Current Plan */}
           <button
@@ -373,9 +384,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 </svg>
               </div>
             </div>
-            <p className={`text-2xl font-bold ${tier.color || 'text-text'}`}>{currentPlan?.name ?? 'Developer'}</p>
+            <p className={`text-2xl font-bold ${currentPlan ? tier.color : 'text-text'}`}>{currentPlan?.name ?? 'No plan'}</p>
             <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
-              {isTrialing ? `Trial · ${trialDaysLeft}d left` : hasActivePlan ? 'Active' : 'Upgrade to unlock all →'}
+              {isTrialing ? `Trial · ${trialDaysLeft}d left` : hasActivePlan ? 'Active' : 'Choose a plan →'}
             </p>
           </button>
 
