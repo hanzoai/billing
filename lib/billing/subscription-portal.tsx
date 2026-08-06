@@ -745,7 +745,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     </p>
                     <a
                       href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please enable card checkout and activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
-                      className="mt-3 block rounded-lg bg-ink/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-ink/70 transition hover:bg-ink/[0.12] hover:text-text"
+                      className="mt-3 block rounded-xl bg-ink/[0.08] px-3 py-2.5 text-center text-sm font-semibold text-ink/70 transition hover:bg-ink/[0.12] hover:text-text"
                     >
                       Contact billing
                     </a>

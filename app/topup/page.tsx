@@ -1004,6 +1004,10 @@ function choiceStyle(selected: boolean): React.CSSProperties {
 function submitStyle(disabled: boolean): React.CSSProperties {
   return {
     width: '100%',
+    // One control scale for the pay action in both of its states: 40px is the
+    // Apple Pay button's height (global.css), so the generic fallback matches
+    // it instead of drifting a few pixels under its own padding.
+    minHeight: '40px',
     padding: '10px 16px',
     fontSize: '13px',
     fontWeight: 600,

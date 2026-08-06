@@ -197,7 +197,7 @@ export function SubscribeCardForm({
         type="button"
         disabled={!canSubmit || submitting}
         onClick={handleSubmit}
-        className="mt-3 w-full rounded-lg bg-brand px-3 py-2 text-center text-[13px] font-semibold text-brand-foreground transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-ink/[0.06] disabled:text-ink/30"
+        className="mt-3 w-full rounded-xl bg-brand px-3 py-2.5 text-center text-sm font-semibold text-brand-foreground transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-ink/[0.06] disabled:text-ink/30"
       >
         {submitting
           ? 'Processing…'
