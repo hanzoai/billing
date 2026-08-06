@@ -37,6 +37,16 @@ export interface SubscriptionPlan {
   externalUrl?: string
   /** Annual price alternative shown on the card */
   annualPrice?: number
+  /**
+   * The catalog's own category — `personal`, `team`, `enterprise`.
+   *
+   * Carried through from the catalog rather than inferred, because the pricing
+   * grid segments on it: Personal shows the four self-serve tiers, Business shows
+   * the seat-based and negotiated ones. Inferring "business" from perSeat or
+   * contactSales would put a per-seat personal tier on the wrong tab the day one
+   * is added; the catalog already answers this question.
+   */
+  category?: string
   /** Price is per seat — the card shows a seat selector and per-seat total */
   perSeat?: boolean
   /** Minimum seats for per-seat plans (backend rejects fewer) */

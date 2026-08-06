@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getCommerce } from '@/lib/commerce'
+import { BASE_PATH } from '@/lib/config'
 import { getAccessToken, getCurrentUser } from '@/lib/iam-auth'
 import { useSquareCard } from '@/lib/square'
 import { ErrorBoundary } from '@/lib/components/error-boundary'
@@ -52,47 +53,39 @@ type Status =
   | { type: 'error'; message: string }
 
 /**
- * Standalone iframe-embeddable topup page.
+ * The top-up page. Same-origin, signed in, not embeddable.
  *
  * URL params:
- *   amount     — pre-set amount in USD cents (optional)
- *   userId     — user to credit (optional, fallback to token sub)
- *   token      — bearer token (optional, also checks cookie hanzo-auth-token)
- *   returnUrl  — redirect target on success (optional; postMessage used if absent)
+ *   amount — pre-set amount in USD cents (optional)
  *
- * On success posts:
- *   window.parent.postMessage({ type: 'topup-complete', balance: <cents> }, '*')
+ * It used to take `token`, `userId` and `returnUrl` from the query as well, and
+ * report completion by posting to `window.parent` — an embedding contract that
+ * nothing can use: the deployment serves `frame-ancestors 'none'` and
+ * `X-Frame-Options: DENY`, so there is never a parent frame to post to. Taking a
+ * bearer token from a URL is also how a token ends up in browser history, in a
+ * referrer, and in every access log along the way. Identity comes from the
+ * session, on this origin, and nowhere else.
  */
 export default function TopupPage() {
-  // ── Parse URL params ─────────────────────────────────────────────────────
+  // ── Who is paying, and how much ──────────────────────────────────────────
+  //
+  // The amount may be suggested by the link that sent us here; the identity
+  // never is. `getAccessToken` reads the session localStorage already holds —
+  // the same one the rest of the app uses — and the subject is the org slug
+  // commerce keys billing on, so the money lands in the account whose balance
+  // the overview shows rather than in one named after the token's `sub`.
   const [params, setParams] = useState<{
     amount: number | null
     userId: string | null
     token: string | null
-    returnUrl: string | null
-  }>({ amount: null, userId: null, token: null, returnUrl: null })
+  }>({ amount: null, userId: null, token: null })
 
   useEffect(() => {
-    const sp = new URLSearchParams(window.location.search)
-    const raw = sp.get('amount')
-    const cookieToken = document.cookie
-      .split(';')
-      .find((c) => c.trim().startsWith('hanzo-auth-token='))
-      ?.split('=')[1]
-
-    // The embedders' params win, then the signed-in session. That last fallback
-    // is the whole self-serve flow: reached from the app's own Add-credit links
-    // there is no query token and no cookie — the session is in localStorage,
-    // where `getAccessToken` reads it — so every top-up opened from inside the
-    // product had no token and died on submit with "Authentication required".
-    // Same for the subject: commerce keys billing on the org slug, so falling
-    // back to the token's `sub` would credit a different account than the one
-    // whose balance the rest of the app shows.
+    const raw = new URLSearchParams(window.location.search).get('amount')
     setParams({
       amount: raw ? parseInt(raw, 10) : null,
-      userId: sp.get('userId') ?? getCurrentUser()?.commerceUserId ?? null,
-      token: sp.get('token') ?? cookieToken ?? getAccessToken(),
-      returnUrl: sp.get('returnUrl'),
+      userId: getCurrentUser()?.commerceUserId ?? null,
+      token: getAccessToken(),
     })
   }, [])
 
@@ -140,18 +133,9 @@ export default function TopupPage() {
   const HANZO_ETH_ADDRESS = (process.env.NEXT_PUBLIC_HANZO_ETH_TREASURY ?? '').trim()
 
   // ── Success handler ──────────────────────────────────────────────────────
-  const handleSuccess = useCallback(
-    (newBalance: number) => {
-      setStatus({ type: 'success', balance: newBalance })
-      window.parent?.postMessage({ type: 'topup-complete', balance: newBalance }, '*')
-      if (params.returnUrl) {
-        setTimeout(() => {
-          window.location.href = `${params.returnUrl}?balance=${newBalance}`
-        }, 1500)
-      }
-    },
-    [params.returnUrl],
-  )
+  const handleSuccess = useCallback((newBalance: number) => {
+    setStatus({ type: 'success', balance: newBalance })
+  }, [])
 
   // ── Card submit: tokenize with Square, then charge the nonce ─────────────
   const handleCardSubmit = useCallback(
@@ -321,11 +305,12 @@ export default function TopupPage() {
             <p style={{ fontSize: '14px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
               New balance: {moneyFromCents(status.balance)}
             </p>
-            {params.returnUrl && (
-              <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)', marginTop: '12px' }}>
-                Redirecting...
-              </p>
-            )}
+            <a
+              href={`${BASE_PATH}/`}
+              style={{ display: 'inline-block', marginTop: '16px', fontSize: '13px', color: 'var(--color-text)', textDecoration: 'underline' }}
+            >
+              Back to billing
+            </a>
           </div>
         </div>
       </div>
@@ -659,7 +644,7 @@ export default function TopupPage() {
             <button
               type="button"
               onClick={() => {
-                const email = params.userId ?? 'your email'
+                const email = params.userId ?? 'your account'
                 copy(`Hanzo ${email}`, 'Reference')
               }}
               style={{
@@ -681,7 +666,7 @@ export default function TopupPage() {
                   Reference (required)
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--color-text)', marginTop: '2px' }}>
-                  Hanzo {params.userId ?? 'your-email@example.com'}
+                  Hanzo {params.userId ?? 'your account'}
                 </div>
               </div>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="color-mix(in oklab, var(--color-text) 30%, transparent)" strokeWidth="2">

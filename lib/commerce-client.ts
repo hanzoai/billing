@@ -349,14 +349,10 @@ export class Commerce {
   // ── Billing status ───────────────────────────────────────────────────
 
   async getBillingStatus(user: string, token?: string): Promise<{ hasPaymentMethod: boolean; creditBalance: number }> {
-    try {
-      return await this.request<{ hasPaymentMethod: boolean; creditBalance: number }>(
-        `/v1/billing/status?user=${encodeURIComponent(user)}`,
-        { token },
-      )
-    } catch {
-      return { hasPaymentMethod: false, creditBalance: 0 }
-    }
+    return this.request<{ hasPaymentMethod: boolean; creditBalance: number }>(
+      `/v1/billing/status?user=${encodeURIComponent(user)}`,
+      { token },
+    )
   }
 
   // ── Transactions ─────────────────────────────────────────────────────
@@ -420,17 +416,13 @@ export class Commerce {
   }
 
   async getSubscription(subscriptionId: string, token?: string): Promise<Subscription | null> {
-    try {
-      return await this.request<Subscription>(`/v1/billing/subscriptions/${subscriptionId}`, { token })
-    } catch { return null }
+    return this.request<Subscription>(`/v1/billing/subscriptions/${subscriptionId}`, { token })
   }
 
   async getUserSubscriptions(userId: string, token?: string): Promise<Subscription[]> {
-    try {
-      return await this.request<Subscription[]>('/v1/billing/subscriptions', {
-        params: { userId }, token,
-      })
-    } catch { return [] }
+    return this.request<Subscription[]>('/v1/billing/subscriptions', {
+      params: { userId }, token,
+    })
   }
 
   async cancelSubscription(subscriptionId: string, token?: string): Promise<void> {
@@ -458,34 +450,28 @@ export class Commerce {
   }
 
   async getPlan(planId: string, token?: string): Promise<Plan | null> {
-    try {
-      return await this.request<Plan>(`/v1/billing/plans/${planId}`, { token })
-    } catch { return null }
+    return this.request<Plan>(`/v1/billing/plans/${planId}`, { token })
   }
 
   // ── Invoices ─────────────────────────────────────────────────────────
 
   async getInvoices(userId: string, params?: { limit?: number; offset?: number }, token?: string): Promise<CommerceInvoice[]> {
-    try {
-      return await this.request<CommerceInvoice[]>('/v1/billing/invoices', {
-        params: {
-          user: userId,
-          ...(params?.limit ? { limit: String(params.limit) } : {}),
-          ...(params?.offset ? { offset: String(params.offset) } : {}),
-        },
-        token,
-      })
-    } catch { return [] }
+    return this.request<CommerceInvoice[]>('/v1/billing/invoices', {
+      params: {
+        user: userId,
+        ...(params?.limit ? { limit: String(params.limit) } : {}),
+        ...(params?.offset ? { offset: String(params.offset) } : {}),
+      },
+      token,
+    })
   }
 
   // ── Payment Methods ──────────────────────────────────────────────────
 
   async getPaymentMethods(userId: string, token?: string): Promise<CommercePaymentMethod[]> {
-    try {
-      return await this.request<CommercePaymentMethod[]>('/v1/billing/methods', {
-        params: { customerId: userId }, token,
-      })
-    } catch { return [] }
+    return this.request<CommercePaymentMethod[]>('/v1/billing/methods', {
+      params: { customerId: userId }, token,
+    })
   }
 
   async addPaymentMethod(params: CommercePaymentMethod & { customerId?: string }, token?: string): Promise<CommercePaymentMethod> {
@@ -515,51 +501,45 @@ export class Commerce {
   // ── Usage ────────────────────────────────────────────────────────────
 
   async getUsage(userId: string, token?: string): Promise<CommerceUsageSummary> {
-    try {
-      // Live wire shape: { user, count, usage: [{ transactionId, amount (cents),
-      // currency, notes, metadata, createdAt }] } — each item an api-usage
-      // withdraw transaction. Fold into the UsageSummary the panels render.
-      const raw = await this.request<{
-        user?: string
-        count?: number
-        currency?: string
-        usage?: Array<{ transactionId?: string; amount?: number; currency?: string; notes?: string; createdAt?: string }>
-      }>('/v1/billing/usage', {
-        params: { user: userId }, token,
-      })
-      const items = raw.usage ?? []
-      if (items.length === 0) return { totalCost: 0, currency: 'usd', period: {}, records: [] }
-      const totalCents = items.reduce((sum, it) => sum + (it.amount ?? 0), 0)
-      const dates = items.map((it) => it.createdAt).filter((d): d is string => !!d).sort()
-      const period = { start: dates[0], end: dates[dates.length - 1] }
-      return {
-        totalCost: totalCents / 100,
-        currency: items[0]?.currency ?? 'usd',
-        period,
-        records: [{
-          meterId: 'api_calls',
-          label: 'API usage',
-          current: items.length,
-          limit: null,
-          unit: 'requests',
-          cost: totalCents / 100,
-          periodStart: period.start ?? '',
-          periodEnd: period.end ?? '',
-        }],
-      }
-    } catch {
-      return { totalCost: 0, currency: 'usd', period: {}, records: [] }
+    // Live wire shape: { user, count, usage: [{ transactionId, amount (cents),
+    // currency, notes, metadata, createdAt }] } — each item an api-usage
+    // withdraw transaction. Fold into the UsageSummary the panels render.
+    const raw = await this.request<{
+      user?: string
+      count?: number
+      currency?: string
+      usage?: Array<{ transactionId?: string; amount?: number; currency?: string; notes?: string; createdAt?: string }>
+    }>('/v1/billing/usage', {
+      params: { user: userId }, token,
+    })
+    const items = raw.usage ?? []
+    if (items.length === 0) return { totalCost: 0, currency: 'usd', period: {}, records: [] }
+    const totalCents = items.reduce((sum, it) => sum + (it.amount ?? 0), 0)
+    const dates = items.map((it) => it.createdAt).filter((d): d is string => !!d).sort()
+    const period = { start: dates[0], end: dates[dates.length - 1] }
+    return {
+      totalCost: totalCents / 100,
+      currency: items[0]?.currency ?? 'usd',
+      period,
+      records: [{
+        meterId: 'api_calls',
+        label: 'API usage',
+        current: items.length,
+        limit: null,
+        unit: 'requests',
+        cost: totalCents / 100,
+        periodStart: period.start ?? '',
+        periodEnd: period.end ?? '',
+      }],
     }
   }
 
   // ── Spend Alerts ─────────────────────────────────────────────────────
 
   async getSpendAlerts(userId: string, token?: string): Promise<CommerceSpendAlert[]> {
-    try {
-      return await this.request<CommerceSpendAlert[]>('/v1/billing/alerts', {
-        params: { user: userId }, token,
-      })
-    } catch { return [] }
+    return this.request<CommerceSpendAlert[]>('/v1/billing/alerts', {
+      params: { user: userId }, token,
+    })
   }
 
   async createSpendAlert(params: { userId: string; title: string; threshold: number; currency?: string }, token?: string): Promise<CommerceSpendAlert> {
@@ -591,31 +571,27 @@ export class Commerce {
   // ── Credit Grants ─────────────────────────────────────────────────────
 
   async getCreditGrants(userId: string, token?: string): Promise<CommerceCreditGrant[]> {
-    try {
-      const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credits', {
-        params: { userId }, token,
-      })
-      // Unwrap envelope: Go API returns { grants: [...], count: N }
-      if (result && !Array.isArray(result) && Array.isArray((result as Record<string, unknown>).grants)) {
-        return (result as { grants: CommerceCreditGrant[] }).grants
-      }
-      if (Array.isArray(result)) return result
-      return []
-    } catch { return [] }
+    const result = await this.request<{ grants?: CommerceCreditGrant[]; count?: number } | CommerceCreditGrant[]>('/v1/billing/credits', {
+      params: { userId }, token,
+    })
+    // Unwrap envelope: Go API returns { grants: [...], count: N }
+    if (result && !Array.isArray(result) && Array.isArray((result as Record<string, unknown>).grants)) {
+      return (result as { grants: CommerceCreditGrant[] }).grants
+    }
+    if (Array.isArray(result)) return result
+    return []
   }
 
   async getCreditBalance(userId: string, token?: string): Promise<CommerceCreditBalance> {
-    try {
-      return await this.request<CommerceCreditBalance>('/v1/billing/credit-balance', {
-        params: { userId }, token,
-      })
-    } catch { return { userId, balances: [] } }
+    return this.request<CommerceCreditBalance>('/v1/billing/credit-balance', {
+      params: { userId }, token,
+    })
   }
 
   // ── Payment Processing ──────────────────────────────────────────────
   //
   // Taking money is POST /v1/payments (cloud apps/commerce payments.go), NOT
-  // /v1/billing/payment. Unlike the reads above, neither of these catches, so
+  // /v1/billing/payment. Neither these nor the reads above swallow a failure, so
   // the retired address surfaced to the customer as a raw "Not Found" on every
   // crypto and wire top-up.
 
@@ -677,15 +653,11 @@ export class Commerce {
   // ── Billing Accounts ──────────────────────────────────────────────────
 
   async listBillingAccounts(token?: string): Promise<CommerceBillingAccount[]> {
-    try {
-      return await this.request<CommerceBillingAccount[]>('/v1/billing/accounts', { token })
-    } catch { return [] }
+    return this.request<CommerceBillingAccount[]>('/v1/billing/accounts', { token })
   }
 
   async getBillingAccount(id: string, token?: string): Promise<CommerceBillingAccount | null> {
-    try {
-      return await this.request<CommerceBillingAccount>(`/v1/billing/accounts/${id}`, { token })
-    } catch { return null }
+    return this.request<CommerceBillingAccount>(`/v1/billing/accounts/${id}`, { token })
   }
 
   async createBillingAccount(data: { name: string; orgId: string }, token?: string): Promise<CommerceBillingAccount> {
@@ -695,9 +667,7 @@ export class Commerce {
   }
 
   async listAccountMembers(accountId: string, token?: string): Promise<CommerceBillingAccountMember[]> {
-    try {
-      return await this.request<CommerceBillingAccountMember[]>(`/v1/billing/accounts/${accountId}/members`, { token })
-    } catch { return [] }
+    return this.request<CommerceBillingAccountMember[]>(`/v1/billing/accounts/${accountId}/members`, { token })
   }
 
   async addAccountMember(accountId: string, data: { email: string; role: string }, token?: string): Promise<CommerceBillingAccountMember> {

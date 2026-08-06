@@ -108,6 +108,12 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   } = props
 
   const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
+  // AUDIENCE and INTERVAL are the two axes the catalog already carries, surfaced
+  // as controls instead of as more cards. Six tiers in one row asked a visitor to
+  // compare a $9 personal plan against a negotiated enterprise contract; they are
+  // different purchases and now sit on different tabs.
+  const [audience, setAudience] = React.useState<'personal' | 'business'>('personal')
+  const [interval, setInterval] = React.useState<'monthly' | 'annual'>('monthly')
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
   const [planError, setPlanError] = React.useState<string | null>(null)
   // Paid plan whose self-serve card checkout panel is open.
@@ -126,6 +132,34 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false)
   const [cancelReason, setCancelReason] = React.useState('')
   const [canceling, setCanceling] = React.useState(false)
+
+  // Segment on the CATALOG's own category, never on a heuristic. `personal` is the
+  // self-serve ladder; everything else (team, enterprise) is bought differently —
+  // seats or a conversation. A category the catalog adds tomorrow lands under
+  // Business without an edit here, which is the point of reading it rather than
+  // listing the four ids.
+  const personalPlans = React.useMemo(
+    () => availablePlans.filter((p) => (p.category ?? 'personal') === 'personal'),
+    [availablePlans],
+  )
+  const businessPlans = React.useMemo(
+    () => availablePlans.filter((p) => (p.category ?? 'personal') !== 'personal'),
+    [availablePlans],
+  )
+  const shownPlans = audience === 'personal' ? personalPlans : businessPlans
+
+  // Annual is only offered when the catalog actually prices it. A toggle that
+  // silently showed the monthly figure under an "Annual" label would be a lie in
+  // the one place a customer is deciding what to pay.
+  const annualAvailable = React.useMemo(
+    () => availablePlans.some((p) => (p.annualPrice ?? 0) > 0),
+    [availablePlans],
+  )
+  // The per-month figure to display for a plan under the chosen interval.
+  const shownPrice = React.useCallback(
+    (p: SubscriptionPlan) => (interval === 'annual' && p.annualPrice ? p.annualPrice : p.price),
+    [interval],
+  )
 
   const currentPlan = React.useMemo(
     () => availablePlans.find((p) => p.id === subscription.planId),
@@ -472,8 +506,72 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
               {planError}
             </div>
           )}
+          {/* Two controls, not twelve cards: WHO the plan is for, and HOW OFTEN it
+              bills. Both read the catalog — the audience from `category`, the
+              interval from whether `annualPrice` exists at all. */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="tablist"
+              aria-label="Plan audience"
+              className="inline-flex rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-1"
+            >
+              {(['personal', 'business'] as const).map((a) => {
+                const count = a === 'personal' ? personalPlans.length : businessPlans.length
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    role="tab"
+                    aria-selected={audience === a}
+                    disabled={count === 0}
+                    onClick={() => setAudience(a)}
+                    className={
+                      'rounded-lg px-4 py-1.5 text-[13px] font-medium capitalize transition disabled:opacity-40 ' +
+                      (audience === a
+                        ? 'bg-bg-card text-text shadow-sm'
+                        : 'text-text-muted hover:text-text')
+                    }
+                  >
+                    {a}
+                  </button>
+                )
+              })}
+            </div>
+
+            {annualAvailable && (
+              <div
+                role="tablist"
+                aria-label="Billing interval"
+                className="inline-flex items-center gap-2"
+              >
+                <div className="inline-flex rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-1">
+                  {(['monthly', 'annual'] as const).map((iv) => (
+                    <button
+                      key={iv}
+                      type="button"
+                      role="tab"
+                      aria-selected={interval === iv}
+                      onClick={() => setInterval(iv)}
+                      className={
+                        'rounded-lg px-4 py-1.5 text-[13px] font-medium capitalize transition ' +
+                        (interval === iv
+                          ? 'bg-bg-card text-text shadow-sm'
+                          : 'text-text-muted hover:text-text')
+                      }
+                    >
+                      {iv}
+                    </button>
+                  ))}
+                </div>
+                {interval === 'annual' && (
+                  <span className="text-[12px] font-medium text-emerald-500">2 months free</span>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {availablePlans.map((plan) => {
+          {shownPlans.map((plan) => {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
             const isFree = plan.price === 0
@@ -481,12 +579,16 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const isExternal = !!plan.externalUrl || plan.contactSales
             const minSeats = plan.minSeats ?? 2
             const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
-            const monthlyTotal = plan.price * seats
+            const monthlyTotal = shownPrice(plan) * seats
             // A priceless tier means two different things: a contact-sales tier
             // has no list price, a $0 tier genuinely costs nothing.
+            // The DISPLAYED price follows the interval toggle; the annual figure the
+            // catalog carries is already per-month-billed-annually, so the suffix
+            // stays /mo and only the number moves.
+            const shown = shownPrice(plan)
             const priceLabel = isFree
               ? plan.contactSales ? 'Custom' : 'Free'
-              : money(plan.price, plan.currency ?? 'USD', 0)
+              : money(shown, plan.currency ?? 'USD', 0)
             const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
@@ -653,6 +755,86 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             )
           })}
           </div>
+
+          {/* COMPARISON MATRIX — built from the catalog, never hand-authored.
+              A card can only show a handful of bullets before it stops being
+              scannable, so the full feature set goes here as one row per feature
+              and one column per plan. The rows are the UNION of every shown plan's
+              features, so a feature only one tier has still gets a row and its
+              absence elsewhere is visible — which is the comparison a buyer is
+              actually making. Hand-maintaining this table is how it drifts from
+              what is sold. */}
+          {shownPlans.length > 1 && (() => {
+            const rows = Array.from(
+              new Set(shownPlans.flatMap((p) => p.features ?? [])),
+            ).sort((a, b) => a.localeCompare(b))
+            if (rows.length === 0) return null
+            return (
+              <section className="mt-10">
+                <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Compare {audience} plans
+                </h3>
+                {/* Its own scroll container: a wide table must never make the PAGE
+                    scroll sideways. */}
+                <div className="overflow-x-auto rounded-2xl border border-ink/[0.08]">
+                  <table className="w-full border-collapse text-[13px]">
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="sticky left-0 z-10 bg-bg-card px-4 py-3 text-left font-medium text-text-muted"
+                        >
+                          Feature
+                        </th>
+                        {shownPlans.map((p) => (
+                          <th
+                            key={p.id}
+                            scope="col"
+                            className="whitespace-nowrap px-4 py-3 text-left font-semibold text-text"
+                          >
+                            {p.name}
+                            <span className="ml-2 font-normal text-text-muted mono">
+                              {p.contactSales
+                                ? 'Custom'
+                                : shownPrice(p) === 0
+                                  ? 'Free'
+                                  : money(shownPrice(p), p.currency ?? 'USD', 0)}
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((feature) => (
+                        <tr key={feature} className="border-t border-ink/[0.06]">
+                          <th
+                            scope="row"
+                            className="sticky left-0 z-10 bg-bg-card px-4 py-3 text-left font-normal text-text-secondary"
+                          >
+                            {feature}
+                          </th>
+                          {shownPlans.map((p) => (
+                            <td key={p.id} className="px-4 py-3">
+                              {(p.features ?? []).includes(feature) ? (
+                                <span aria-label="included" className="text-emerald-500">
+                                  ✓
+                                </span>
+                              ) : (
+                                <span aria-label="not included" className="text-ink/25">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          })()}
+
         </>
       )}
 

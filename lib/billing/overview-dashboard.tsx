@@ -23,6 +23,8 @@ export interface OverviewDashboardProps {
   paymentMethods: PaymentMethod[]
   usage: UsageSummary | null
   usageLoading: boolean
+  /** Why usage could not be read. Distinct from having none. */
+  usageError?: string | null
   balance: Balance | null
   creditGrants: CreditGrant[]
   creditBalance: number
@@ -141,7 +143,10 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     ),
   [mtdSpend])
 
-  const zeroUsage = tokensThisPeriod === 0 && !props.usageLoading
+  // Only claim there is no usage when we actually read it. A failed read
+  // used to render "No usage yet" plus a nudge to go start using the product —
+  // told to accounts that may well have been spending all month.
+  const zeroUsage = tokensThisPeriod === 0 && !props.usageLoading && !props.usageError
 
   return (
     <div className="space-y-5">
@@ -272,9 +277,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 <h2 className="text-2xl font-bold text-text">
                   {tokensThisPeriod > 0
                     ? <><AnimatedNumber value={tokensThisPeriod} /> tokens</>
-                    : props.usageLoading ? 'Loading…' : (
-                      <span className="text-ink/40">No usage yet</span>
-                    )
+                    : props.usageLoading ? 'Loading…'
+                    : props.usageError ? <span className="text-ink/40">Usage unavailable</span>
+                    : <span className="text-ink/40">No usage yet</span>
                   }
                 </h2>
                 {zeroUsage ? (

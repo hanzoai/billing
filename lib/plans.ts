@@ -59,6 +59,7 @@ function mapPublicPlan(p: PublicPlan): SubscriptionPlan {
     // it, and every price-rendering site asks that FIRST.
     price: p.priceMonthly ?? 0,
     annualPrice: p.priceAnnual || undefined,
+    category: p.category,
     billingPeriod: 'monthly',
     currency: p.currency ?? 'usd',
     features: p.features ?? [],

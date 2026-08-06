@@ -5,6 +5,8 @@ import { money } from '@/lib/money'
 import { BASE_PATH } from '@/lib/config'
 
 export interface CreditsPanelProps {
+  /** Why the grants could not be read. Distinct from holding none. */
+  error?: string | null
   creditGrants: CreditGrant[]
   creditBalance?: number
 }
@@ -27,7 +29,7 @@ function formatDate(dateStr: string) {
   }).format(new Date(dateStr))
 }
 
-export function CreditsPanel({ creditGrants, creditBalance = 0 }: CreditsPanelProps) {
+export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: CreditsPanelProps) {
   const activeGrants = creditGrants.filter((g) => g.active && !g.voided)
   const expiredGrants = creditGrants.filter((g) => !g.active || g.voided)
 
@@ -140,7 +142,12 @@ export function CreditsPanel({ creditGrants, creditBalance = 0 }: CreditsPanelPr
         </div>
       )}
 
-      {creditGrants.length === 0 && (
+      {error ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-danger">Couldn&apos;t load your credit grants.</p>
+          <p className="mt-1 text-sm text-text-muted">{error}</p>
+        </div>
+      ) : creditGrants.length === 0 && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-text-muted">No credit grants yet.</p>
         </div>

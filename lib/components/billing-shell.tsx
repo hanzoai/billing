@@ -312,6 +312,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
   const [usageError, setUsageError] = useState<string | null>(null)
+  // Why a fetch produced nothing, per panel. An empty list and a failed read
+  // look identical once they reach a component, and on a money page the
+  // difference is the whole message: "you have no transactions" is a fact about
+  // the account, "we could not read them" is a fact about us. The commerce
+  // client no longer turns a 404 or a 502 into an empty success, so the
+  // rejection actually arrives here and the panel can say which one it has.
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({})
   const [creditGrants, setCreditGrants] = useState<CreditGrant[]>([])
   const [creditBalance, setCreditBalance] = useState(0)
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
@@ -343,6 +350,21 @@ export function BillingShell({ org, user }: BillingShellProps) {
         commerce.getTransactions(userId, { limit: 100 }),
         commerce.listBillingAccounts(),
       ])
+
+      const failed: Record<string, string> = {}
+      const why = (r: PromiseSettledResult<unknown>) =>
+        r.status === 'rejected'
+          ? (r.reason instanceof Error ? r.reason.message : String(r.reason))
+          : ''
+      for (const [panel, result] of [
+        ['balance', bal], ['plans', planList], ['subscriptions', subs],
+        ['invoices', invList], ['payment', pmList], ['alerts', alertList],
+        ['credits', cgList], ['creditBalance', cBal], ['transactions', txList],
+        ['accounts', acctList],
+      ] as const) {
+        if (result.status === 'rejected') failed[panel] = why(result)
+      }
+      setLoadErrors(failed)
 
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
@@ -883,6 +905,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             paymentMethods={paymentMethods}
             usage={usage}
             usageLoading={usageLoading}
+            usageError={usageError}
             balance={balance}
             creditGrants={creditGrants}
             creditBalance={creditBalance}
@@ -934,10 +957,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <CreditsPanel
             creditGrants={creditGrants}
             creditBalance={creditBalance}
+            error={loadErrors.credits ?? null}
           />
         )
       case 'transactions':
-        return <TransactionsPanel transactions={transactions} loading={transactionsLoading} />
+        return <TransactionsPanel transactions={transactions} loading={transactionsLoading} error={loadErrors.transactions ?? null} onRetry={loadBillingData} />
       case 'alerts':
         return (
           <SpendAlertsPanel
@@ -959,6 +983,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       case 'team':
         return (
           <AccountMembers
+            error={loadErrors.accounts ?? null}
             members={accountMembers}
             userRole={userRole}
             onInvite={handleInviteMember}

@@ -4,6 +4,8 @@ import * as React from 'react'
 import type { BillingAccountMember, BillingRole } from './types'
 
 export interface AccountMembersProps {
+  /** Why the member list could not be read. Distinct from having no members. */
+  error?: string | null
   members: BillingAccountMember[]
   userRole: BillingRole
   onInvite?: (email: string, role: BillingRole) => Promise<void>
@@ -26,7 +28,7 @@ function roleBadgeClass(role: BillingRole): string {
 
 const INPUT_CLASS = 'rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand'
 
-export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRemove }: AccountMembersProps) {
+export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRemove, error = null }: AccountMembersProps) {
   const canManage = userRole === 'owner' || userRole === 'admin'
   const [inviteEmail, setInviteEmail] = React.useState('')
   const [inviteRole, setInviteRole] = React.useState<BillingRole>('viewer')
@@ -115,7 +117,12 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
 
         {/* Members list */}
         <div className="divide-y divide-border">
-          {members.length === 0 ? (
+          {error ? (
+            <div className="p-6 text-sm">
+              <p className="text-danger">Couldn&apos;t load the member list.</p>
+              <p className="mt-1 text-text-muted">{error}</p>
+            </div>
+          ) : members.length === 0 ? (
             <div className="p-6 text-sm text-text-muted">No members yet.</div>
           ) : (
             members.map((member) => {
