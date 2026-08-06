@@ -45,18 +45,28 @@ const SQUARE_SCRIPT_URL =
     ? 'https://web.squarecdn.com/v1/square.js'
     : 'https://sandbox.web.squarecdn.com/v1/square.js'
 
-// Square validates fontFamily against its own allowlist (it must load the font
-// into its iframe) and rejects both CSS-wide stacks and arbitrary names like
-// 'Inter', throwing "Invalid style value … for property 'fontFamily'" — which
-// blocks the card iframe from painting. Omit fontFamily entirely → Square uses
-// its built-in default and the fields render cleanly.
-export const SQUARE_CARD_STYLE = {
-  input: {
-    backgroundColor: 'transparent',
-    color: '#fafafa',
-    fontSize: '14px',
-  },
-  'input::placeholder': { color: '#52525b' },
+// ── Card colours ─────────────────────────────────────────────────────────────
+
+/**
+ * Square paints its fields in a cross-origin iframe on a white surface of its
+ * own, and it does NOT accept a background from us — `.input-container`
+ * backgroundColor is rejected outright ("Invalid style property"), and setting
+ * it on `input` changes nothing. So the surface is white whatever the page is.
+ *
+ * Which is why we no longer choose the ink. This used to hard-code `#fafafa`,
+ * a near-white, and that is invisible on white — not only in the light theme,
+ * as was long assumed, but in the DEFAULT dark one too: the typed card number
+ * rendered as ghost text against Square's own white card. Deriving the colour
+ * from the live theme instead just moves which theme is unreadable.
+ *
+ * Square's defaults are dark-on-white and internally consistent, so they are
+ * legible under both our themes, identically. We set the size, and the colour
+ * of the validation message. Nothing here depends on the theme, so the card
+ * never has to re-attach on a flip — which would have discarded whatever the
+ * customer had already typed.
+ */
+const CARD_STYLE = {
+  input: { fontSize: '14px' },
   '.message-text': { color: '#f87171' },
   '.message-icon': { color: '#f87171' },
 }
@@ -113,14 +123,21 @@ export interface UseSquareCard {
  */
 export function useSquareCard(containerId: string, enabled = true): UseSquareCard {
   const cardRef = useRef<SquareCard | null>(null)
-  const mountedRef = useRef(false)
   const [ready, setReady] = useState(false)
   const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled) return
-    mountedRef.current = true
+
+    // Liveness belongs to THIS run of the effect, not to the component. It was a
+    // ref shared across runs, so a cleanup could flip it false and the attach
+    // still in flight from the current run would then read "unmounted" and
+    // destroy the card it had just successfully attached — leaving an empty box
+    // and a permanently disabled Pay button, with no error to explain either.
+    let alive = true
+    let card: SquareCard | null = null
+
     setReady(false)
     setError(null)
     setLoading(true)
@@ -131,7 +148,7 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
       if (!SQUARE_APP_ID) throw new Error('Payment form not configured (missing app ID)')
       if (!SQUARE_LOCATION_ID) throw new Error('Payment form not configured (missing location ID)')
       const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-      const c = await payments.card({ style: SQUARE_CARD_STYLE })
+      const c = await payments.card({ style: CARD_STYLE })
       await c.attach(`#${containerId}`)
       return c
     }
@@ -140,10 +157,11 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
       // Square's "unable to be initialized in time" is often a transient backend
       // timeout — retry with backoff before surfacing an error.
       let lastErr: unknown = null
-      for (let attempt = 1; attempt <= 3 && mountedRef.current; attempt++) {
+      for (let attempt = 1; attempt <= 3 && alive; attempt++) {
         try {
           const c = await attemptInit()
-          if (!mountedRef.current) { await c.destroy().catch(() => undefined); return }
+          if (!alive) { await c.destroy().catch(() => undefined); return }
+          card = c
           cardRef.current = c
           setReady(true)
           setError(null)
@@ -151,12 +169,12 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
           return
         } catch (err) {
           lastErr = err
-          if (attempt < 3 && mountedRef.current) {
+          if (attempt < 3 && alive) {
             await new Promise((r) => setTimeout(r, 1200 * attempt))
           }
         }
       }
-      if (mountedRef.current) {
+      if (alive) {
         const raw = lastErr instanceof Error ? lastErr.message : ''
         setError(
           /initialized in time|timeout|timed out|network/i.test(raw)
@@ -170,9 +188,9 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
     void init()
 
     return () => {
-      mountedRef.current = false
-      cardRef.current?.destroy().catch(() => undefined)
-      cardRef.current = null
+      alive = false
+      card?.destroy().catch(() => undefined)
+      if (cardRef.current === card) cardRef.current = null
       setReady(false)
     }
   }, [containerId, enabled])

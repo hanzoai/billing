@@ -1,13 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import {
-  loadSquareScript,
-  SQUARE_APP_ID,
-  SQUARE_LOCATION_ID,
-  SQUARE_CARD_STYLE,
-  type SquareCard,
-} from '@/lib/square'
+import { useSquareCard } from '@/lib/square'
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
@@ -19,88 +13,34 @@ export interface SquareCardFormProps {
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-const CONTAINER_ID = 'sq-card-container'
+// Its own id. This said `sq-card-container`, the same id the top-up page gives
+// its container, and Square attaches by selector — so whichever mounted second
+// aimed at the first one's box.
+const CONTAINER_ID = 'sq-add-card'
 
 export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
-  const cardRef = React.useRef<SquareCard | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  // The SDK lifecycle lives in `useSquareCard` and nowhere else. This file used
+  // to carry its own copy of the load/attach/retry/destroy dance — the same
+  // logic, drifting separately, and carrying the same liveness bug the hook has
+  // since had fixed.
+  const { ready, loading, error: cardError, tokenize } = useSquareCard(CONTAINER_ID)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  const [ready, setReady] = React.useState(false)
-  const mountedRef = React.useRef(true)
-
-  React.useEffect(() => {
-    mountedRef.current = true
-
-    async function attemptInit(): Promise<SquareCard> {
-      await loadSquareScript()
-      if (!window.Square) throw new Error('Square SDK not available')
-      if (!SQUARE_APP_ID) throw new Error('NEXT_PUBLIC_SQUARE_APPLICATION_ID is not set')
-      if (!SQUARE_LOCATION_ID) throw new Error('NEXT_PUBLIC_SQUARE_LOCATION_ID is not set')
-      const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-      const c = await payments.card({ style: SQUARE_CARD_STYLE })
-      await c.attach(`#${CONTAINER_ID}`)
-      return c
-    }
-
-    async function init() {
-      // Square's "Web Payments SDK was unable to be initialized in time" is
-      // frequently a transient backend timeout. Retry a few times with backoff
-      // before surfacing an error so a single hiccup doesn't strand the form.
-      let lastErr: unknown = null
-      for (let attempt = 1; attempt <= 3 && mountedRef.current; attempt++) {
-        try {
-          const c = await attemptInit()
-          if (!mountedRef.current) { await c.destroy().catch(() => undefined); return }
-          cardRef.current = c
-          setReady(true)
-          setError(null)
-          setLoading(false)
-          return
-        } catch (err) {
-          lastErr = err
-          if (attempt < 3 && mountedRef.current) {
-            await new Promise((r) => setTimeout(r, 1200 * attempt))
-          }
-        }
-      }
-      if (mountedRef.current) {
-        const raw = lastErr instanceof Error ? lastErr.message : ''
-        const friendly = /initialized in time|timeout|timed out|network/i.test(raw)
-          ? 'The card form timed out loading from Square. Reload to retry — or use Crypto or Bank Wire instead. If it keeps failing, a browser ad/privacy blocker may be blocking Square.'
-          : raw || 'Failed to initialize payment form'
-        setError(friendly)
-        setLoading(false)
-      }
-    }
-
-    void init()
-
-    return () => {
-      mountedRef.current = false
-      cardRef.current?.destroy().catch(() => undefined)
-      cardRef.current = null
-    }
-  }, [])
 
   const handleSubmit = React.useCallback(async () => {
-    if (!cardRef.current || !ready || submitting || disabled) return
+    if (!ready || submitting || disabled) return
     setSubmitting(true)
     setError(null)
     try {
-      const result = await cardRef.current.tokenize()
-      if (result.status === 'OK' && result.token) {
-        await onToken(result.token)
-      } else {
-        const msg = result.errors?.map(e => e.message).join('; ') ?? 'Tokenization failed'
-        setError(msg)
-      }
+      await onToken(await tokenize())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment processing error')
     } finally {
-      if (mountedRef.current) setSubmitting(false)
+      setSubmitting(false)
     }
-  }, [onToken, ready, submitting, disabled])
+  }, [onToken, ready, submitting, disabled, tokenize])
+
+  const shown = error ?? cardError
 
   return (
     <div className="space-y-3">
@@ -124,8 +64,8 @@ export function SquareCardForm({ onToken, disabled }: SquareCardFormProps) {
         )}
       </div>
 
-      {error && (
-        <p className="text-sm" style={{ color: '#f87171' }}>{error}</p>
+      {shown && (
+        <p className="text-sm" style={{ color: '#f87171' }}>{shown}</p>
       )}
 
       <button

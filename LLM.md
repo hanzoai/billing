@@ -139,13 +139,18 @@ Colours that are deliberately literal, and why:
 - `lib/config.ts` per-org brand palettes (data, not theme);
 - `app/layout.tsx` `viewport.themeColor` (a `prefers-color-scheme` meta pair);
 - `lib/wallet-providers.tsx` RainbowKit `darkTheme()`;
-- **`lib/square.ts` `SQUARE_CARD_STYLE`** — the ONE surface that still ignores
-  the theme. Square paints its fields in a cross-origin iframe and takes literal
-  colour strings, so it cannot read a custom property. Fixing it means resolving
-  the tokens with `getComputedStyle` at attach time AND re-attaching the card on
-  a theme flip; it cannot be verified locally because the Square SDK will not
-  load against sandbox credentials over plain http. Left alone deliberately —
-  in light mode the card input renders light-on-light.
+- **`lib/square.ts` `CARD_STYLE`** — the card fields keep SQUARE's colours, not
+  ours, and that is the fix rather than a gap. Square paints them in a
+  cross-origin iframe on a white surface it will not let us repaint:
+  `.input-container` backgroundColor is rejected outright ("Invalid style
+  property", which fails the whole attach), and setting it on `input` does
+  nothing. So an ink chosen from our theme is invisible in whichever theme is
+  light-on-light — this shipped as a hard-coded `#fafafa`, which was ghost text
+  on white in the DEFAULT dark theme, not just in light. Square's own defaults
+  are dark-on-white and internally consistent, so they read identically under
+  both themes. We set the font size and the validation-message colour, nothing
+  else, and the hook therefore has no theme dependency — one that re-attached on
+  a flip would discard whatever the customer had already typed.
 
 A class with no rule in any delivered sheet is silently unstyled: same failure
 mode as an unrecognised style prop. `postbuild` runs **`gui-css-check`** so that
@@ -193,7 +198,7 @@ advertising a current offer.
   ever disagreed on (catalog prices are whole dollars, ledger amounts are to the
   cent). Do not add a local `fmt` / `formatCurrency`; there were fourteen.
 - **Square tokenization** lives in ONE place: `lib/square.ts` (`useSquareCard`
-  hook + `loadSquareScript` + config + `SQUARE_CARD_STYLE`). Both money-in flows
+  hook + `loadSquareScript` + config + `CARD_STYLE`). All money-in flows
   reuse it — the top-up page (`app/topup/page.tsx`) and paid-plan checkout
   (`lib/billing/subscribe-card-form.tsx`). Card data never touches our code;
   Square returns a single-use `sourceId` nonce the server charges.

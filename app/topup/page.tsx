@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getCommerce } from '@/lib/commerce'
+import { getAccessToken, getCurrentUser } from '@/lib/iam-auth'
 import { useSquareCard } from '@/lib/square'
 import { ErrorBoundary } from '@/lib/components/error-boundary'
 import {
@@ -79,10 +80,18 @@ export default function TopupPage() {
       .find((c) => c.trim().startsWith('hanzo-auth-token='))
       ?.split('=')[1]
 
+    // The embedders' params win, then the signed-in session. That last fallback
+    // is the whole self-serve flow: reached from the app's own Add-credit links
+    // there is no query token and no cookie — the session is in localStorage,
+    // where `getAccessToken` reads it — so every top-up opened from inside the
+    // product had no token and died on submit with "Authentication required".
+    // Same for the subject: commerce keys billing on the org slug, so falling
+    // back to the token's `sub` would credit a different account than the one
+    // whose balance the rest of the app shows.
     setParams({
       amount: raw ? parseInt(raw, 10) : null,
-      userId: sp.get('userId'),
-      token: sp.get('token') ?? cookieToken ?? null,
+      userId: sp.get('userId') ?? getCurrentUser()?.commerceUserId ?? null,
+      token: sp.get('token') ?? cookieToken ?? getAccessToken(),
       returnUrl: sp.get('returnUrl'),
     })
   }, [])
@@ -100,32 +109,18 @@ export default function TopupPage() {
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Cards already on file — offered before the blank Square form ─────────
-  const [saved, setSaved] = useState<{ id: string; label: string; isDefault?: boolean }[]>([])
-  const [payWith, setPayWith] = useState<string>('new')
-  useEffect(() => {
-    if (!params.token) return
-    const commerce = getCommerce(commerceUrl, params.token)
-    commerce.getPaymentMethods(params.userId ?? '').then((rows) => {
-      const cards = rows
-        .filter((r) => (r.type ?? 'card') === 'card')
-        .map((r) => ({
-          id: r.id ?? '',
-          label: r.card?.brand && r.card?.last4 ? `${r.card.brand} ending in ${r.card.last4}` : 'Saved card',
-          isDefault: r.isDefault ?? false,
-        }))
-        .filter((c) => c.id !== '')
-      setSaved(cards)
-      if (cards.length > 0) setPayWith((cards.find((c) => c.isDefault) ?? cards[0]).id)
-    }).catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.token])
-
-  // ── Square card element (shared hook) — only init on the Card tab, and only
-  //    once "Use a new card" is the choice (a saved-card charge never loads it).
+  // ── Square card element (shared hook) — only init on the Card tab ─────────
+  //
+  // A card on file is NOT offered here. It was, defaulting to the stored card,
+  // but the charge behind it — POST /v1/billing/topup — is not a route commerce
+  // serves: it answers 404 to an authenticated caller on both the gateway and
+  // commerce directly, while the nonce path beside it answers 400 "sourceId is
+  // required". So the option could only ever fail, and picking it by default
+  // made failing the DEFAULT. One money-in path here, the one that works:
+  // Square holds the card, returns a nonce, the server charges it.
   const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
     'sq-card-container',
-    tab === 'card' && payWith === 'new',
+    tab === 'card',
   )
 
   // ── Crypto payment state ─────────────────────────────────────────────────
@@ -158,7 +153,7 @@ export default function TopupPage() {
     [params.returnUrl],
   )
 
-  // ── Card submit: charge the chosen saved card, or tokenize a new one ─────
+  // ── Card submit: tokenize with Square, then charge the nonce ─────────────
   const handleCardSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -166,8 +161,7 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
         return
       }
-      const useNew = payWith === 'new'
-      if (useNew && !sqReady) {
+      if (!sqReady) {
         setStatus({ type: 'error', message: 'Card form not ready. Please wait.' })
         return
       }
@@ -175,27 +169,18 @@ export default function TopupPage() {
       setStatus({ type: 'loading' })
       try {
         const commerce = getCommerce(commerceUrl, params.token)
-        const userId = params.userId ?? ''
-
-        const payment = useNew
-          ? await commerce.topupWithSquareToken({
-              sourceId: await sqTokenize(),
-              amountCents,
-              userId: userId || undefined,
-              currency: 'usd',
-            })
-          : await commerce.topupWithMethod({
-              paymentMethodId: payWith,
-              amountCents,
-              currency: 'usd',
-            })
-
+        const payment = await commerce.topupWithSquareToken({
+          sourceId: await sqTokenize(),
+          amountCents,
+          userId: params.userId || undefined,
+          currency: 'usd',
+        })
         handleSuccess(payment.balanceCents)
       } catch (err) {
         setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
       }
     },
-    [params, payWith, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
+    [params, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────
@@ -429,79 +414,43 @@ export default function TopupPage() {
         {/* ── Card tab ─────────────────────────────────────────────────── */}
         {tab === 'card' && (
           <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Saved cards first — the blank form only for "Use a new card". */}
-            {saved.length > 0 && (
-              <div role="radiogroup" aria-label="Pay with" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {[...saved.map((c) => ({ key: c.id, label: c.label, isDefault: c.isDefault })), { key: 'new', label: 'Use a new card', isDefault: false }].map((opt) => (
-                  <label
-                    key={opt.key}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                      borderRadius: '8px', padding: '9px 12px', fontSize: '13px',
-                      border: `1px solid ${payWith === opt.key ? 'color-mix(in oklab, var(--color-text) 35%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
-                      background: payWith === opt.key ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'transparent',
-                      color: payWith === opt.key ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 55%, transparent)',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="topup-pay-with"
-                      checked={payWith === opt.key}
-                      onChange={() => setPayWith(opt.key)}
-                      style={{ accentColor: 'currentColor' }}
-                    />
-                    <span>{opt.label}</span>
-                    {opt.isDefault && (
-                      <span style={{ marginLeft: 'auto', fontSize: '10px', borderRadius: '999px', padding: '2px 8px', border: '1px solid color-mix(in oklab, var(--color-text) 12%, transparent)', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)' }}>Default</span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
-
             {/* Square card container */}
-            {payWith === 'new' && (
-              <div
-                id="sq-card-container"
-                style={{
-                  minHeight: '96px',
-                  borderRadius: '8px',
-                  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-                  background: 'var(--color-bg)',
-                  padding: '10px 12px',
-                  position: 'relative',
-                }}
-              >
-                {sqLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-                    <div style={{
-                      width: '18px', height: '18px',
-                      border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
-                      borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
-                      borderRadius: '50%',
-                      animation: 'sq-spin 0.8s linear infinite',
-                    }} />
-                    <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
-                  </div>
-                )}
-                {sqError && !sqLoading && (
-                  <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
-                    {sqError}
-                  </div>
-                )}
-              </div>
-            )}
+            <div
+              id="sq-card-container"
+              style={{
+                minHeight: '96px',
+                borderRadius: '8px',
+                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+                background: 'var(--color-bg)',
+                padding: '10px 12px',
+                position: 'relative',
+              }}
+            >
+              {sqLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+                  <div style={{
+                    width: '18px', height: '18px',
+                    border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
+                    borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
+                    borderRadius: '50%',
+                    animation: 'sq-spin 0.8s linear infinite',
+                  }} />
+                  <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+              {sqError && !sqLoading && (
+                <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
+                  {sqError}
+                </div>
+              )}
+            </div>
 
             <button
               type="submit"
-              style={submitStyle(isLoading || (payWith === 'new' && !sqReady))}
-              disabled={isLoading || (payWith === 'new' && !sqReady)}
+              style={submitStyle(isLoading || !sqReady)}
+              disabled={isLoading || !sqReady}
             >
-              {isLoading
-                ? 'Processing...'
-                : payWith === 'new'
-                  ? `Pay ${moneyFromCents(amountCents)}`
-                  : `Pay ${moneyFromCents(amountCents)} with ${saved.find((c) => c.id === payWith)?.label ?? 'saved card'}`}
+              {isLoading ? 'Processing...' : `Pay ${moneyFromCents(amountCents)}`}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>
@@ -804,8 +753,12 @@ function submitStyle(disabled: boolean): React.CSSProperties {
     padding: '10px 16px',
     fontSize: '13px',
     fontWeight: 600,
-    background: disabled ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : '#ffffff',
-    color: disabled ? 'color-mix(in oklab, var(--color-text) 30%, transparent)' : 'var(--color-bg)',
+    // The brand pair, not a literal. This was `#ffffff` on `var(--color-bg)`,
+    // which is white-on-white the moment the ground is light — the primary
+    // action on the money page, invisible. `--color-brand` and its foreground
+    // invert together with the theme, so the pair always contrasts.
+    background: disabled ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'var(--color-brand)',
+    color: disabled ? 'color-mix(in oklab, var(--color-text) 30%, transparent)' : 'var(--color-brand-foreground)',
     border: 'none',
     borderRadius: '8px',
     cursor: disabled ? 'not-allowed' : 'pointer',
