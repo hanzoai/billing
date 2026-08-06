@@ -221,6 +221,138 @@ advertising a current offer.
   https://billing.hanzo.ai`). Public catalog prices are DOLLARS; commerce's are
   cents.
 
+## Testing money flows in sandbox
+
+Money-in can be exercised end to end with FAKE money. Nothing below changes a
+production CR, and none of it needs a deploy.
+
+**The authority is the ORG, not the deployment.** commerce resolves sandbox vs
+production from the org record alone — `organization.TestMode()` is `!o.Live`
+(`models/organization/testmode.go`), and that ONE fact picks both the credential
+set (`payment/orgsetup.go` → `SQUARE_SANDBOX_ACCESS_TOKEN` /
+`SQUARE_SANDBOX_LOCATION_ID`) and the ledger bucket (`trans.Test` in
+`api/billing/payment_core.go`). So a `Live=false` org transacts in Square sandbox
+and credits the TEST balance, on the same replica that serves live merchants. A
+sandbox charge can never mint spendable credit, and production needs no change to
+serve one.
+
+**But the SPA does not follow the org.** `lib/square.ts` reads the app id and
+location id from `NEXT_PUBLIC_*`, which Next.js bakes in at BUILD time
+(`output: 'export'`). commerce already computes the per-org answer and serves it
+(`payment.SquarePublicConfig` → `GET /v1/billing/settings`), but nothing here
+fetches it. Consequence: **billing.hanzo.ai cannot be used to test sandbox** — the
+browser would tokenize against the production application while commerce charged
+with the sandbox token, and Square rejects the cross-environment nonce. Testing
+sandbox therefore means a LOCAL build with sandbox values, pointed at a
+`Live=false` org. (Making the SPA read `/v1/billing/settings` would remove this
+split and let one build serve both; until then, keep the two in step by hand.)
+
+### Credentials
+
+Sandbox app id and location id are PUBLIC — Square hands them to the browser, so
+they belong in a build arg, not a vault:
+
+```
+NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox
+NEXT_PUBLIC_SQUARE_APPLICATION_ID=sandbox-sq0idb--kZP78n8_TjQOu8qApr5iQ
+NEXT_PUBLIC_SQUARE_LOCATION_ID=LD8DWE4KKB0WB
+```
+
+The server-side access token is the only secret. It lives in Hanzo KMS, project
+`hanzo-commerce`, env `prod`, path `/`, key **`SQUARE_SANDBOX_ACCESS_TOKEN`**,
+synced by `universe/infra/k8s/commerce/kms-secrets.yaml` into the `commerce-secrets`
+Secret in namespace `hanzo`. Never paste the value into a file, a build arg, or a
+commit — read it at point of use:
+
+```bash
+kubectl get secret commerce-secrets -n hanzo \
+  -o jsonpath='{.data.SQUARE_SANDBOX_ACCESS_TOKEN}' | base64 -d
+```
+
+### Test card
+
+`4111 1111 1111 1111` · any future expiry · any CVV · ZIP `94103`.
+Square's sandbox also accepts the pre-made nonce `cnon:card-nonce-ok` as a
+`sourceId`, which is how the charge leg is proven without a browser.
+
+### Run the card flow
+
+Square's Web Payments SDK refuses to load over plain `http` on a non-localhost
+origin, and the sandbox CDN (`sandbox.web.squarecdn.com`) is selected whenever
+`NEXT_PUBLIC_SQUARE_ENVIRONMENT` is not `production`. `http://localhost:3005` is
+exempt, so `pnpm dev` needs no certificate; anything else does (`mkcert`).
+
+```bash
+cd ~/work/hanzo/hanzoai/billing
+cat > .env.local <<'EOF'
+NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox
+NEXT_PUBLIC_SQUARE_APPLICATION_ID=sandbox-sq0idb--kZP78n8_TjQOu8qApr5iQ
+NEXT_PUBLIC_SQUARE_LOCATION_ID=LD8DWE4KKB0WB
+NEXT_PUBLIC_BASE_PATH=
+EOF
+pnpm dev            # http://localhost:3005/topup
+```
+
+`.env.local` outranks `.env.production` and is git-ignored, so the committed live
+defaults are never mutated. Sign in, open `/topup`, enter the test card, submit:
+the SPA tokenizes and calls `POST /v1/billing/topup/token` with the nonce. Read
+the balance either side with `GET /v1/billing/balance`. The credited subject is
+the org slug, resolved server-side — a body value cannot steer it.
+
+The same values exist as Docker build args (`SQUARE_APPLICATION_ID`,
+`SQUARE_LOCATION_ID`, `SQUARE_ENVIRONMENT`) for a throwaway sandbox image; they
+write `.env.production.local` at build. Do not point a shared host at that image.
+
+### Verify the charge leg alone
+
+Proves the KMS token and location take money, no browser involved:
+
+```bash
+TOK=$(kubectl get secret commerce-secrets -n hanzo \
+  -o jsonpath='{.data.SQUARE_SANDBOX_ACCESS_TOKEN}' | base64 -d)
+curl -s https://connect.squareupsandbox.com/v2/payments \
+  -H "Square-Version: 2025-01-23" -H "Authorization: Bearer $TOK" \
+  -H 'Content-Type: application/json' \
+  -d '{"source_id":"cnon:card-nonce-ok","idempotency_key":"probe-'"$(date +%s)"'",
+       "amount_money":{"amount":2500,"currency":"USD"},"location_id":"LD8DWE4KKB0WB"}' \
+  | jq '{status:.payment.status, id:.payment.id}'
+```
+
+### Verify the ledger leg alone
+
+The Square call is provider-owned; the ledger invariants are pinned
+deterministically in `hanzoai/commerce`. Build the way the product ships —
+`CGO_ENABLED=0` — because `hanzoai/base` deliberately fails a cgo build that
+lacks `sqlite_math_functions`:
+
+```bash
+cd ~/work/hanzo/hanzoai/commerce
+CGO_ENABLED=0 go test ./api/billing/ -run TestTopup -v
+```
+
+`TestTopup_SandboxChargeCreditsTestBucket` drives the real handler for a
+`Live=false` org and asserts the test bucket rises while the live bucket stays
+empty.
+
+### Crypto is NOT testable this way — the tab's door is not the credited rail
+
+`app/topup/page.tsx` gates its crypto tab on `NEXT_PUBLIC_HANZO_ETH_TREASURY`,
+and setting it does render the address and form. Do not read that as a working
+test surface. That tab posts a user-typed tx hash to `POST /v1/payments`, which
+is a GENERIC REST resource (`rest.New(payment.Payment{})` in `commerce/api/api.go`)
+with no create hook: nothing verifies the hash on-chain and nothing credits a
+balance. It also hardcodes `network: 'ethereum'`, so a Sepolia send would be
+recorded as mainnet.
+
+The real rail is MPC custody — `POST /v1/billing/crypto/deposit` for a per-payer
+address, `GET /v1/billing/crypto/options` for the live chain/token set, and a
+chain watcher that credits only on confirmations (`api/billing/crypto_deposit.go`:
+"nothing here mints, so a claimed deposit is worth nothing until the chain says
+otherwise"). Point the tab at that rail before enabling it. Publishing a treasury
+address behind a door that cannot credit is how a customer sends real USDC and
+gets nothing — the same failure the hardcoded third-party address already caused
+once.
+
 ## License
 
 Dual-licensed **MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`), replacing the
