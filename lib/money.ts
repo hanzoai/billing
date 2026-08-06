@@ -19,6 +19,22 @@ export function money(value: number, currency = 'USD', digits: 0 | 2 = 2): strin
   }).format(value)
 }
 
+/**
+ * How many fraction digits a catalog price needs to stay true.
+ *
+ * `digits: 0` is right for a catalog of whole dollars and wrong the moment one
+ * price carries cents. The annual rates do: Go is 8.25 against 9, Pro 41.5
+ * against 49. Rounding those to the dollar put two different annual prices on
+ * one card — a $8 headline above its own "$8.25/mo billed annually" — because
+ * the headline was rounded and the sub-line was not. Same number, two
+ * formatters, and the customer gets to decide which one the charge will be.
+ *
+ * So the price itself decides, and every catalog figure asks the same question.
+ */
+export function cents(value: number): 0 | 2 {
+  return Number.isInteger(value) ? 0 : 2
+}
+
 /** Commerce ledger amounts (balances, transactions, top-ups) are CENTS. */
 export function moneyFromCents(cents: number, currency = 'USD', digits: 0 | 2 = 2): string {
   return money(cents / 100, currency, digits)

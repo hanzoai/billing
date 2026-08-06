@@ -48,7 +48,7 @@ export interface SubscriptionPortalProps {
 
 import { SubscribeCardForm, type SavedCard } from './subscribe-card-form'
 import type { CardInput } from '@/lib/commerce-client'
-import { money } from '@/lib/money'
+import { cents, money } from '@/lib/money'
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -588,7 +588,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const shown = shownPrice(plan)
             const priceLabel = isFree
               ? plan.contactSales ? 'Custom' : 'Free'
-              : money(shown, plan.currency ?? 'USD', 0)
+              : money(shown, plan.currency ?? 'USD', cents(shown))
             const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
@@ -649,7 +649,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     {priceSuffix && <span className="text-sm font-normal text-ink/40">{priceSuffix}</span>}
                   </p>
                   {plan.annualPrice && !isCurrent ? (
-                    <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
+                    <p className="mt-0.5 text-[12px] text-emerald-400">{money(plan.annualPrice, plan.currency ?? 'USD', cents(plan.annualPrice))}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
                   ) : null}
                   {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
                     <p className="mt-0.5 text-[12px] text-emerald-400">+${(plan.trialCreditCents! / 100).toFixed(0)} credit included</p>
@@ -798,7 +798,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                                 ? 'Custom'
                                 : shownPrice(p) === 0
                                   ? 'Free'
-                                  : money(shownPrice(p), p.currency ?? 'USD', 0)}
+                                  : money(shownPrice(p), p.currency ?? 'USD', cents(shownPrice(p)))}
                             </span>
                           </th>
                         ))}
