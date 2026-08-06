@@ -1,7 +1,9 @@
 'use client'
 
 /**
- * Square Web Payments SDK — the ONE place the billing SPA tokenizes a card.
+ * Square Web Payments SDK — the ONE place the billing SPA tokenizes. The card
+ * fields and the Apple Pay sheet both live here; every payment leaves as the
+ * same single-use `sourceId` nonce.
  *
  * Both money-in flows (the top-up page and paid-plan self-serve checkout) mount
  * a Square card element and turn the entered card into a single-use `sourceId`
@@ -23,8 +25,17 @@ export interface SquareCard {
   tokenize(): Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>
   destroy(): Promise<void>
 }
+interface SquarePaymentRequest {
+  /** Reflect a changed total into the (not yet open) sheet; true when applied. */
+  update(options: { total: { amount: string; label: string } }): boolean
+}
+interface SquareApplePay {
+  tokenize(): Promise<{ status: string; token?: string; errors?: Array<{ message: string }> }>
+}
 interface SquarePayments {
   card(options?: Record<string, unknown>): Promise<SquareCard>
+  paymentRequest(options: Record<string, unknown>): SquarePaymentRequest
+  applePay(request: SquarePaymentRequest): Promise<SquareApplePay>
 }
 interface SquareSDK {
   payments(appId: string, locationId: string): Promise<SquarePayments>
@@ -32,6 +43,8 @@ interface SquareSDK {
 declare global {
   interface Window {
     Square?: SquareSDK
+    /** WebKit only — the capability probe Apple Pay availability gates on. */
+    ApplePaySession?: { canMakePayments(): boolean }
   }
 }
 
@@ -206,4 +219,95 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
   }, [])
 
   return { ready, loading, error, tokenize }
+}
+
+// ── Apple Pay ─────────────────────────────────────────────────────────────────
+
+/** The sheet's total row: our name, the amount being charged. */
+function sheetTotal(amountCents: number): { amount: string; label: string } {
+  return { amount: (amountCents / 100).toFixed(2), label: 'Hanzo' }
+}
+
+export interface UseApplePay {
+  /** The device offers Apple Pay AND Square accepted this origin for it. */
+  ready: boolean
+  /**
+   * Open the Apple Pay sheet → single-use nonce. Resolves null when the
+   * customer dismisses the sheet — a change of mind, not an error to show.
+   * Throws with a human message on a real failure.
+   */
+  tokenize: () => Promise<string | null>
+}
+
+/**
+ * Apple Pay on the same Square payments plane as the card form: the sheet
+ * returns the same single-use `sourceId` nonce, charged by the same server
+ * calls. No card data, no separate money path.
+ *
+ * Availability is a feature test, never a setting. The device must offer
+ * Apple Pay at all (ApplePaySession.canMakePayments) and Square must accept
+ * this origin (payments.applePay resolves only on a domain registered for
+ * Apple Pay). Either test failing leaves `ready` false and the caller keeps
+ * its generic pay button — silently, because an unavailable wallet is a fact
+ * about the browser, not something the customer can act on.
+ *
+ * Built once; the sheet's total tracks `amountCents` via paymentRequest
+ * .update(), so an amount click never rebuilds the wallet session.
+ */
+export function useApplePay(amountCents: number, enabled = true): UseApplePay {
+  const applePayRef = useRef<SquareApplePay | null>(null)
+  const requestRef = useRef<SquarePaymentRequest | null>(null)
+  const [ready, setReady] = useState(false)
+
+  // Init reads the amount from a ref: the one-time build must see the amount
+  // current at build time without re-running on every amount click.
+  const amountRef = useRef(amountCents)
+  amountRef.current = amountCents
+
+  useEffect(() => {
+    if (!enabled || applePayRef.current) return
+    if (typeof window === 'undefined' || !window.ApplePaySession?.canMakePayments()) return
+
+    let alive = true
+    ;(async () => {
+      try {
+        await loadSquareScript()
+        if (!alive || !window.Square || !SQUARE_APP_ID || !SQUARE_LOCATION_ID) return
+        const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+        const request = payments.paymentRequest({
+          countryCode: 'US',
+          currencyCode: 'USD',
+          total: sheetTotal(amountRef.current),
+        })
+        const applePay = await payments.applePay(request)
+        if (!alive) return
+        requestRef.current = request
+        applePayRef.current = applePay
+        setReady(true)
+      } catch {
+        // Origin not registered with Square for Apple Pay, or the SDK refused —
+        // the card form stands and nothing here needs saying.
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [enabled])
+
+  useEffect(() => {
+    requestRef.current?.update({ total: sheetTotal(amountCents) })
+  }, [amountCents])
+
+  const tokenize = useCallback(async (): Promise<string | null> => {
+    const applePay = applePayRef.current
+    if (!applePay) throw new Error('Apple Pay is not ready yet. Please wait a moment.')
+    const result = await applePay.tokenize()
+    if (result.status === 'Cancel') return null
+    if (result.status !== 'OK' || !result.token) {
+      throw new Error(result.errors?.map((e) => e.message).join('; ') ?? 'Apple Pay could not authorize the payment')
+    }
+    return result.token
+  }, [])
+
+  return { ready, tokenize }
 }

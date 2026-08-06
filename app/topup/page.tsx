@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getCommerce } from '@/lib/commerce'
 import { BASE_PATH } from '@/lib/config'
 import { getAccessToken, getCurrentUser } from '@/lib/iam-auth'
-import { useSquareCard } from '@/lib/square'
+import { useApplePay, useSquareCard } from '@/lib/square'
 import { ErrorBoundary } from '@/lib/components/error-boundary'
 import {
   sendHusdTopup,
@@ -57,6 +57,9 @@ interface SavedCard {
 
 /** The choice that opens the Square form. Never a payment-method id. */
 const NEW_CARD = 'new'
+
+/** The wallet choice. Offered only while the device and Square both say yes. */
+const APPLE_PAY = 'apple-pay'
 
 /**
  * The saved methods this page can actually charge.
@@ -167,7 +170,9 @@ export default function TopupPage() {
   // the blank Square form it was.
   const [cards, setCards] = useState<SavedCard[]>([])
   const [cardsLoading, setCardsLoading] = useState(true)
-  const [chosen, setChosen] = useState<string>(NEW_CARD)
+  // The row the customer clicked — null until they do. What is CHARGED is the
+  // derived `chosen` below, so the opening choice never needs an effect.
+  const [picked, setPicked] = useState<string | null>(null)
 
   const amountCents = customAmountCents ?? params.amount ?? TOPUP_DEFAULT
 
@@ -206,11 +211,7 @@ export default function TopupPage() {
       .getPaymentMethods(userId, token)
       .then((methods) => {
         if (!live) return
-        const saved = chargeableCards(methods)
-        setCards(saved)
-        // The card the customer marked default is the opening choice, else the
-        // most recent. Only 'new' when there is genuinely nothing to charge.
-        if (saved.length > 0) setChosen((saved.find((c) => c.isDefault) ?? saved[0]).id)
+        setCards(chargeableCards(methods))
       })
       .catch(() => {
         if (live) setCards([])
@@ -223,13 +224,28 @@ export default function TopupPage() {
     }
   }, [commerceUrl])
 
+  // ── Apple Pay (shared hook) ───────────────────────────────────────────────
+  //
+  // When the device can pay this way, the wallet IS the payment action — the
+  // generic pay button renders only as its fallback. Availability is a feature
+  // test inside the hook; `ready` false costs nothing and shows nothing.
+  const { ready: apReady, tokenize: apTokenize } = useApplePay(amountCents, tab === 'card')
+
+  // What is charged on submit: the customer's own click wins, then Apple Pay
+  // when the device offers it, then the saved default card, then the blank
+  // form. Derived, so the async arrivals (wallet, cards) cannot race a chosen
+  // value out from under a customer who never clicked anything.
+  const chosen =
+    picked ?? (apReady ? APPLE_PAY : cards.length > 0 ? (cards.find((c) => c.isDefault) ?? cards[0]).id : NEW_CARD)
+
   const useNewCard = chosen === NEW_CARD
   const chosenCard = cards.find((c) => c.id === chosen)
 
   // ── Square card element (shared hook) ─────────────────────────────────────
   //
-  // Only for a card being typed: a saved-card top-up never loads the SDK, and
-  // neither does the wait while we are still finding out whether there is one.
+  // Only for a card being typed: a saved-card or wallet top-up never loads the
+  // card fields, and neither does the wait while we are still finding out
+  // whether there is a saved one.
   const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
     'sq-card-container',
     tab === 'card' && useNewCard && !cardsLoading,
@@ -276,9 +292,32 @@ export default function TopupPage() {
       setStatus({ type: 'loading' })
       const commerce = getCommerce(commerceUrl, params.token)
 
-      // A nonce is single-use, so the tokenized path needs no idempotency key —
+      // A nonce is single-use, so the tokenized paths need no idempotency key —
       // spending one twice is not something Square permits, and re-tokenizing
       // mints a different nonce anyway. Only the reusable saved card needs one.
+      // Apple Pay and a typed card are the same money path: a sheet or an
+      // iframe mints the nonce, the identical server call charges it.
+      if (chosen === APPLE_PAY) {
+        try {
+          const sourceId = await apTokenize()
+          if (!sourceId) {
+            // Sheet dismissed — a change of mind, not a failure.
+            setStatus({ type: 'idle' })
+            return
+          }
+          const payment = await commerce.topupWithSquareToken({
+            sourceId,
+            amountCents,
+            userId: params.userId || undefined,
+            currency: 'usd',
+          })
+          handleSuccess(payment.balanceCents)
+        } catch (err) {
+          setStatus({ type: 'error', message: chargeMessage(err) })
+        }
+        return
+      }
+
       if (useNewCard) {
         try {
           const payment = await commerce.topupWithSquareToken({
@@ -317,7 +356,7 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: chargeMessage(err) })
       }
     },
-    [params, useNewCard, chosen, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
+    [params, useNewCard, chosen, sqReady, sqTokenize, apTokenize, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────
@@ -475,7 +514,10 @@ export default function TopupPage() {
   // Paying is off while a charge is in flight, while we still do not know which
   // cards exist, and — for a card being typed — until Square's fields are live.
   // A saved card needs none of that: it is chargeable the moment it is chosen.
-  const payDisabled = isLoading || cardsLoading || (useNewCard && !sqReady)
+  // Apple Pay needs only itself: the sheet carries its own credentials, so the
+  // cards-on-file answer cannot gate it.
+  const payDisabled =
+    isLoading || (chosen !== APPLE_PAY && (cardsLoading || (useNewCard && !sqReady)))
 
   // ── Render: main form ──────────────────────────────────────────────────────
   return (
@@ -557,22 +599,27 @@ export default function TopupPage() {
         {/* ── Card tab ─────────────────────────────────────────────────── */}
         {tab === 'card' && (
           <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Cards on file — the chooser only appears when there is a choice.
-                While the answer is unknown the page says so rather than showing
-                a blank form it may be about to replace. */}
-            {cardsLoading ? (
+            {/* Ways to pay — the chooser only appears when there is a choice:
+                a wallet, a card on file, or both. While the cards answer is
+                unknown the page says so rather than showing a blank form it
+                may be about to replace. */}
+            {cardsLoading && !apReady ? (
               <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', margin: 0 }}>
                 Checking for cards on file…
               </p>
-            ) : cards.length > 0 ? (
+            ) : apReady || cards.length > 0 ? (
               <div role="radiogroup" aria-label="Pay with" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {[...cards, { id: NEW_CARD, label: 'Use a new card', isDefault: false }].map((opt) => (
+                {[
+                  ...(apReady ? [{ id: APPLE_PAY, label: 'Apple Pay', isDefault: false }] : []),
+                  ...cards,
+                  { id: NEW_CARD, label: 'Use a new card', isDefault: false },
+                ].map((opt) => (
                   <label key={opt.id} style={choiceStyle(chosen === opt.id)}>
                     <input
                       type="radio"
                       name="topup-card"
                       checked={chosen === opt.id}
-                      onChange={() => setChosen(opt.id)}
+                      onChange={() => setPicked(opt.id)}
                       style={{ accentColor: 'currentColor' }}
                     />
                     <span>{opt.label}</span>
@@ -619,17 +666,30 @@ export default function TopupPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              style={submitStyle(payDisabled)}
-              disabled={payDisabled}
-            >
-              {isLoading
-                ? 'Processing...'
-                : chosenCard
-                  ? `Pay ${moneyFromCents(amountCents)} with ${chosenCard.label}`
-                  : `Pay ${moneyFromCents(amountCents)}`}
-            </button>
+            {/* ONE payment action. When Apple Pay is on the sheet the wallet
+                button IS it — WebKit paints the mark, so the element stays
+                empty — and the generic pay button exists only as the fallback
+                for everything else. Never both. */}
+            {chosen === APPLE_PAY ? (
+              <button
+                type="submit"
+                className="apple-pay-button"
+                disabled={payDisabled}
+                aria-label={`Pay ${moneyFromCents(amountCents)} with Apple Pay`}
+              />
+            ) : (
+              <button
+                type="submit"
+                style={submitStyle(payDisabled)}
+                disabled={payDisabled}
+              >
+                {isLoading
+                  ? 'Processing...'
+                  : chosenCard
+                    ? `Pay ${moneyFromCents(amountCents)} with ${chosenCard.label}`
+                    : `Pay ${moneyFromCents(amountCents)}`}
+              </button>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
