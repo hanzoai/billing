@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 // Every billing surface comes from ONE place: the local `lib/billing` barrel.
 // Two reasons, and both still hold. The published @hanzo/ui/billing bundle drags
 // in a first-party card form that reads the raw PAN into JS — Square Web Payments
@@ -43,7 +43,7 @@ import type {
   SubscriptionPlan,
   DiscountCode,
 } from '@/lib/billing'
-import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
+import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, logout } from '@/lib/iam-auth'
 import { type BillingOrgConfig, isAdminUser, BASE_PATH, SALES_URL } from '@/lib/config'
@@ -562,20 +562,34 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await handleUpgrade(planId)
   }, [handleUpgrade])
 
-  // Self-serve paid checkout: charge a Square nonce and start the subscription.
-  // Rethrows CommerceApiError (with .status) so SubscribeCardForm can branch on
-  // 402/409/422/500 with honest UI. On success, refresh state to show the plan.
-  const handleSubscribeWithCard = useCallback(async (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => {
+  // Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
+  // start the subscription. Rethrows CommerceApiError (with .status) so
+  // SubscribeCardForm can branch on 402/404/409/422/500 with honest UI. On
+  // success, refresh state to show the plan.
+  const handleSubscribeWithCard = useCallback(async (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => {
     const token = getAccessToken()
     if (!token) throw new Error('Your session expired. Please sign in again.')
     const commerce = getCommerce(org.commerceUrl, token)
     const userId = user.commerceUserId || user.email || user.sub
     await commerce.subscribeWithCard(
-      { sourceId, planId, userId, quantity, currency: 'usd' },
+      { ...card, planId, userId, quantity, currency: 'usd' },
       { idempotencyKey },
     )
     await loadBillingData()
   }, [org, user, loadBillingData])
+
+  // Cards on file the checkout can charge directly. Only card methods qualify;
+  // the label is the receipt name commerce stamps ("Visa ending in 4242") or
+  // the card facts, falling back to a generic that is still honest.
+  const savedCards = useMemo(() => paymentMethods
+    .filter((m) => m.type === 'card')
+    .map((m) => ({
+      id: m.id,
+      label: m.card?.brand && m.card?.last4
+        ? `${m.card.brand} ending in ${m.card.last4}`
+        : 'Saved card',
+      isDefault: m.isDefault ?? m.is_default,
+    })), [paymentMethods])
 
   const handleCancel = useCallback(async (_reason: string, _feedback?: string) => {
     const token = getAccessToken()
@@ -907,6 +921,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onCancel={handleCancel}
             onApplyDiscount={handleApplyDiscount}
             onSubscribeWithCard={handleSubscribeWithCard}
+            savedCards={savedCards}
           />
         )
       case 'credits':

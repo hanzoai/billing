@@ -100,10 +100,32 @@ export default function TopupPage() {
   // ── Commerce client ──────────────────────────────────────────────────────
   const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
-  // ── Square card element (shared hook) — only init on the Card tab ────────
+  // ── Cards already on file — offered before the blank Square form ─────────
+  const [saved, setSaved] = useState<{ id: string; label: string; isDefault?: boolean }[]>([])
+  const [payWith, setPayWith] = useState<string>('new')
+  useEffect(() => {
+    if (!params.token) return
+    const commerce = getCommerce(commerceUrl, params.token)
+    commerce.getPaymentMethods(params.userId ?? '').then((rows) => {
+      const cards = rows
+        .filter((r) => (r.type ?? 'card') === 'card')
+        .map((r) => ({
+          id: r.id ?? '',
+          label: r.card?.brand && r.card?.last4 ? `${r.card.brand} ending in ${r.card.last4}` : 'Saved card',
+          isDefault: r.isDefault ?? false,
+        }))
+        .filter((c) => c.id !== '')
+      setSaved(cards)
+      if (cards.length > 0) setPayWith((cards.find((c) => c.isDefault) ?? cards[0]).id)
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.token])
+
+  // ── Square card element (shared hook) — only init on the Card tab, and only
+  //    once "Use a new card" is the choice (a saved-card charge never loads it).
   const { ready: sqReady, loading: sqLoading, error: sqError, tokenize: sqTokenize } = useSquareCard(
     'sq-card-container',
-    tab === 'card',
+    tab === 'card' && payWith === 'new',
   )
 
   // ── Crypto payment state ─────────────────────────────────────────────────
@@ -131,7 +153,7 @@ export default function TopupPage() {
     [params.returnUrl],
   )
 
-  // ── Card submit (Square tokenize → charge) ───────────────────────────────
+  // ── Card submit: charge the chosen saved card, or tokenize a new one ─────
   const handleCardSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -139,31 +161,36 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: 'Authentication required. Please sign in.' })
         return
       }
-      if (!sqReady) {
+      const useNew = payWith === 'new'
+      if (useNew && !sqReady) {
         setStatus({ type: 'error', message: 'Card form not ready. Please wait.' })
         return
       }
 
       setStatus({ type: 'loading' })
       try {
-        const sourceId = await sqTokenize()
-
         const commerce = getCommerce(commerceUrl, params.token)
         const userId = params.userId ?? ''
 
-        const payment = await commerce.topupWithSquareToken({
-          sourceId,
-          amountCents,
-          userId: userId || undefined,
-          currency: 'usd',
-        })
+        const payment = useNew
+          ? await commerce.topupWithSquareToken({
+              sourceId: await sqTokenize(),
+              amountCents,
+              userId: userId || undefined,
+              currency: 'usd',
+            })
+          : await commerce.topupWithMethod({
+              paymentMethodId: payWith,
+              amountCents,
+              currency: 'usd',
+            })
 
         handleSuccess(payment.balanceCents)
       } catch (err) {
         setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
       }
     },
-    [params, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
+    [params, payWith, sqReady, sqTokenize, amountCents, commerceUrl, handleSuccess],
   )
 
   // ── Crypto submit ─────────────────────────────────────────────────────────
@@ -391,43 +418,79 @@ export default function TopupPage() {
         {/* ── Card tab ─────────────────────────────────────────────────── */}
         {tab === 'card' && (
           <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {/* Saved cards first — the blank form only for "Use a new card". */}
+            {saved.length > 0 && (
+              <div role="radiogroup" aria-label="Pay with" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {[...saved.map((c) => ({ key: c.id, label: c.label, isDefault: c.isDefault })), { key: 'new', label: 'Use a new card', isDefault: false }].map((opt) => (
+                  <label
+                    key={opt.key}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                      borderRadius: '8px', padding: '9px 12px', fontSize: '13px',
+                      border: `1px solid ${payWith === opt.key ? 'color-mix(in oklab, var(--color-text) 35%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
+                      background: payWith === opt.key ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'transparent',
+                      color: payWith === opt.key ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 55%, transparent)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="topup-pay-with"
+                      checked={payWith === opt.key}
+                      onChange={() => setPayWith(opt.key)}
+                      style={{ accentColor: 'currentColor' }}
+                    />
+                    <span>{opt.label}</span>
+                    {opt.isDefault && (
+                      <span style={{ marginLeft: 'auto', fontSize: '10px', borderRadius: '999px', padding: '2px 8px', border: '1px solid color-mix(in oklab, var(--color-text) 12%, transparent)', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)' }}>Default</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+
             {/* Square card container */}
-            <div
-              id="sq-card-container"
-              style={{
-                minHeight: '96px',
-                borderRadius: '8px',
-                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-                background: 'var(--color-bg)',
-                padding: '10px 12px',
-                position: 'relative',
-              }}
-            >
-              {sqLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-                  <div style={{
-                    width: '18px', height: '18px',
-                    border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
-                    borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
-                    borderRadius: '50%',
-                    animation: 'sq-spin 0.8s linear infinite',
-                  }} />
-                  <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
-                </div>
-              )}
-              {sqError && !sqLoading && (
-                <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
-                  {sqError}
-                </div>
-              )}
-            </div>
+            {payWith === 'new' && (
+              <div
+                id="sq-card-container"
+                style={{
+                  minHeight: '96px',
+                  borderRadius: '8px',
+                  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+                  background: 'var(--color-bg)',
+                  padding: '10px 12px',
+                  position: 'relative',
+                }}
+              >
+                {sqLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+                    <div style={{
+                      width: '18px', height: '18px',
+                      border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)',
+                      borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)',
+                      borderRadius: '50%',
+                      animation: 'sq-spin 0.8s linear infinite',
+                    }} />
+                    <style>{`@keyframes sq-spin { to { transform: rotate(360deg); } }`}</style>
+                  </div>
+                )}
+                {sqError && !sqLoading && (
+                  <div style={{ fontSize: '12px', color: '#f87171', padding: '8px 0' }}>
+                    {sqError}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"
-              style={submitStyle(isLoading || !sqReady)}
-              disabled={isLoading || !sqReady}
+              style={submitStyle(isLoading || (payWith === 'new' && !sqReady))}
+              disabled={isLoading || (payWith === 'new' && !sqReady)}
             >
-              {isLoading ? 'Processing...' : `Pay ${moneyFromCents(amountCents)}`}
+              {isLoading
+                ? 'Processing...'
+                : payWith === 'new'
+                  ? `Pay ${moneyFromCents(amountCents)}`
+                  : `Pay ${moneyFromCents(amountCents)} with ${saved.find((c) => c.id === payWith)?.label ?? 'saved card'}`}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)' }}>

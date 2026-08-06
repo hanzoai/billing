@@ -120,6 +120,13 @@ export type CommerceInvoice = {
   }>
 }
 
+/**
+ * The card a money move names: a fresh Square Web Payments nonce (sourceId,
+ * single-use, vaulted server-side) OR a payment method the subject already
+ * saved (paymentMethodId — its vaulted card is charged directly). Exactly one.
+ */
+export type CardInput = { sourceId: string } | { paymentMethodId: string }
+
 export type CommercePaymentMethod = {
   id?: string
   userId?: string
@@ -398,7 +405,7 @@ export class Commerce {
    *   422 org has no payment processor            500 charged but activation failed
    */
   async subscribeWithCard(
-    params: { sourceId: string; planId: string; userId?: string; quantity?: number; currency?: string },
+    params: CardInput & { planId: string; userId?: string; quantity?: number; currency?: string },
     opts?: { idempotencyKey?: string; token?: string },
   ): Promise<{ subscriptionId: string; invoiceId: string; planId: string; amountCents: number; currency: string; status: string }> {
     return this.request<{ subscriptionId: string; invoiceId: string; planId: string; amountCents: number; currency: string; status: string }>(
@@ -638,6 +645,17 @@ export class Commerce {
   ): Promise<{ transactionId: string; balanceCents: number; status: string }> {
     return this.request<{ transactionId: string; balanceCents: number; status: string }>(
       '/v1/billing/topup/token',
+      { method: 'POST', body: params, token },
+    )
+  }
+
+  /** Charge a card the subject already saved (card-on-file) and credit balance */
+  async topupWithMethod(
+    params: { paymentMethodId: string; amountCents: number; currency?: string },
+    token?: string,
+  ): Promise<{ transactionId: string; balanceCents: number; status: string }> {
+    return this.request<{ transactionId: string; balanceCents: number; status: string }>(
+      '/v1/billing/topup',
       { method: 'POST', body: params, token },
     )
   }

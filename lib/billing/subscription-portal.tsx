@@ -30,10 +30,13 @@ export interface SubscriptionPortalProps {
   onAcceptOffer?: (offerId: string) => Promise<void>
   onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
   /**
-   * Self-serve paid checkout: charge a Square nonce and start the subscription.
-   * Rejects with a CommerceApiError carrying the HTTP status for honest UI.
+   * Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
+   * start the subscription. Rejects with a CommerceApiError carrying the HTTP
+   * status for honest UI.
    */
-  onSubscribeWithCard?: (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => Promise<void>
+  onSubscribeWithCard?: (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => Promise<void>
+  /** Cards already on file, offered in the checkout before the blank form. */
+  savedCards?: SavedCard[]
   /**
    * Logged-out public pricing: every plan CTA calls this (start sign-in) instead
    * of subscribing. Auth gates the subscribe action, not viewing prices.
@@ -43,7 +46,8 @@ export interface SubscriptionPortalProps {
   defaultView?: 'overview' | 'plans' | 'history'
 }
 
-import { SubscribeCardForm } from './subscribe-card-form'
+import { SubscribeCardForm, type SavedCard } from './subscribe-card-form'
+import type { CardInput } from '@/lib/commerce-client'
 import { money } from '@/lib/money'
 
 function formatDate(date: Date) {
@@ -98,6 +102,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     onCancel,
     onApplyDiscount,
     onSubscribeWithCard,
+    savedCards = [],
     onRequireAuth,
     defaultView = 'overview',
   } = props
@@ -622,7 +627,8 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     planName={plan.name}
                     quantity={seats}
                     totalLabel={`$${monthlyTotal}/mo`}
-                    onSubscribe={(sourceId, idempotencyKey) => onSubscribeWithCard!(plan.id, sourceId, seats, idempotencyKey)}
+                    savedCards={savedCards}
+                    onSubscribe={(card, idempotencyKey) => onSubscribeWithCard!(plan.id, card, seats, idempotencyKey)}
                     onSuccess={() => setActivationPlanId(null)}
                     onNoProcessor={() => setNoProcessorPlanId(plan.id)}
                   />

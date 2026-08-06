@@ -2,11 +2,19 @@
 
 import * as React from 'react'
 import { useSquareCard } from '@/lib/square'
-import { CommerceApiError } from '@/lib/commerce-client'
+import { CommerceApiError, type CardInput } from '@/lib/commerce-client'
 
 // One card element at a time in the pricing grid (only one plan's checkout panel
 // is ever open), so a single stable container id is safe.
 const CONTAINER_ID = 'sq-subscribe-card'
+
+/** A saved card the subject may charge instead of typing one. */
+export interface SavedCard {
+  id: string
+  /** e.g. "Visa ending in 4242" — pm.name, or a generic fallback. */
+  label: string
+  isDefault?: boolean
+}
 
 export interface SubscribeCardFormProps {
   planId: string
@@ -15,8 +23,10 @@ export interface SubscribeCardFormProps {
   quantity: number
   /** Human total shown on the button, e.g. "$40/mo". */
   totalLabel: string
+  /** Cards already on file — offered before the blank Square form. */
+  savedCards?: SavedCard[]
   /** POST subscribe/card. Throws CommerceApiError (with .status) on failure. */
-  onSubscribe: (sourceId: string, idempotencyKey: string) => Promise<void>
+  onSubscribe: (card: CardInput, idempotencyKey: string) => Promise<void>
   /** 201 — subscription active. */
   onSuccess: () => void
   /** 422 — org has no payment processor; parent shows the contact fallback. */
@@ -44,33 +54,48 @@ export function SubscribeCardForm({
   planName,
   quantity,
   totalLabel,
+  savedCards = [],
   onSubscribe,
   onSuccess,
   onNoProcessor,
 }: SubscribeCardFormProps) {
-  const { ready, loading, error: cardError, tokenize } = useSquareCard(CONTAINER_ID)
+  // The default saved card is the opening choice; 'new' opens the Square form.
+  // The Square element is only initialized once 'new' is chosen (enabled flag),
+  // so a saved-card checkout never loads the SDK at all.
+  const [chosen, setChosen] = React.useState<string>(() => {
+    if (savedCards.length === 0) return 'new'
+    return (savedCards.find((c) => c.isDefault) ?? savedCards[0]).id
+  })
+  const useNew = chosen === 'new'
+  const { ready, loading, error: cardError, tokenize } = useSquareCard(CONTAINER_ID, useNew)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
+  const canSubmit = useNew ? ready : chosen !== ''
+
   const handleSubmit = React.useCallback(async () => {
-    if (!ready || submitting) return
+    if (!canSubmit || submitting) return
     setSubmitting(true)
     setError(null)
 
-    let sourceId: string
-    try {
-      sourceId = await tokenize()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Please check the card details and try again.')
-      setSubmitting(false)
-      return
+    let card: CardInput
+    if (useNew) {
+      try {
+        card = { sourceId: await tokenize() }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Please check the card details and try again.')
+        setSubmitting(false)
+        return
+      }
+    } else {
+      card = { paymentMethodId: chosen }
     }
 
     // Reuse the key across a same-attempt retry (network/500 replay-safe); rotate
     // only when a genuine re-attempt is needed (a declined card = new charge).
     const idempotencyKey = getOrCreateIdemKey(planId, quantity)
     try {
-      await onSubscribe(sourceId, idempotencyKey)
+      await onSubscribe(card, idempotencyKey)
       clearIdemKey(planId, quantity)
       onSuccess()
     } catch (err) {
@@ -85,6 +110,10 @@ export function SubscribeCardForm({
             return
           case 409:
             setError('A checkout is already in progress — give it a moment, then retry.')
+            return
+          case 404:
+            clearIdemKey(planId, quantity)
+            setError('That saved card is no longer available — use a new card.')
             return
           case 401:
             setError('Your session expired. Please sign in again.')
@@ -104,36 +133,69 @@ export function SubscribeCardForm({
     } finally {
       setSubmitting(false)
     }
-  }, [ready, submitting, tokenize, planId, quantity, onSubscribe, onSuccess, onNoProcessor])
+  }, [canSubmit, submitting, useNew, chosen, tokenize, planId, quantity, onSubscribe, onSuccess, onNoProcessor])
+
+  const chosenLabel = savedCards.find((c) => c.id === chosen)?.label
 
   return (
     <div className="mt-3 rounded-xl border border-ink/[0.12] bg-ink/[0.03] p-3">
       <p className="text-[12px] font-semibold text-ink/80">Subscribe to {planName}</p>
       <p className="mt-1 text-[12px] text-ink/40">
-        Enter a card — you are charged <span className="font-semibold text-ink/70">{totalLabel}</span> and the plan
+        You are charged <span className="font-semibold text-ink/70">{totalLabel}</span> and the plan
         activates immediately.
       </p>
 
-      <div
-        id={CONTAINER_ID}
-        className="mt-3"
-        style={{
-          minHeight: loading ? '96px' : undefined,
-          borderRadius: '8px',
-          border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-          background: 'var(--color-bg)',
-          padding: '10px 12px',
-        }}
-      >
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
-            <div style={{ width: '18px', height: '18px', border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)', borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)', borderRadius: '50%', animation: 'sq-sub-spin 0.8s linear infinite' }} />
-            <style>{`@keyframes sq-sub-spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
-      </div>
+      {savedCards.length > 0 && (
+        <div role="radiogroup" aria-label="Pay with" style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[...savedCards.map((c) => ({ key: c.id, label: c.label, isDefault: c.isDefault ?? false })), { key: 'new', label: 'Use a new card', isDefault: false }].map((opt) => (
+            <label
+              key={opt.key}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                borderRadius: '8px', padding: '8px 12px', fontSize: '12px',
+                border: `1px solid ${chosen === opt.key ? 'color-mix(in oklab, var(--color-text) 35%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
+                background: chosen === opt.key ? 'color-mix(in oklab, var(--color-text) 6%, transparent)' : 'transparent',
+                color: chosen === opt.key ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 55%, transparent)',
+              }}
+            >
+              <input
+                type="radio"
+                name="sq-subscribe-with"
+                checked={chosen === opt.key}
+                onChange={() => setChosen(opt.key)}
+                style={{ accentColor: 'currentColor' }}
+              />
+              <span>{opt.label}</span>
+              {opt.isDefault && (
+                <span style={{ marginLeft: 'auto', fontSize: '10px', borderRadius: '999px', padding: '2px 8px', border: '1px solid color-mix(in oklab, var(--color-text) 12%, transparent)', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)' }}>Default</span>
+              )}
+            </label>
+          ))}
+        </div>
+      )}
 
-      {cardError && !loading && (
+      {useNew && (
+        <div
+          id={CONTAINER_ID}
+          className="mt-3"
+          style={{
+            minHeight: loading ? '96px' : undefined,
+            borderRadius: '8px',
+            border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+            background: 'var(--color-bg)',
+            padding: '10px 12px',
+          }}
+        >
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '72px' }}>
+              <div style={{ width: '18px', height: '18px', border: '2px solid color-mix(in oklab, var(--color-text) 12%, transparent)', borderTopColor: 'color-mix(in oklab, var(--color-text) 60%, transparent)', borderRadius: '50%', animation: 'sq-sub-spin 0.8s linear infinite' }} />
+              <style>{`@keyframes sq-sub-spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          )}
+        </div>
+      )}
+
+      {useNew && cardError && !loading && (
         <p className="mt-2 text-[12px] text-rose-400">{cardError}</p>
       )}
       {error && (
@@ -142,11 +204,15 @@ export function SubscribeCardForm({
 
       <button
         type="button"
-        disabled={!ready || submitting}
+        disabled={!canSubmit || submitting}
         onClick={handleSubmit}
         className="mt-3 w-full rounded-lg bg-brand px-3 py-2 text-center text-[13px] font-semibold text-brand-foreground transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-ink/[0.06] disabled:text-ink/30"
       >
-        {submitting ? 'Processing…' : `Pay ${totalLabel} & subscribe`}
+        {submitting
+          ? 'Processing…'
+          : useNew || !chosenLabel
+            ? `Pay ${totalLabel} & subscribe`
+            : `Pay ${totalLabel} with ${chosenLabel}`}
       </button>
 
       <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink/25">
