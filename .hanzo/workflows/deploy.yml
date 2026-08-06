@@ -112,7 +112,11 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.ver.outputs.version }}
-            org.opencontainers.image.source=https://github.com/hanzoai/billing
+            # Canonical, not the redirect: this repo lives in the hanzo-inc org
+            # and GitHub only resolves the old name until somebody creates a repo
+            # there. This label is how a tool finds an image's source, so a stale
+            # name here is provenance that quietly points somewhere else.
+            org.opencontainers.image.source=https://github.com/hanzo-inc/billing
           secrets: |
             GIT_AUTH_TOKEN=${{ secrets.GH_PAT }}
 
