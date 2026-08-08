@@ -46,13 +46,6 @@ const hanzo: BillingOrgConfig = {
   },
 }
 
-/** Emails with admin/super-user billing access (can grant credits to anyone). */
-const ADMIN_EMAILS = [
-  'admin@hanzo.ai',
-  'zach@hanzo.ai',
-  'ant@hanzo.ai',
-]
-
 const lux: BillingOrgConfig = {
   id: 'lux',
   displayName: 'Lux',
@@ -99,10 +92,6 @@ export function getOrgByHost(host: string): BillingOrgConfig {
   if (host.includes('zoo')) return zoo
   if (host.includes('pars')) return pars
   return hanzo
-}
-
-export function isAdminUser(email: string): boolean {
-  return ADMIN_EMAILS.includes(email.toLowerCase())
 }
 
 /**

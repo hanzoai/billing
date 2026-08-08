@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { SubscriptionPortal } from '@/lib/billing/subscription-portal'
 import type { Subscription, SubscriptionPlan } from '@/lib/billing/types'
-import { fetchPublicPlans } from '@/lib/plans'
+import { fetchPlans } from '@/lib/plans'
 
 // Logged-out prospect has no subscription — an empty one so the grid renders
 // every plan as available.
@@ -17,22 +17,25 @@ const NO_SUBSCRIPTION: Subscription = {
 }
 
 /**
- * Public pricing page — renders logged-out with prices from the public catalog.
- * Auth gates only the subscribe action: any plan CTA starts sign-in.
+ * Public pricing page — renders logged-out from the SAME catalog the signed-in
+ * grid reads. GET /v1/billing/plans is public (200 unauthenticated, and it returns
+ * this origin in access-control-allow-origin), so there is no second catalog and no
+ * second set of units. Auth gates only the subscribe action: any plan CTA starts
+ * sign-in.
  */
-export function PublicPricing({ onSignIn }: { onSignIn: () => void }) {
+export function PublicPricing({ onSignIn, commerceUrl }: { onSignIn: () => void; commerceUrl: string }) {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
-    fetchPublicPlans()
+    fetchPlans(commerceUrl)
       .then((p) => { if (alive) { setPlans(p); setLoading(false) } })
       // A rejected fetch leaves plans empty; the portal shows an honest catalog
       // error rather than a login wall.
       .catch(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [])
+  }, [commerceUrl])
 
   return (
     <div className="min-h-screen bg-bg">

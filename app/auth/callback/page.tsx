@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BASE_PATH, getOrgByHost } from '@/lib/config'
 import { makeAuthConf } from '@/lib/auth'
-import { handleCallback, startLogin, logout } from '@/lib/iam-auth'
+import { handleCallback, startLogin, forgetTokens } from '@/lib/iam-auth'
 
 // One-shot retry flag — survives the authorize round-trip via sessionStorage so
 // a transient first-attempt failure self-heals silently but can never loop.
@@ -38,7 +38,7 @@ export default function CallbackPage() {
         const transient = /invalid_grant|authorization code|code[_ ]?verifier|expired/i.test(msg)
         if (transient && !sessionStorage.getItem(RETRY_KEY)) {
           sessionStorage.setItem(RETRY_KEY, '1')
-          logout() // clear any stale token + PKCE/state so the retry starts clean
+          forgetTokens() // stale token + spent PKCE/state, so the retry starts clean
           startLogin(conf).catch(() => setError(msg))
           return
         }

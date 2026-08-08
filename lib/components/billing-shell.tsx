@@ -45,10 +45,11 @@ import type {
 } from '@/lib/billing'
 import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
-import { getAccessToken, logout } from '@/lib/iam-auth'
-import { type BillingOrgConfig, isAdminUser, BASE_PATH, SALES_URL } from '@/lib/config'
+import { getAccessToken, isSuperAdmin, signOut } from '@/lib/iam-auth'
+import { type BillingOrgConfig, BASE_PATH, SALES_URL } from '@/lib/config'
 import { topupHref } from '@/lib/topup'
 import { getCommerce } from '@/lib/commerce'
+import { selectPlans } from '@/lib/plans'
 
 import { OrgHeader, type HanzoOrg } from '@hanzogui/shell'
 
@@ -141,6 +142,7 @@ function mapCommercePaymentMethod(cpm: CommercePaymentMethod): PaymentMethod {
     is_default: cpm.isDefault ?? false,
     created_at: cpm.createdAt ?? new Date().toISOString(),
     isDefault: cpm.isDefault ?? false,
+    providerRef: cpm.providerRef,
     card: cpm.card ? {
       brand: cpm.card.brand ?? '',
       last4: cpm.card.last4 ?? '',
@@ -246,47 +248,6 @@ function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
 
 // Subscription tiers shown on the pricing grid (the catalog also carries
 // dns/world/social plans, which have their own product surfaces).
-const PLAN_CATEGORIES = new Set(['personal', 'team', 'enterprise'])
-
-/**
- * Project a commerce catalog plan (prices in cents, from
- * @hanzo/plans/subscription.json) onto the card the portal renders.
- * The catalog is the ONE source of plan copy — features, prices, tiers.
- */
-function mapCommercePlan(p: Plan): SubscriptionPlan {
-  const limits: Record<string, number> = {}
-  for (const [k, v] of Object.entries(p.limits ?? {})) {
-    if (typeof v === 'number') limits[k] = v
-  }
-  const perSeat = p.category === 'team'
-  // Same rule as the public projection (lib/plans.ts): a tier with NO price is
-  // sold by a person even when the catalog forgets to flag it. This is the
-  // AUTHENTICATED copy of that projection — commerce sends cents here, the
-  // gateway sends dollars there — and the two must agree on who sells what.
-  const sold = !!p.contactSales || p.price == null
-  return {
-    id: p.slug ?? '',
-    name: p.name ?? '',
-    description: p.description ?? '',
-    price: (p.price ?? 0) / 100,
-    annualPrice: p.priceAnnual ? p.priceAnnual / 100 : undefined,
-    billingPeriod: 'monthly',
-    currency: p.currency ?? 'usd',
-    features: p.features ?? [],
-    limits,
-    highlighted: p.popular,
-    badge: sold ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
-    contactSales: sold,
-    externalUrl: sold ? SALES_URL : undefined,
-    trialDays: p.trialPeriodDays || undefined,
-    trialCreditCents: limits.freeCredit ? limits.freeCredit * 100 : undefined,
-    perSeat,
-    // minSeats comes from the catalog when projected; commerce rejects fewer
-    // than 2 seats on per-seat tiers, so the selector enforces the same floor.
-    minSeats: perSeat ? limits.minSeats ?? 2 : undefined,
-  }
-}
-
 /** Normalise any API envelope (array / {data:[]} / {items:[]} etc.) to a plain array. */
 function asList<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[]
@@ -373,11 +334,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
       if (planList.status === 'fulfilled') {
-        setPlans(
-          asList<Plan>(planList.value)
-            .filter((p) => PLAN_CATEGORIES.has(p.category ?? ''))
-            .map(mapCommercePlan),
-        )
+        setPlans(selectPlans(asList<Plan>(planList.value)))
       }
       // Loading is over either way; a rejected fetch leaves plans empty and
       // the portal shows an honest catalog error, never stale local copy.
@@ -530,7 +487,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     loadUsage()
   }, [loadBillingData, loadUsage])
 
-  const admin = isAdminUser(user.email)
+  const admin = isSuperAdmin(user)
 
   // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -604,11 +561,14 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await loadBillingData()
   }, [org, user, loadBillingData])
 
-  // Cards on file the checkout can charge directly. Only card methods qualify;
-  // the label is the receipt name commerce stamps ("Visa ending in 4242") or
-  // the card facts, falling back to a generic that is still honest.
+  // Cards on file the checkout can CHARGE. Two tests, not one: it must be a card,
+  // and it must have a providerRef — the vaulted card a charge names. Commerce
+  // refuses a method without one ("saved payment method has no chargeable card"),
+  // so offering it put a dead option in the checkout and spent the customer's click
+  // on a 422. The label is the receipt name commerce stamps ("Visa ending in 4242")
+  // or the card facts, falling back to a generic that is still honest.
   const savedCards = useMemo(() => paymentMethods
-    .filter((m) => m.type === 'card')
+    .filter((m) => m.type === 'card' && !!m.providerRef)
     .map((m) => ({
       id: m.id,
       label: m.card?.brand && m.card?.last4
@@ -855,9 +815,10 @@ export function BillingShell({ org, user }: BillingShellProps) {
   )
 
   const handleLogout = useCallback(() => {
-    logout()
-    window.location.href = `${BASE_PATH}/`
-  }, [])
+    // Navigate to what signOut returns — IAM's end-session URL — so the session ends
+    // there too and the next sign-in actually asks who you are.
+    window.location.href = signOut(org.iamServerUrl, `${window.location.origin}${BASE_PATH}/`)
+  }, [org.iamServerUrl])
 
   // ── Section routing ─────────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<BillingSection>(getInitialSection)

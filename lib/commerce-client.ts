@@ -77,6 +77,19 @@ export type Plan = {
   trialPeriodDays?: number
   contactSales?: boolean
   popular?: boolean
+  /** The catalog bills this tier per seat — the charge multiplies by quantity. */
+  perSeat?: boolean
+  /**
+   * Percent off the ACTIVE platform promo takes off this plan.
+   *
+   * It is not decoration. commerce annotates a row here only when a promo is live
+   * AND covers that plan (withPromo: `Price > 0 && pr.AppliesTo(slug)`), and the
+   * charge path then subtracts exactly this much through engine.DiscountCents. A
+   * quote that ignores it quotes a price the card is not charged.
+   */
+  promoPercent?: number
+  /** When the promo ends, RFC3339 — copy for the customer, never math. */
+  promoUntil?: string
   features?: string[]
   bundles?: string[]
   includedIn?: string[]

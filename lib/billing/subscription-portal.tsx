@@ -48,7 +48,7 @@ export interface SubscriptionPortalProps {
 
 import { SubscribeCardForm, type SavedCard } from './subscribe-card-form'
 import type { CardInput } from '@/lib/commerce-client'
-import { cents, money } from '@/lib/money'
+import { billableSeats, cents, chargeTotal, money, subtotal } from '@/lib/money'
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -115,12 +115,11 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   // caller could detect one.
   const signedOut = !!onRequireAuth
   const view = signedOut ? 'plans' : viewChoice
-  // AUDIENCE and INTERVAL are the two axes the catalog already carries, surfaced
-  // as controls instead of as more cards. Six tiers in one row asked a visitor to
-  // compare a $9 personal plan against a negotiated enterprise contract; they are
-  // different purchases and now sit on different tabs.
+  // AUDIENCE is the axis the catalog carries, surfaced as a control instead of as
+  // more cards. Six tiers in one row asked a visitor to compare a $9 personal plan
+  // against a negotiated enterprise contract; they are different purchases and now
+  // sit on different tabs.
   const [audience, setAudience] = React.useState<'personal' | 'business'>('personal')
-  const [interval, setInterval] = React.useState<'monthly' | 'annual'>('monthly')
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
   const [planError, setPlanError] = React.useState<string | null>(null)
   // Paid plan whose self-serve card checkout panel is open.
@@ -155,23 +154,23 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   )
   const shownPlans = audience === 'personal' ? personalPlans : businessPlans
 
-  // Annual is only offered when the catalog actually prices it. A toggle that
-  // silently showed the monthly figure under an "Annual" label would be a lie in
-  // the one place a customer is deciding what to pay.
-  const annualAvailable = React.useMemo(
-    () => availablePlans.some((p) => (p.annualPrice ?? 0) > 0),
-    [availablePlans],
-  )
-  // The per-month figure to display for a plan under the chosen interval.
-  const shownPrice = React.useCallback(
-    (p: SubscriptionPlan) => (interval === 'annual' && p.annualPrice ? p.annualPrice : p.price),
-    [interval],
-  )
-
   const currentPlan = React.useMemo(
     () => availablePlans.find((p) => p.id === subscription.planId),
     [availablePlans, subscription.planId],
   )
+  // The plan this account ALREADY PAYS FOR, if any.
+  //
+  // commerce sells one paid subscription per subject and answers 409 to a second
+  // (POST /v1/billing/subscribe/card), because a second row does not merely charge
+  // twice — the newest one also becomes the plan the allotment resolver reports. So
+  // this is what decides whether the card checkout is the right door at all. A FREE
+  // current plan is not this: paying for the first time is exactly what the door is
+  // for.
+  const paidPlan = React.useMemo(() => {
+    if (!subscription.id) return null
+    if (subscription.status !== 'active' && subscription.status !== 'trialing') return null
+    return currentPlan && currentPlan.price > 0 ? currentPlan : null
+  }, [subscription.id, subscription.status, currentPlan])
 
   const handlePlanChange = React.useCallback(
     async (plan: SubscriptionPlan) => {
@@ -190,6 +189,17 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
       // Paid tier, self-serve: open the Square card checkout panel (toggle).
       if (plan.price > 0 && !canDirectSubscribe && onSubscribeWithCard) {
+        // Not for someone who already pays. Opening the checkout here took a card,
+        // minted a Square nonce and then lost the whole thing to a 409 — and before
+        // commerce refused, it charged the new plan in full and left the old one
+        // renewing. Say what is true instead of collecting a card for a sale that
+        // cannot complete.
+        if (paidPlan) {
+          setPlanError(
+            `This account already pays for ${paidPlan.name}. Moving between paid plans is not self-serve yet — cancel ${paidPlan.name} first, or ask us to move it.`,
+          )
+          return
+        }
         setNoProcessorPlanId(null)
         setActivationPlanId((prev) => (prev === plan.id ? null : plan.id))
         return
@@ -209,7 +219,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
+    [currentPlan, paidPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {
@@ -515,9 +525,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
               {planError}
             </div>
           )}
-          {/* Two controls, not twelve cards: WHO the plan is for, and HOW OFTEN it
-              bills. Both read the catalog — the audience from `category`, the
-              interval from whether `annualPrice` exists at all. */}
+          {/* One control, not twelve cards: WHO the plan is for, read from the
+              catalog's `category`. There is deliberately no billing-interval
+              control — see the annual note on the plan cards below. */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div
               role="tablist"
@@ -546,37 +556,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 )
               })}
             </div>
-
-            {annualAvailable && (
-              <div
-                role="tablist"
-                aria-label="Billing interval"
-                className="inline-flex items-center gap-2"
-              >
-                <div className="inline-flex rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-1">
-                  {(['monthly', 'annual'] as const).map((iv) => (
-                    <button
-                      key={iv}
-                      type="button"
-                      role="tab"
-                      aria-selected={interval === iv}
-                      onClick={() => setInterval(iv)}
-                      className={
-                        'rounded-lg px-4 py-1.5 text-[13px] font-medium capitalize transition ' +
-                        (interval === iv
-                          ? 'bg-bg-card text-text shadow-sm'
-                          : 'text-text-muted hover:text-text')
-                      }
-                    >
-                      {iv}
-                    </button>
-                  ))}
-                </div>
-                {interval === 'annual' && (
-                  <span className="text-[12px] font-medium text-emerald-500">2 months free</span>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -587,17 +566,20 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             const hasTrial = (plan.trialDays ?? 0) > 0
             const isExternal = !!plan.externalUrl || plan.contactSales
             const minSeats = plan.minSeats ?? 2
-            const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
-            const monthlyTotal = shownPrice(plan) * seats
+            const seats = billableSeats(plan, seatCounts[plan.id])
+            // The quote, from the ONE price rule — the number commerce is about to
+            // charge, never a rate the wire cannot ask for. `seatSubtotal` is the
+            // list-price arithmetic the seat line shows; the two differ only while a
+            // promo is live, which is exactly when the button must show the discount
+            // and the seat line must still add up.
+            const seatSubtotal = subtotal(plan, seats)
+            const total = chargeTotal(plan, seats)
+            const totalLabel = `${money(total, plan.currency ?? 'USD', cents(total))}/mo`
             // A priceless tier means two different things: a contact-sales tier
             // has no list price, a $0 tier genuinely costs nothing.
-            // The DISPLAYED price follows the interval toggle; the annual figure the
-            // catalog carries is already per-month-billed-annually, so the suffix
-            // stays /mo and only the number moves.
-            const shown = shownPrice(plan)
             const priceLabel = isFree
               ? plan.contactSales ? 'Custom' : 'Free'
-              : money(shown, plan.currency ?? 'USD', cents(shown))
+              : money(plan.price, plan.currency ?? 'USD', cents(plan.price))
             const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
@@ -657,6 +639,13 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     <span className="mono">{priceLabel}</span>
                     {priceSuffix && <span className="text-sm font-normal text-ink/40">{priceSuffix}</span>}
                   </p>
+                  {/* The annual rate is INFORMATION, not something this checkout can
+                      buy. commerce sells an annual plan the only way it can — as its
+                      own catalog row with its own price and interval — and every live
+                      row says "monthly". There is no interval on the wire either, so
+                      the charge always reads the monthly column. Quoting this number
+                      as a total is how the screen came to say "$41.50/mo" over a
+                      $49.00 charge. */}
                   {plan.annualPrice && !isCurrent ? (
                     <p className="mt-0.5 text-[12px] text-emerald-400">{money(plan.annualPrice, plan.currency ?? 'USD', cents(plan.annualPrice))}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
                   ) : null}
@@ -693,7 +682,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                       </div>
                     </div>
                     <p className="mt-2 text-[12px] text-ink/40">
-                      {seats} × ${plan.price}/mo = <span className="font-semibold text-ink/80">${monthlyTotal}/mo</span>
+                      {seats} × {money(plan.price, plan.currency ?? 'USD', cents(plan.price))}/mo = <span className="font-semibold text-ink/80">{money(seatSubtotal, plan.currency ?? 'USD', cents(seatSubtotal))}/mo</span>
                     </p>
                   </div>
                 )}
@@ -737,7 +726,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     planId={plan.id}
                     planName={plan.name}
                     quantity={seats}
-                    totalLabel={`$${monthlyTotal}/mo`}
+                    totalLabel={totalLabel}
                     savedCards={savedCards}
                     onSubscribe={(card, idempotencyKey) => onSubscribeWithCard!(plan.id, card, seats, idempotencyKey)}
                     onSuccess={() => setActivationPlanId(null)}
@@ -805,9 +794,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                             <span className="ml-2 font-normal text-text-muted mono">
                               {p.contactSales
                                 ? 'Custom'
-                                : shownPrice(p) === 0
+                                : p.price === 0
                                   ? 'Free'
-                                  : money(shownPrice(p), p.currency ?? 'USD', cents(shownPrice(p)))}
+                                  : money(p.price, p.currency ?? 'USD', cents(p.price))}
                             </span>
                           </th>
                         ))}

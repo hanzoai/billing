@@ -49,6 +49,11 @@ export interface SubscriptionPlan {
   category?: string
   /** Price is per seat — the card shows a seat selector and per-seat total */
   perSeat?: boolean
+  /**
+   * Percent off the active platform promo takes off this plan, straight from the
+   * catalog. The charge subtracts it, so the quote has to as well.
+   */
+  promoPercent?: number
   /** Minimum seats for per-seat plans (backend rejects fewer) */
   minSeats?: number
 }
@@ -178,6 +183,15 @@ export interface PaymentMethod {
   is_default: boolean
   created_at: string
   isDefault?: boolean
+  /**
+   * The vaulted card behind this method — what a charge actually names.
+   *
+   * Commerce omits it when the method has none and then REFUSES to charge such a
+   * method ("saved payment method has no chargeable card"), so any chooser that
+   * offers cards has to read it: an option without a providerRef is an option that
+   * cannot pay. Dropping it here is what put a dead card in the checkout.
+   */
+  providerRef?: string
   card?: {
     brand: string
     last4: string

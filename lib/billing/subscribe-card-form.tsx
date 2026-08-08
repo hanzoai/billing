@@ -30,7 +30,15 @@ export interface SubscribeCardFormProps {
   onSubscribe: (card: CardInput, idempotencyKey: string) => Promise<void>
   /** 201 — subscription active. */
   onSuccess: () => void
-  /** 422 — org has no payment processor; parent shows the contact fallback. */
+  /**
+   * 422 whose reason is that the ORG has no payment processor — the one failure a
+   * customer cannot act on, so the parent shows the contact fallback.
+   *
+   * Not every 422. Commerce also answers 422 for a saved card with no chargeable
+   * vaulted card, whose fix is "add the card again" — routing that to the contact
+   * panel told a customer their organization had no payment processor and sent them
+   * to email support for something they could have fixed in ten seconds.
+   */
   onNoProcessor: () => void
 }
 
@@ -93,14 +101,27 @@ export function SubscribeCardForm({
       if (err instanceof CommerceApiError) {
         switch (err.status) {
           case 422:
-            onNoProcessor()
+            // Commerce writes an accurate sentence for each of its two 422s. Only
+            // the org-has-no-processor one needs different UI (the contact panel);
+            // for anything else the server already said the actionable thing, so
+            // show that rather than replace it with a guess.
+            if (/payment processor/i.test(err.message)) {
+              onNoProcessor()
+              return
+            }
+            clearChargeKey(scope)
+            setError(err.message || 'We could not charge that card.')
             return
           case 402:
             clearChargeKey(scope)
             setError('Card declined. Try another card.')
             return
           case 409:
-            setError('A checkout is already in progress — give it a moment, then retry.')
+            // Two conflicts share this status: a checkout already in flight, and an
+            // account that already pays for a plan (commerce sells one paid
+            // subscription per subject). The server names which; only fall back to
+            // the in-flight wording when it said nothing.
+            setError(err.message || 'A checkout is already in progress — give it a moment, then retry.')
             return
           case 404:
             clearChargeKey(scope)
