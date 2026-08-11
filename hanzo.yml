@@ -14,16 +14,11 @@ images:
     dockerfile: ./Dockerfile
 
 test:
-  # `pnpm lint` is the PCI gate, not a style pass: scripts/pci-scope.mjs asserts
-  # Square's hosted fields are the only path a card number can take, and it scans
-  # the BUILT bundle as well as the source — so it must run after the build or it
-  # examines nothing and passes for the wrong reason.
-  #
-  # `pnpm build` also runs gui-css-check, which fails on a class no delivered
-  # sheet defines. That matters here more than usual: this app carries the whole
-  # stylesheet itself, so an unmatched class is silently unstyled rather than a
-  # build error.
-  - pnpm install --frozen-lockfile
-  - pnpm typecheck
-  - pnpm build
-  - pnpm lint
+  - name: typecheck
+    run: |
+      pnpm install --frozen-lockfile
+      pnpm typecheck
+  - name: build
+    run: pnpm build
+  - name: lint
+    run: pnpm lint
