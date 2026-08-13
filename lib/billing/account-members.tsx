@@ -34,14 +34,18 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
   const [inviteRole, setInviteRole] = React.useState<BillingRole>('viewer')
   const [inviting, setInviting] = React.useState(false)
   const [busyId, setBusyId] = React.useState<string | null>(null)
+  const [actionError, setActionError] = React.useState<string | null>(null)
 
   const handleInvite = React.useCallback(async () => {
     if (!inviteEmail.includes('@') || !onInvite) return
     setInviting(true)
+    setActionError(null)
     try {
       await onInvite(inviteEmail, inviteRole)
       setInviteEmail('')
       setInviteRole('viewer')
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not invite that member.')
     } finally {
       setInviting(false)
     }
@@ -50,8 +54,11 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
   const handleChangeRole = React.useCallback(async (memberId: string, role: BillingRole) => {
     if (!onChangeRole) return
     setBusyId(memberId)
+    setActionError(null)
     try {
       await onChangeRole(memberId, role)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not change that member’s role.')
     } finally {
       setBusyId(null)
     }
@@ -60,8 +67,11 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
   const handleRemove = React.useCallback(async (memberId: string) => {
     if (!onRemove) return
     setBusyId(memberId)
+    setActionError(null)
     try {
       await onRemove(memberId)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not remove that member.')
     } finally {
       setBusyId(null)
     }
@@ -112,6 +122,12 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
             >
               {inviting ? 'Inviting...' : 'Invite'}
             </button>
+          </div>
+        )}
+
+        {actionError && (
+          <div className="border-b border-border p-4 text-sm text-danger" role="alert">
+            {actionError}
           </div>
         )}
 
