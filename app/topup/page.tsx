@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { encodeQR } from 'qr'
 import { getCommerce } from '@/lib/commerce'
-import { BASE_PATH } from '@/lib/config'
+import { BASE_PATH, COMMERCE_URL } from '@/lib/config'
 import { getAccessToken, getCurrentUser } from '@/lib/iam-auth'
 import { useApplePay, useSquareCard } from '@/lib/square'
 import { ErrorBoundary } from '@/lib/components/error-boundary'
@@ -14,7 +15,12 @@ import {
   type Sent,
 } from '@/lib/wallet-topup'
 import { moneyFromCents } from '@/lib/money'
-import { CommerceApiError, type CommercePaymentMethod } from '@/lib/commerce-client'
+import {
+  CommerceApiError,
+  type CommercePaymentMethod,
+  type CryptoDeposit,
+  type CryptoOptions,
+} from '@/lib/commerce-client'
 import { chargeKey, clearChargeKey } from '@/lib/charge'
 import { TOPUP_AMOUNTS, TOPUP_DEFAULT } from '@/lib/topup'
 
@@ -117,6 +123,219 @@ function cardChargeScope(card: string, amountCents: number): string {
   return `topup:${card}:${amountCents}`
 }
 
+// ── Crypto deposits ──────────────────────────────────────────────────────────
+//
+// The rail that can actually credit a coin: commerce mints a custody address
+// this payer alone deposits to, and a chain watcher credits the balance on
+// confirmations. Nothing on this tab moves money and nothing on it claims a
+// credit — the form it replaced took a typed transaction hash and posted it to
+// /v1/payments, a generic REST resource with no create hook, then read the
+// balance back and announced a successful top-up. It verified nothing, credited
+// nothing, and recorded every send as mainnet ethereum whatever chain it was on.
+
+/** An asset the rail can receive AND credit, spelled the way commerce spells it. */
+interface Asset {
+  label: string
+  chain: string
+  token: string
+}
+
+/**
+ * The pairs worth a label. Each names a chain the watcher reads and a token
+ * commerce can price: a deposit is valued at a fixed peg, so only stablecoins
+ * can be credited and a native coin (ETH, SOL, BTC) is never offered. Which of
+ * these a customer SEES is the server's answer, never this list.
+ *
+ * The label carries the chain because a token alone stops naming a destination
+ * the moment two chains carry it — and on a deposit screen that ambiguity is
+ * someone sending USDC over a network the address cannot receive.
+ */
+const ASSETS: Asset[] = [
+  { label: 'USDC · Base', chain: 'base', token: 'usdc' },
+  { label: 'USDC · Ethereum', chain: 'ethereum', token: 'usdc' },
+  { label: 'USDT · Ethereum', chain: 'ethereum', token: 'usdt' },
+  { label: 'USDC · Solana', chain: 'solana', token: 'usdc' },
+  { label: 'RLUSD · XRPL', chain: 'xrpl', token: 'rlusd' },
+  { label: 'USDT · TON', chain: 'ton', token: 'usdt' },
+]
+
+/**
+ * What the server says it is watching — and NOTHING when it has not said.
+ *
+ * A failed options call must not fall back to a list: every row in it invites a
+ * customer to send real money, and an unanswered question is not permission to
+ * take it.
+ */
+function offered(options: CryptoOptions | null): Asset[] {
+  if (!options) return []
+  const chains = new Set(options.chains ?? [])
+  const tokens = new Set(options.tokens ?? [])
+  return ASSETS.filter((a) => chains.has(a.chain) && tokens.has(a.token))
+}
+
+/**
+ * Choose a network, get the address to send to. No amount is charged and no
+ * balance moves here; the address is a standing destination, so changing the
+ * amount above afterwards does not invalidate it — the credit is whatever the
+ * chain delivers, once it confirms.
+ */
+function CryptoTab({
+  token,
+  amountCents,
+  copy,
+  copyMsg,
+  onError,
+}: {
+  token: string | null
+  amountCents: number
+  copy: (text: string, label: string) => void
+  copyMsg: string
+  onError: (message: string | null) => void
+}) {
+  // null while we are still asking; [] means nothing is on offer, which is the
+  // honest state for both "the rail is closed" and "we could not find out".
+  const [assets, setAssets] = useState<Asset[] | null>(null)
+  const [chosen, setChosen] = useState<Asset | null>(null)
+  const [deposit, setDeposit] = useState<CryptoDeposit | null>(null)
+  const [minting, setMinting] = useState(false)
+
+  useEffect(() => {
+    if (!token) {
+      setAssets([])
+      return
+    }
+    let live = true
+    getCommerce(COMMERCE_URL, token)
+      .getCryptoOptions(token)
+      .then((o) => { if (live) setAssets(offered(o)) })
+      .catch(() => { if (live) setAssets([]) })
+    return () => { live = false }
+  }, [token])
+
+  const choose = useCallback(
+    async (asset: Asset) => {
+      if (!token) return
+      // The address on screen and the asset named beside it are set together, so
+      // the customer can never be reading one chain's address under another
+      // chain's name.
+      setChosen(asset)
+      setDeposit(null)
+      setMinting(true)
+      onError(null)
+      try {
+        setDeposit(
+          await getCommerce(COMMERCE_URL, token).createCryptoDeposit(
+            { chain: asset.chain, token: asset.token, amountCents },
+            token,
+          ),
+        )
+      } catch (err) {
+        // Commerce writes these for the customer ("nothing is watching that
+        // address…"), so its sentence is the useful one.
+        onError(err instanceof Error ? err.message : 'Could not get a deposit address.')
+      }
+      setMinting(false)
+    },
+    [token, amountCents, onError],
+  )
+
+  // A QR of the address, and ONLY where the address is the whole destination.
+  // Where commerce issues a tag the payment needs both halves, and a scannable
+  // address on its own is an invitation to send the half that arrives at an
+  // account we own and belongs to nobody.
+  const qr = useMemo(
+    () => (deposit?.depositAddress && !deposit.addressTag ? encodeQR(deposit.depositAddress, 'svg') : null),
+    [deposit],
+  )
+
+  if (assets === null) {
+    return <p style={NOTE}>Checking which networks are accepted…</p>
+  }
+  if (assets.length === 0) {
+    // Two different silences, and saying which one it is costs nothing: an
+    // address is minted for a PAYER, so with no session there is nobody to mint
+    // one for — which is not the same as the rail being closed.
+    return (
+      <p style={NOTE}>
+        {token
+          ? 'Crypto deposits are not available right now. Fund your balance with a card meanwhile — the Card tab is instant.'
+          : 'Sign in to get a deposit address.'}
+      </p>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <p style={NOTE}>
+        Choose a network to get your deposit address. Your balance is credited once the network
+        confirms the transfer — nothing is charged here.
+      </p>
+
+      <div role="radiogroup" aria-label="Deposit asset" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {assets.map((a) => {
+          const active = chosen?.chain === a.chain && chosen?.token === a.token
+          return (
+            <button
+              key={`${a.chain}:${a.token}`}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={minting}
+              onClick={() => { if (!active) void choose(a) }}
+              style={chipStyle(active)}
+            >
+              {a.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {minting && <p style={NOTE}>Getting your {chosen?.label} deposit address…</p>}
+
+      {deposit && chosen && !minting && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+          {qr && (
+            <div
+              role="img"
+              aria-label={`${chosen.label} deposit address`}
+              style={QR}
+              dangerouslySetInnerHTML={{ __html: qr }}
+            />
+          )}
+
+          <button type="button" onClick={() => copy(deposit.depositAddress, 'Address')} style={COPY_ROW}>
+            <div style={FIELD_LABEL}>Deposit address · {chosen.label}</div>
+            <div className="mono" style={{ fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
+              {deposit.depositAddress}
+            </div>
+            <div style={{ fontSize: '10px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', marginTop: '4px' }}>
+              Click to copy
+            </div>
+          </button>
+
+          {deposit.addressTag && (
+            <button type="button" onClick={() => copy(deposit.addressTag ?? '', 'Destination tag')} style={COPY_ROW}>
+              <div style={FIELD_LABEL}>Destination tag (required)</div>
+              <div className="mono" style={{ fontSize: '12px', color: 'var(--color-text)' }}>{deposit.addressTag}</div>
+              <div style={{ fontSize: '10px', color: '#f87171', marginTop: '4px', lineHeight: 1.5 }}>
+                Send this tag with the payment. The address is shared, so a deposit without the tag
+                names no account and cannot be credited.
+              </div>
+            </button>
+          )}
+
+          {copyMsg && <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>}
+
+          <p style={{ ...NOTE, textAlign: 'center' }}>
+            Send only {chosen.label} to this address. Another asset, or the same one on another
+            network, cannot be recovered.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Topup page ───────────────────────────────────────────────────────────────
 
 type PayTab = 'card' | 'crypto' | 'wire' | 'wallet'
@@ -176,9 +395,6 @@ export default function TopupPage() {
 
   const amountCents = customAmountCents ?? params.amount ?? TOPUP_DEFAULT
 
-  // ── Commerce client ──────────────────────────────────────────────────────
-  const commerceUrl = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
-
   // ── Who is paying, how much, and with which card ─────────────────────────
   //
   // One pass, on mount: the session is read synchronously and the cards it can
@@ -207,7 +423,7 @@ export default function TopupPage() {
     }
 
     let live = true
-    getCommerce(commerceUrl, token)
+    getCommerce(COMMERCE_URL, token)
       .getPaymentMethods(userId, token)
       .then((methods) => {
         if (!live) return
@@ -222,7 +438,7 @@ export default function TopupPage() {
     return () => {
       live = false
     }
-  }, [commerceUrl])
+  }, [])
 
   // ── Apple Pay (shared hook) ───────────────────────────────────────────────
   //
@@ -251,21 +467,9 @@ export default function TopupPage() {
     tab === 'card' && useNewCard && !cardsLoading,
   )
 
-  // ── Crypto payment state ─────────────────────────────────────────────────
-  const [txHash, setTxHash] = useState('')
-  const [fromAddr, setFromAddr] = useState('')
-
   // ── Wallet (HUSD) state — a sent-but-not-yet-credited transfer, so a failed
   //    record can be retried without re-sending HUSD. ─────────────────────────
   const [walletSent, setWalletSent] = useState<Sent | null>(null)
-
-  // ── Crypto receive address (Hanzo's deposit wallet) ──────────────────────
-  // Read from config, never a literal. An unset value renders the tab's honest
-  // unavailable state rather than a wrong address — the same discipline the
-  // HUSD tab already uses (topupConfigured). A hardcoded address here once was
-  // a third party's wallet, so a customer following the happy path would have
-  // sent USDC to someone else and lost it. The address must be operator-supplied.
-  const HANZO_ETH_ADDRESS = (process.env.NEXT_PUBLIC_HANZO_ETH_TREASURY ?? '').trim()
 
   // ── Success handler ──────────────────────────────────────────────────────
   const handleSuccess = useCallback((newBalance: number) => {
@@ -290,7 +494,7 @@ export default function TopupPage() {
       }
 
       setStatus({ type: 'loading' })
-      const commerce = getCommerce(commerceUrl, params.token)
+      const commerce = getCommerce(COMMERCE_URL, params.token)
 
       // A nonce is single-use, so the tokenized paths need no idempotency key —
       // spending one twice is not something Square permits, and re-tokenizing
@@ -356,61 +560,22 @@ export default function TopupPage() {
         setStatus({ type: 'error', message: chargeMessage(err) })
       }
     },
-    [params, useNewCard, chosen, sqReady, sqTokenize, apTokenize, amountCents, commerceUrl, handleSuccess],
+    [params, useNewCard, chosen, sqReady, sqTokenize, apTokenize, amountCents, handleSuccess],
   )
 
-  // ── Crypto submit ─────────────────────────────────────────────────────────
-  const handleCryptoSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      // No configured deposit address means no crypto flow at all; refuse to
-      // record a payment against an address we did not publish.
-      if (!HANZO_ETH_ADDRESS) {
-        setStatus({ type: 'error', message: 'Crypto deposits are not available yet.' })
-        return
-      }
-      if (!params.token) {
-        setStatus({ type: 'error', message: 'Authentication required.' })
-        return
-      }
-      if (!txHash.trim()) {
-        setStatus({ type: 'error', message: 'Transaction hash required.' })
-        return
-      }
-
-      setStatus({ type: 'loading' })
-      try {
-        const commerce = getCommerce(commerceUrl, params.token)
-        const userId = params.userId ?? params.token!
-
-        const payment = await commerce.recordCryptoPayment({
-          txHash: txHash.trim(),
-          network: 'ethereum',
-          amount: amountCents,
-          currency: 'usdc',
-          userId: userId || undefined,
-          fromAddress: fromAddr.trim() || txHash.trim(),
-          toAddress: HANZO_ETH_ADDRESS,
-        })
-
-        if (payment.status !== 'failed' && payment.status !== 'cancelled') {
-          const bal = await commerce.getBalance(userId)
-          handleSuccess(bal.balance)
-        } else {
-          setStatus({ type: 'error', message: 'Transaction not confirmed. Check the hash and retry.' })
-        }
-      } catch (err) {
-        setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to record payment.' })
-      }
-    },
-    [params, txHash, fromAddr, amountCents, commerceUrl, handleSuccess],
-  )
+  // ── Crypto error reporting ────────────────────────────────────────────────
+  //
+  // The deposit tab owns its own state; the only thing it hands back is a
+  // failure, so it reads in the same box every other tab's does.
+  const reportCryptoError = useCallback((message: string | null) => {
+    setStatus(message ? { type: 'error', message } : { type: 'idle' })
+  }, [])
 
   // ── Wallet (HUSD) submit ───────────────────────────────────────────────────
   const creditWalletTopup = useCallback(
     async (sent: Sent) => {
       const { balanceCents } = await recordHusdTopup({
-        commerceUrl,
+        commerceUrl: COMMERCE_URL,
         token: params.token ?? undefined,
         userId: params.userId ?? undefined,
         txHash: sent.txHash,
@@ -419,7 +584,7 @@ export default function TopupPage() {
       setWalletSent(null)
       handleSuccess(balanceCents)
     },
-    [commerceUrl, params.token, params.userId, handleSuccess],
+    [params.token, params.userId, handleSuccess],
   )
 
   const handleWalletPay = useCallback(async () => {
@@ -459,7 +624,7 @@ export default function TopupPage() {
 
     setStatus({ type: 'loading' })
     try {
-      const commerce = getCommerce(commerceUrl, params.token)
+      const commerce = getCommerce(COMMERCE_URL, params.token)
       const userId = params.userId ?? params.token!
 
       await commerce.recordWirePayment({
@@ -475,7 +640,7 @@ export default function TopupPage() {
     } catch (err) {
       setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to record wire.' })
     }
-  }, [params, amountCents, commerceUrl, handleSuccess])
+  }, [params, amountCents, handleSuccess])
 
   const copy = useCallback((text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -704,74 +869,13 @@ export default function TopupPage() {
         {/* ── Crypto tab ────────────────────────────────────────────────── */}
         {tab === 'crypto' && (
           <ErrorBoundary fallback={walletTabFallback}>
-          {!HANZO_ETH_ADDRESS ? (
-            // No operator-supplied deposit address means there is nowhere safe
-            // to send funds, so the tab says so instead of showing an address.
-            // Never render a fallback address here: a wrong one loses real money.
-            <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
-              Crypto deposits are coming soon. Fund your balance with a card meanwhile — the
-              Card tab is instant.
-            </p>
-          ) : (
-          <form onSubmit={handleCryptoSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '12px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0, lineHeight: 1.5 }}>
-              Send USDC or ETH to the address below, then paste your transaction hash to confirm.
-            </p>
-
-            {/* Deposit address */}
-            <button
-              type="button"
-              onClick={() => copy(HANZO_ETH_ADDRESS, 'Address')}
-              style={{
-                background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
-                border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                Deposit address (Ethereum / EVM)
-              </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
-                {HANZO_ETH_ADDRESS}
-              </div>
-              <div style={{ fontSize: '10px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', marginTop: '4px' }}>
-                Click to copy
-              </div>
-            </button>
-
-            {copyMsg && (
-              <p style={{ fontSize: '11px', color: '#34d399', margin: 0 }}>{copyMsg}</p>
-            )}
-
-            <input
-              type="text"
-              placeholder="Your wallet address (from)"
-              value={fromAddr}
-              onChange={(e) => setFromAddr(e.target.value)}
-              style={INPUT}
-              disabled={isLoading}
+            <CryptoTab
+              token={params.token}
+              amountCents={amountCents}
+              copy={copy}
+              copyMsg={copyMsg}
+              onError={reportCryptoError}
             />
-            <input
-              type="text"
-              placeholder="Transaction hash (0x...)"
-              value={txHash}
-              onChange={(e) => setTxHash(e.target.value)}
-              style={INPUT}
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              style={submitStyle(isLoading || !txHash.trim())}
-              disabled={isLoading || !txHash.trim()}
-            >
-              {isLoading ? 'Verifying...' : `Confirm ${moneyFromCents(amountCents)} crypto payment`}
-            </button>
-          </form>
-          )}
           </ErrorBoundary>
         )}
 
@@ -794,20 +898,10 @@ export default function TopupPage() {
                 <button
                   type="button"
                   onClick={() => copy(HUSD_TREASURY, 'Treasury')}
-                  style={{
-                    background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
-                    border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
-                    borderRadius: '8px',
-                    padding: '10px 12px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
+                  style={COPY_ROW}
                 >
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'color-mix(in oklab, var(--color-text) 35%, transparent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-                    HUSD treasury (Hanzo Mainnet)
-                  </div>
-                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
+                  <div style={FIELD_LABEL}>HUSD treasury (Hanzo Mainnet)</div>
+                  <div className="mono" style={{ fontSize: '12px', color: 'var(--color-text)', wordBreak: 'break-all' }}>
                     {HUSD_TREASURY}
                   </div>
                   <div style={{ fontSize: '10px', color: 'color-mix(in oklab, var(--color-text) 30%, transparent)', marginTop: '4px' }}>Click to copy</div>
@@ -970,6 +1064,67 @@ const CARD: React.CSSProperties = {
   border: '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
   borderRadius: '16px',
   padding: '20px',
+}
+
+/** A quiet line of explanation — what a tab says when it is not asking. */
+const NOTE: React.CSSProperties = {
+  fontSize: '12px',
+  color: 'color-mix(in oklab, var(--color-text) 40%, transparent)',
+  margin: 0,
+  lineHeight: 1.5,
+}
+
+/** The small-caps name above a value the customer has to carry elsewhere. */
+const FIELD_LABEL: React.CSSProperties = {
+  fontSize: '10px',
+  fontWeight: 600,
+  color: 'color-mix(in oklab, var(--color-text) 35%, transparent)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  marginBottom: '4px',
+}
+
+/** That value, and one tap copies it. */
+const COPY_ROW: React.CSSProperties = {
+  background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  textAlign: 'left',
+  cursor: 'pointer',
+  width: '100%',
+}
+
+/**
+ * The white ground under a QR is not a theme choice: the code is read by a
+ * camera, and dark modules on a light field is what a scanner is built for —
+ * inverted, half the phones in a queue simply fail to see it. The encoder draws
+ * its own quiet zone, so the box just holds it at a scannable size.
+ */
+const QR: React.CSSProperties = {
+  width: '184px',
+  height: '184px',
+  boxSizing: 'border-box',
+  padding: '8px',
+  borderRadius: '8px',
+  background: '#ffffff',
+}
+
+/** One asset in the deposit chooser, at the 44px touch floor. */
+function chipStyle(selected: boolean): React.CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    minHeight: '44px',
+    padding: '0 14px',
+    fontSize: '12px',
+    fontWeight: 600,
+    borderRadius: '8px',
+    border: `1px solid ${selected ? 'color-mix(in oklab, var(--color-text) 35%, transparent)' : 'color-mix(in oklab, var(--color-text) 10%, transparent)'}`,
+    background: selected ? 'color-mix(in oklab, var(--color-text) 8%, transparent)' : 'transparent',
+    color: selected ? 'var(--color-text)' : 'color-mix(in oklab, var(--color-text) 45%, transparent)',
+    cursor: 'pointer',
+  }
 }
 
 const INPUT: React.CSSProperties = {
