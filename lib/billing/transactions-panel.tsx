@@ -85,7 +85,7 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
               setTypeFilter(e.target.value as TransactionType | 'all')
               setPage(1)
             }}
-            className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary outline-none transition focus:border-brand"
+            className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary transition"
           >
             {typeFilterOptions.map((t) => (
               <option key={t} value={t}>

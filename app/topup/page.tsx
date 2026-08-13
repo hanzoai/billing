@@ -1136,7 +1136,6 @@ const INPUT: React.CSSProperties = {
   padding: '9px 12px',
   fontSize: '13px',
   color: 'var(--color-text)',
-  outline: 'none',
   fontFamily: 'inherit',
 }
 

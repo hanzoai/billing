@@ -105,7 +105,7 @@ export function CostExplorer({ usage, usageLoading }: CostExplorerProps) {
         <select
           value={productFilter}
           onChange={e => setProductFilter(e.target.value)}
-          className="rounded-lg border border-border bg-bg-input px-3 py-1.5 text-xs text-text outline-none"
+          className="rounded-lg border border-border bg-bg-input px-3 py-1.5 text-xs text-text"
         >
           <option value="all">All products</option>
           {productTypes.map(t => (

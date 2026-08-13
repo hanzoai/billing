@@ -372,7 +372,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     setDiscountResult(null)
                   }}
                   placeholder="Enter promo code"
-                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text outline-none transition focus:border-brand"
+                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text transition"
                 />
                 <button
                   type="button"
@@ -458,7 +458,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     onChange={(e) => setCancelReason(e.target.value)}
                     placeholder="Why are you canceling? (required)"
                     rows={2}
-                    className="mt-3 w-full rounded-lg border border-rose-500/30 bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-rose-500"
+                    className="mt-3 w-full rounded-lg border border-rose-500/30 bg-bg-input px-3 py-2 text-sm text-text transition"
                   />
                   <div className="mt-3 flex gap-2">
                     <button

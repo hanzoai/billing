@@ -26,7 +26,7 @@ function roleBadgeClass(role: BillingRole): string {
   }
 }
 
-const INPUT_CLASS = 'rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand'
+const INPUT_CLASS = 'rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text transition'
 
 export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRemove, error = null }: AccountMembersProps) {
   const canManage = userRole === 'owner' || userRole === 'admin'
@@ -167,7 +167,7 @@ export function AccountMembers({ members, userRole, onInvite, onChangeRole, onRe
                         value={member.role}
                         onChange={(e) => handleChangeRole(member.id, e.target.value as BillingRole)}
                         disabled={isBusy}
-                        className="rounded-md border border-border bg-bg-input px-2 py-1 text-xs text-text outline-none transition focus:border-brand disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-md border border-border bg-bg-input px-2 py-1 text-xs text-text transition disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>

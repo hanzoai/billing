@@ -84,7 +84,7 @@ export function PromotionsPanel({ discount, onApplyDiscount }: PromotionsPanelPr
                 setResult(null)
               }}
               placeholder="Enter promo code"
-              className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text outline-none transition placeholder:text-text-dim focus:border-brand"
+              className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text transition placeholder:text-text-dim"
             />
             <button
               type="button"

@@ -106,7 +106,7 @@ function copyToClipboard(text: string, label: string, setMsg: (m: string) => voi
 const TAB_CLASS = 'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition'
 const TAB_ACTIVE = 'bg-bg-elevated text-text'
 const TAB_INACTIVE = 'text-text-muted hover:text-text-secondary'
-const INPUT_CLASS = 'w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition placeholder:text-text-dim focus:border-brand focus:ring-1 focus:ring-brand'
+const INPUT_CLASS = 'w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text transition placeholder:text-text-dim'
 const BTN_PRIMARY = 'w-full rounded-lg bg-text px-4 py-2.5 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60'
 
 type AddMethodTab = 'card' | 'crypto' | 'wire'
