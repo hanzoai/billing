@@ -32,6 +32,9 @@ importers:
       next:
         specifier: ^16.2.1
         version: 16.2.1(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      qr:
+        specifier: 0.5.5
+        version: 0.5.5
       react:
         specifier: ^19.2.4
         version: 19.2.4

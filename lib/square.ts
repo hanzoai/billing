@@ -12,9 +12,16 @@
  * submit button, drive state off `{ ready, loading, error }`, and call
  * `tokenize()` on submit to get the nonce (it throws with a human message on a
  * validation/SDK failure).
+ *
+ * WHICH Square is the org's answer, not the build's: `squareConfig()` reads it
+ * from commerce at mount, so one image serves a sandbox org and a live one.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { getCommerce } from '@/lib/commerce'
+import { COMMERCE_URL } from '@/lib/config'
+import { getAccessToken } from '@/lib/iam-auth'
 
 // ── SDK surface (minimal) ────────────────────────────────────────────────────
 
@@ -35,15 +42,70 @@ declare global {
   }
 }
 
-// ── Environment config (client-side, safe to expose) ─────────────────────────
+// ── Which Square, for THIS org (client-side, safe to expose) ─────────────────
 
-export const SQUARE_APP_ID = process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? ''
-export const SQUARE_LOCATION_ID = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? ''
-const SQUARE_ENV = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox'
-const SQUARE_SCRIPT_URL =
-  SQUARE_ENV === 'production'
+/**
+ * The three facts the SDK needs, which are one answer: the environment picks the
+ * CDN, and the application/location live in that environment's Square account.
+ */
+export interface SquareConfig {
+  applicationId: string
+  locationId: string
+  environment: string // "sandbox" | "production"
+}
+
+/**
+ * The build's own answer — `output: 'export'` bakes NEXT_PUBLIC_* into the
+ * bundle, so this is a property of the IMAGE and one image serves every org.
+ * It is the fallback, never the first answer: it forced billing.hanzo.ai onto
+ * production Square, and a sandbox (Live=false) org tokenizing against the
+ * production application had every nonce rejected as cross-environment by the
+ * sandbox charge that followed. Testing sandbox meant a second build.
+ */
+const BAKED: SquareConfig = {
+  applicationId: process.env.NEXT_PUBLIC_SQUARE_APPLICATION_ID ?? '',
+  locationId: process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID ?? '',
+  environment: process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT ?? 'sandbox',
+}
+
+/**
+ * Ask commerce which Square THIS org tokenizes against.
+ *
+ * Commerce resolves it from the org record through the same single authority
+ * that picks the access token it will charge with (`organization.TestMode()` →
+ * `payment.SquarePublicConfig` → GET /v1/billing/settings), so browser and
+ * charge always name the same account and one build serves sandbox and
+ * production alike.
+ *
+ * Answered fresh per card mount rather than cached, so it follows the session:
+ * a customer who switches org gets that org's Square, not the first one asked
+ * about.
+ *
+ * A partial answer falls back WHOLE. Filling a missing field from the baked
+ * build would pair one environment's application with another's CDN, which is
+ * precisely the cross-environment mismatch this exists to end — the three
+ * fields come from one source or none.
+ */
+export async function squareConfig(): Promise<SquareConfig> {
+  try {
+    const token = getAccessToken() ?? undefined
+    const cfg = await getCommerce(COMMERCE_URL, token).getPaymentConfig(token)
+    if (!cfg.applicationId || !cfg.locationId || !cfg.environment) return BAKED
+    return {
+      applicationId: cfg.applicationId,
+      locationId: cfg.locationId,
+      environment: cfg.environment,
+    }
+  } catch {
+    return BAKED
+  }
+}
+
+function scriptUrl(environment: string): string {
+  return environment === 'production'
     ? 'https://web.squarecdn.com/v1/square.js'
     : 'https://sandbox.web.squarecdn.com/v1/square.js'
+}
 
 // ── Card colours ─────────────────────────────────────────────────────────────
 
@@ -73,15 +135,16 @@ const CARD_STYLE = {
 
 // ── Script loader ─────────────────────────────────────────────────────────────
 
-let scriptLoadPromise: Promise<void> | null = null
+// Keyed by URL, because the sandbox and production SDKs are different scripts
+// and the environment is now the org's rather than the build's.
+const scriptLoads = new Map<string, Promise<void>>()
 
-export function loadSquareScript(): Promise<void> {
-  if (scriptLoadPromise) return scriptLoadPromise
-  if (typeof window !== 'undefined' && window.Square) {
-    return (scriptLoadPromise = Promise.resolve())
-  }
-  scriptLoadPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${SQUARE_SCRIPT_URL}"]`)
+export function loadSquareScript(environment: string): Promise<void> {
+  const src = scriptUrl(environment)
+  const cached = scriptLoads.get(src)
+  if (cached) return cached
+  const load = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`)
     if (existing) {
       if (window.Square) { resolve(); return }
       existing.addEventListener('load', () => resolve())
@@ -89,7 +152,7 @@ export function loadSquareScript(): Promise<void> {
       return
     }
     const script = document.createElement('script')
-    script.src = SQUARE_SCRIPT_URL
+    script.src = src
     script.async = true
     script.onload = () => resolve()
     script.onerror = () => reject(new Error('Failed to load Square Web Payments SDK'))
@@ -97,10 +160,11 @@ export function loadSquareScript(): Promise<void> {
   }).catch((e) => {
     // Never cache a rejected load — a transient network blip must not
     // permanently break the card form until a full page reload.
-    scriptLoadPromise = null
+    scriptLoads.delete(src)
     throw e
   })
-  return scriptLoadPromise
+  scriptLoads.set(src, load)
+  return load
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -143,11 +207,16 @@ export function useSquareCard(containerId: string, enabled = true): UseSquareCar
     setLoading(true)
 
     async function attemptInit(): Promise<SquareCard> {
-      await loadSquareScript()
+      // The org's answer first: it names the environment, and the environment
+      // names the script. Asked inside the attempt, so a settings request that
+      // failed on the first try is re-asked on the retry rather than pinning the
+      // whole mount to the baked fallback.
+      const cfg = await squareConfig()
+      await loadSquareScript(cfg.environment)
       if (!window.Square) throw new Error('Square SDK unavailable')
-      if (!SQUARE_APP_ID) throw new Error('Payment form not configured (missing app ID)')
-      if (!SQUARE_LOCATION_ID) throw new Error('Payment form not configured (missing location ID)')
-      const payments = await window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+      if (!cfg.applicationId) throw new Error('Payment form not configured (missing app ID)')
+      if (!cfg.locationId) throw new Error('Payment form not configured (missing location ID)')
+      const payments = await window.Square.payments(cfg.applicationId, cfg.locationId)
       const c = await payments.card({ style: CARD_STYLE })
       await c.attach(`#${containerId}`)
       return c

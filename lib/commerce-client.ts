@@ -259,6 +259,45 @@ export type CommerceBillingAccountMember = {
   addedAt?: string
 }
 
+/**
+ * The org's PUBLIC Square config (commerce's `payment.SquarePublicConfig`).
+ * Every field is public — Square hands them to the browser — and the THREE of
+ * them are one answer: `environment` picks which Square the SDK loads from, and
+ * the application/location belong to that environment's account. Mixing halves
+ * from two sources is what makes Square reject a nonce as cross-environment.
+ */
+export type PaymentConfig = {
+  provider?: string
+  applicationId?: string
+  locationId?: string
+  environment?: string // "sandbox" | "production"
+  live?: boolean
+}
+
+/**
+ * The assets the crypto deposit rail accepts, as commerce spells them — the set
+ * something is WATCHING, so every pair it offers is one a deposit can be
+ * credited from. Two lists rather than pairs, which is the endpoint's shape.
+ */
+export type CryptoOptions = { chains: string[]; tokens: string[] }
+
+/** A per-payer MPC custody deposit intent (commerce mints, the chain credits). */
+export type CryptoDeposit = {
+  id: string
+  status: string
+  chain: string
+  token: string
+  depositAddress: string
+  /**
+   * The routing tag a payer MUST send WITH the payment on a chain whose address
+   * is shared (XRPL's destination tag). Absent wherever the address is the whole
+   * destination. Present, it is half the destination: a payment without it
+   * arrives at an address commerce owns and is credited to nobody.
+   */
+  addressTag?: string
+  expiresAt?: string
+}
+
 export class CommerceApiError extends Error {
   readonly status: number
 
@@ -351,6 +390,18 @@ export class Commerce {
     return this.request<Transaction>('/v1/billing/deposit', {
       method: 'POST', body: params, token,
     })
+  }
+
+  // ── Settings ─────────────────────────────────────────────────────────
+
+  /**
+   * The Square application the CALLER's org tokenizes against. Commerce resolves
+   * sandbox-vs-production from the org record alone (`organization.TestMode()`),
+   * the same authority that picks the access token it will charge with, so the
+   * browser and the charge can never end up on different Square accounts.
+   */
+  async getPaymentConfig(token?: string): Promise<PaymentConfig> {
+    return this.request<PaymentConfig>('/v1/billing/settings', { token })
   }
 
   // ── Billing status ───────────────────────────────────────────────────
@@ -595,6 +646,39 @@ export class Commerce {
     })
   }
 
+  // ── Crypto deposits ──────────────────────────────────────────────────
+  //
+  // The rail that can actually credit a coin: commerce asks its MPC custody
+  // signer for an address the payer alone deposits to, and a chain watcher
+  // credits the balance on confirmations. The client's whole part is to ask
+  // what is on offer and to ask for the address — there is no call here that
+  // can move money, which is the property that makes offering it honest.
+
+  /** The chain/token set the deposit watcher can credit right now. */
+  async getCryptoOptions(token?: string): Promise<CryptoOptions> {
+    return this.request<CryptoOptions>('/v1/billing/crypto/options', { token })
+  }
+
+  /**
+   * Mint (or re-read) the caller's deposit address for one asset.
+   *
+   * The payer is resolved server-side from the credential — no subject crosses
+   * this call — and an open intent for the same asset is returned rather than a
+   * second address, so asking twice strands nothing. `amountCents` is what the
+   * payer intends to send; the credit is whatever the chain delivers.
+   *
+   * 503 is the rail saying it cannot credit that asset (nothing watching it, or
+   * custody unavailable). Its message is written for the customer — show it.
+   */
+  async createCryptoDeposit(
+    params: { chain: string; token: string; amountCents?: number },
+    token?: string,
+  ): Promise<CryptoDeposit> {
+    return this.request<CryptoDeposit>('/v1/billing/crypto/deposit', {
+      method: 'POST', body: params, token,
+    })
+  }
+
   // ── Payment Processing ──────────────────────────────────────────────
   //
   // Taking money is POST /v1/payments (cloud apps/commerce payments.go), NOT
@@ -602,7 +686,13 @@ export class Commerce {
   // the retired address surfaced to the customer as a raw "Not Found" on every
   // crypto and wire top-up.
 
-  /** Record a crypto payment (on-chain tx already sent by the client) */
+  /**
+   * Record a crypto payment the client has already verified on-chain (HUSD).
+   *
+   * It writes a Payment row through the generic REST resource and returns it —
+   * it does not credit a balance, so a caller must not read a returned row as
+   * money landing. The credited rail is `createCryptoDeposit` above.
+   */
   async recordCryptoPayment(
     params: { txHash: string; network: string; chainId?: number; amount: number; currency: string; userId?: string; fromAddress: string; toAddress: string },
     token?: string,

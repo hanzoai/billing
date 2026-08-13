@@ -15,6 +15,8 @@ Hanzo billing service
   Tailwind in its dependencies and rendered completely unstyled. 8.0.6 ships zero
   CSS and zero className literals; it styles itself with inline style objects and
   one scoped `[data-hanzo-shell]` sheet.
+- `qr` 0.5.5 — 0-dep QR encoder, one use: the crypto deposit address on
+  `/topup`, drawn as an inline `<svg>` string. No CSS, no image request.
 - **No Tailwind, no Radix, no shadcn, no tailwind-merge, no PostCSS config.**
   See *Styling* below.
 
@@ -48,7 +50,10 @@ billing/
 - `Dockerfile` -- Container build
 - `app/global.css` -- tokens + the exact utility vocabulary the markup uses
 - `lib/money.ts` -- the ONE money formatter
-- `lib/config.ts` -- `BASE_PATH`, the app's own root
+- `lib/config.ts` -- `BASE_PATH` (the app's own root) and `COMMERCE_URL`, the ONE
+  commerce address every money-in surface asks — the card form reads its Square
+  application from it and the charge is sent to it, so two spellings would be two
+  Square accounts
 - `lib/topup.ts` -- the standing top-up amounts and `topupHref()`, the ONE way
   to link to `/topup` (it carries `?amount=` so a click never drops what it knew)
 - `lib/charge.ts` -- the ONE idempotency key per money-move attempt, shared by
@@ -202,10 +207,23 @@ advertising a current offer.
   ever disagreed on (catalog prices are whole dollars, ledger amounts are to the
   cent). Do not add a local `fmt` / `formatCurrency`; there were fourteen.
 - **Square tokenization** lives in ONE place: `lib/square.ts` (`useSquareCard`
-  hook + `loadSquareScript` + config + `CARD_STYLE`). All money-in flows
+  hook + `squareConfig` + `loadSquareScript` + `CARD_STYLE`). All money-in flows
   reuse it — the top-up page (`app/topup/page.tsx`) and paid-plan checkout
   (`lib/billing/subscribe-card-form.tsx`). Card data never touches our code;
   Square returns a single-use `sourceId` nonce the server charges.
+  **Which Square is the ORG's answer, not the build's**: `squareConfig()` reads
+  `GET /v1/billing/settings` per card mount and uses application + location +
+  environment from it, so a sandbox org and a live org are served by one image.
+  The baked `NEXT_PUBLIC_SQUARE_*` are the fallback for when that read fails, and
+  a partial answer falls back WHOLE — pairing one environment's application with
+  another's CDN is exactly the cross-environment mismatch Square rejects.
+- **Crypto top-up** is the MPC custody rail and nothing else: the `/topup` crypto
+  tab lists what commerce is watching (`GET /v1/billing/crypto/options`), asks for
+  this payer's address on the chosen pair (`POST /v1/billing/crypto/deposit`), and
+  shows it with a QR. Nothing in the tab can credit a balance — a chain watcher
+  does that on confirmations — so nothing in it says a deposit has landed. Where
+  commerce issues a destination tag (XRPL) the QR is withheld: an address alone
+  is half that destination, and the half that arrives belongs to nobody.
 - **Paid-plan self-serve checkout**: SubscriptionPortal → SubscribeCardForm →
   `commerce.subscribeWithCard({ sourceId, planId, quantity, currency }, { idempotencyKey })`
   → `POST /v1/billing/subscribe/card` (commerce ≥ v1.49.5). Server-authoritative
@@ -240,21 +258,25 @@ and credits the TEST balance, on the same replica that serves live merchants. A
 sandbox charge can never mint spendable credit, and production needs no change to
 serve one.
 
-**But the SPA does not follow the org.** `lib/square.ts` reads the app id and
-location id from `NEXT_PUBLIC_*`, which Next.js bakes in at BUILD time
-(`output: 'export'`). commerce already computes the per-org answer and serves it
-(`payment.SquarePublicConfig` → `GET /v1/billing/settings`), but nothing here
-fetches it. Consequence: **billing.hanzo.ai cannot be used to test sandbox** — the
-browser would tokenize against the production application while commerce charged
-with the sandbox token, and Square rejects the cross-environment nonce. Testing
-sandbox therefore means a LOCAL build with sandbox values, pointed at a
-`Live=false` org. (Making the SPA read `/v1/billing/settings` would remove this
-split and let one build serve both; until then, keep the two in step by hand.)
+**And the SPA follows the org.** `lib/square.ts` asks
+`GET /v1/billing/settings` (commerce's `payment.SquarePublicConfig`) on each card
+mount and tokenizes with the application, location and environment it answers, so
+**billing.hanzo.ai serves sandbox and production from ONE image**: flip an org's
+`Live` flag and the next card form loads the other Square. The baked
+`NEXT_PUBLIC_SQUARE_*` apply only when that read fails, and then all three
+together — filling one field from the build and the rest from the org is how a
+nonce ends up minted against the wrong environment, which Square rejects.
+
+This works on the deployed cloud because the pod carries the sandbox PUBLIC pair
+(`SQUARE_SANDBOX_APPLICATION_ID`, `SQUARE_SANDBOX_LOCATION_ID`) beside the
+production one; without them a test org would be answered `environment: sandbox`
+with the production application id — the same mismatch, now server-side.
 
 ### Credentials
 
-Sandbox app id and location id are PUBLIC — Square hands them to the browser, so
-they belong in a build arg, not a vault:
+Sandbox app id and location id are PUBLIC — Square hands them to the browser.
+Commerce serves them per org, so nothing here needs them; they are only worth
+setting for a build that must work with no commerce to ask:
 
 ```
 NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox
@@ -281,31 +303,27 @@ Square's sandbox also accepts the pre-made nonce `cnon:card-nonce-ok` as a
 
 ### Run the card flow
 
-Square's Web Payments SDK refuses to load over plain `http` on a non-localhost
-origin, and the sandbox CDN (`sandbox.web.squarecdn.com`) is selected whenever
-`NEXT_PUBLIC_SQUARE_ENVIRONMENT` is not `production`. `http://localhost:3005` is
-exempt, so `pnpm dev` needs no certificate; anything else does (`mkcert`).
+Sign in as a member of a `Live=false` org, open `/topup`, enter the test card,
+submit: the SPA tokenizes with that org's sandbox application and calls
+`POST /v1/billing/topup/token` with the nonce. Read the balance either side with
+`GET /v1/billing/balance`. The credited subject is the org slug, resolved
+server-side — a body value cannot steer it. billing.hanzo.ai does this as well as
+a local run does; the org is the whole switch.
+
+Locally, Square's Web Payments SDK refuses to load over plain `http` on a
+non-localhost origin. `http://localhost:3005` is exempt, so `pnpm dev` needs no
+certificate; anything else does (`mkcert`).
 
 ```bash
 cd ~/work/hanzo/hanzoai/billing
-cat > .env.local <<'EOF'
-NEXT_PUBLIC_SQUARE_ENVIRONMENT=sandbox
-NEXT_PUBLIC_SQUARE_APPLICATION_ID=sandbox-sq0idb--kZP78n8_TjQOu8qApr5iQ
-NEXT_PUBLIC_SQUARE_LOCATION_ID=LD8DWE4KKB0WB
-NEXT_PUBLIC_BASE_PATH=
-EOF
+echo 'NEXT_PUBLIC_BASE_PATH=' > .env.local
 pnpm dev            # http://localhost:3005/topup
 ```
 
 `.env.local` outranks `.env.production` and is git-ignored, so the committed live
-defaults are never mutated. Sign in, open `/topup`, enter the test card, submit:
-the SPA tokenizes and calls `POST /v1/billing/topup/token` with the nonce. Read
-the balance either side with `GET /v1/billing/balance`. The credited subject is
-the org slug, resolved server-side — a body value cannot steer it.
-
-The same values exist as Docker build args (`SQUARE_APPLICATION_ID`,
-`SQUARE_LOCATION_ID`, `SQUARE_ENVIRONMENT`) for a throwaway sandbox image; they
-write `.env.production.local` at build. Do not point a shared host at that image.
+defaults are never mutated. The Docker build args (`SQUARE_APPLICATION_ID`,
+`SQUARE_LOCATION_ID`, `SQUARE_ENVIRONMENT`) still write `.env.production.local`,
+which now only decides what the card form does when it cannot reach commerce.
 
 ### Verify the charge leg alone
 
@@ -338,24 +356,41 @@ CGO_ENABLED=0 go test ./api/billing/ -run TestTopup -v
 `Live=false` org and asserts the test bucket rises while the live bucket stays
 empty.
 
-### Crypto is NOT testable this way — the tab's door is not the credited rail
+### Crypto rides the MPC custody rail
 
-`app/topup/page.tsx` gates its crypto tab on `NEXT_PUBLIC_HANZO_ETH_TREASURY`,
-and setting it does render the address and form. Do not read that as a working
-test surface. That tab posts a user-typed tx hash to `POST /v1/payments`, which
-is a GENERIC REST resource (`rest.New(payment.Payment{})` in `commerce/api/api.go`)
-with no create hook: nothing verifies the hash on-chain and nothing credits a
-balance. It also hardcodes `network: 'ethereum'`, so a Sepolia send would be
-recorded as mainnet.
+The crypto tab is `GET /v1/billing/crypto/options` for what commerce is watching,
+`POST /v1/billing/crypto/deposit` for this payer's address on the pair chosen,
+and a chain watcher that credits only on confirmations
+(`commerce/api/billing/crypto_deposit.go`). The SPA cannot credit anything, and
+says nothing that implies it has.
 
-The real rail is MPC custody — `POST /v1/billing/crypto/deposit` for a per-payer
-address, `GET /v1/billing/crypto/options` for the live chain/token set, and a
-chain watcher that credits only on confirmations (`api/billing/crypto_deposit.go`:
-"nothing here mints, so a claimed deposit is worth nothing until the chain says
-otherwise"). Point the tab at that rail before enabling it. Publishing a treasury
-address behind a door that cannot credit is how a customer sends real USDC and
-gets nothing — the same failure the hardcoded third-party address already caused
-once.
+Two properties hold it together, both server-side:
+
+- **Offered ⟺ creditable.** The picker renders only what `options` answers, and
+  that set is projected from the watcher's configured assets — an asset appears
+  because something is reading the chain for it, and stops the moment that stops
+  being true. A failed options call therefore renders NOTHING; a fallback list
+  would be an invitation to send money at an address nobody watches.
+- **One payer, one address per asset.** A re-POST returns the open intent rather
+  than minting again, so re-opening the tab strands nothing.
+
+Arming an asset is one act on the serving deployment: `CRYPTO_DEPOSIT_RPC_<CHAIN>`
+plus `CRYPTO_DEPOSIT_TOKEN_<CHAIN>_<TOKEN>` (and `CRYPTO_DEPOSIT_ADDRESS_<CHAIN>`
+where deposits are pooled). Nothing is watched by default, so the rail is closed
+until it is named. `app/topup/page.tsx` holds the labels for the pairs worth
+naming — a row there is copy, never permission; visibility is the server's answer.
+
+Where commerce issues a destination tag (a pooled chain such as XRPL) the tab
+shows the tag and withholds the QR: the address alone is half the destination,
+and the half that arrives names nobody.
+
+What this replaced, so it is not rebuilt: a form that took a user-typed tx hash
+and posted it to `POST /v1/payments` — a GENERIC REST resource
+(`rest.New(payment.Payment{})` in `commerce/api/api.go`) with no create hook. It
+verified no hash, credited no balance, hardcoded `network: 'ethereum'` whatever
+chain the customer used, then read the balance back and announced a successful
+top-up. The treasury address it published came from `NEXT_PUBLIC_HANZO_ETH_TREASURY`
+(no longer read anywhere).
 
 ## License
 

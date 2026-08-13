@@ -4,6 +4,14 @@
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/admin/billing'
 
 /**
+ * Where commerce answers — ONE spelling, because the money-in surfaces must all
+ * ask the same deployment. It matters most for the card form: `lib/square.ts`
+ * reads the org's Square application from here and the charge is sent here, so
+ * two addresses would be two Square accounts and a nonce minted for the wrong one.
+ */
+export const COMMERCE_URL = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
+
+/**
  * Where a tier that is sold by a person sends the buyer — OUR calendar.
  *
  * ONE address, because it was written in two files and a third surface linked
