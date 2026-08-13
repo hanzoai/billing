@@ -238,16 +238,23 @@ advertising a current offer.
   ever disagreed on (catalog prices are whole dollars, ledger amounts are to the
   cent). Do not add a local `fmt` / `formatCurrency`; there were fourteen.
 - **Square tokenization** lives in ONE place: `lib/square.ts` (`useSquareCard`
-  hook + `squareConfig` + `loadSquareScript` + `CARD_STYLE`). All money-in flows
-  reuse it — the top-up page (`app/topup/page.tsx`) and paid-plan checkout
-  (`lib/billing/subscribe-card-form.tsx`). Card data never touches our code;
-  Square returns a single-use `sourceId` nonce the server charges.
+  and `useApplePay` hooks + `squareConfig` + `loadSquareScript` + `CARD_STYLE`).
+  All money-in flows reuse it — the top-up page (`app/topup/page.tsx`) and
+  paid-plan checkout (`lib/billing/subscribe-card-form.tsx`). Card data never
+  touches our code; the card fields and the Apple Pay sheet both return a
+  single-use `sourceId` nonce the server charges by the identical call.
   **Which Square is the ORG's answer, not the build's**: `squareConfig()` reads
   `GET /v1/billing/settings` per card mount and uses application + location +
   environment from it, so a sandbox org and a live org are served by one image.
   The baked `NEXT_PUBLIC_SQUARE_*` are the fallback for when that read fails, and
   a partial answer falls back WHOLE — pairing one environment's application with
   another's CDN is exactly the cross-environment mismatch Square rejects.
+  **Every surface that tokenizes asks `squareConfig()`** — the wallet included.
+  `useApplePay` resolves the account through it and passes that answer to both
+  `loadSquareScript(environment)` and `payments()`, so the sheet and the card
+  fields can never name different Square accounts. Wiring the wallet to the baked
+  constants instead would mint a nonce against one environment for a charge sent
+  to another, which is the rejection `squareConfig()` exists to prevent.
 - **Crypto top-up** is the MPC custody rail and nothing else: the `/topup` crypto
   tab lists what commerce is watching (`GET /v1/billing/crypto/options`), asks for
   this payer's address on the chosen pair (`POST /v1/billing/crypto/deposit`), and
