@@ -5,12 +5,14 @@ Hanzo billing service
 
 ## Tech Stack
 - TypeScript 5.9.3 · React 19 · Next 16.2 (`output: 'export'`, **Turbopack**)
-- `@hanzo/ui` 8.0.47 — the shared handle vocabulary (`mono`, `tnum`, `paper`,
+- `@hanzo/ui` 8.0.72 — the shared handle vocabulary (`mono`, `tnum`, `paper`,
   `row`, `elevation-1..4`). `.btn` and `.badge` do NOT exist in it; anything
   that looks like one is defined locally in `app/global.css`.
-- `@hanzo/design` 0.4.6 — the colour ladder AND the two self-hosted faces.
-- `@hanzo/gui` 8.0.2 — ships `gui-css-check`, which `postbuild` runs.
-- `@hanzogui/shell` 8.0.6 for the cross-app chrome (TenantHeader, ORG_DOMAINS).
+  **Never below 8.0.69** — see *The focus ring* below.
+- `@hanzo/design` 0.5.1 — the colour ladder AND the two self-hosted faces.
+  **Never below 0.4.9** — same reason.
+- `@hanzo/gui` 8.1.1 — ships `gui-css-check`, which `postbuild` runs.
+- `@hanzogui/shell` 8.1.5 for the cross-app chrome (TenantHeader, ORG_DOMAINS).
   **Never 8.0.3** — that release published 966 lines of Tailwind classes with no
   Tailwind in its dependencies and rendered completely unstyled. 8.0.6 ships zero
   CSS and zero className literals; it styles itself with inline style objects and
@@ -118,9 +120,38 @@ with the gui classes forced on, so they read ui's inlined ladder directly and ar
 not restated here. Do not "defensively" wrap the others; that would be a second
 mechanism for a problem they do not have.
 
-**Removable once `@hanzo/ui` 8.0.48 lands** — it stops ui/gui shadowing design's
-`--background` / `--black` / `--white`. At that point `--page` can become
-`var(--background)` and then disappear entirely.
+**Still needed at `@hanzo/ui` 8.0.72.** The removal condition was "once ui stops
+shadowing design's `--background` / `--black` / `--white`", and it has not:
+8.0.72's sheet still carries the gui theme runtime and declares `--background`
+246 times. Re-measure before deleting `--page`; do not delete it on the version
+number alone.
+
+### The focus ring — ONE, and it is not ours
+
+A focused field draws exactly one indicator and billing does not own it:
+`@hanzo/design`'s base layer states `:focus-visible { outline: 2px solid
+var(--ring); outline-offset: 2px }` for every focusable thing, field included.
+It is `--ring` at .40 (3.77:1 on the darkest canvas, the one contrast pair the
+design package gates), it is `:focus-visible` so a mouse click does not ring it,
+and an `outline` is the only affordance an app's own border styling cannot
+silently override.
+
+**Never put `outline-none`, `focus:border-*` or `focus:ring-*` on a field here.**
+All sixteen inputs did, and it cost twice over: `outline-none` deleted the shared
+ring, and what replaced it was either a second ring stacked on the first
+(`focus:border-brand focus:ring-1 focus:ring-brand`) or — on the three fields
+carrying an inline `outline: 'none'` — no focus indicator at all. Deleting the
+overrides is the whole fix; there is nothing to add.
+
+The reason a stale lockfile shows a DOUBLE rather than a single ring:
+`@hanzo/ui/styles.css` inlines design's base layer verbatim at ui build time, so
+the version of that layer an app renders is decided by its `@hanzo/ui` pin, NOT
+its `@hanzo/design` pin. Before design 0.4.9 the layer held two rules — a field
+rule (`outline:none` + brightened edge + halo) and the generic ring — that both
+computed to (0,1,0), so the cascade fell through to source order, the generic
+rule was written later, and it beat the `outline:none` the field rule stated to
+prevent exactly that. Both rules then painted. design 0.4.9 deleted the field
+rule; `@hanzo/ui` 8.0.69 was the first release to re-inline the fixed layer.
 
 Money must be tabular. Numeric cells carry `mono` (Geist Mono +
 `font-variant-numeric: tabular-nums`); `tnum` is the same tabular figures

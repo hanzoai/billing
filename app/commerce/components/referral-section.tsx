@@ -111,7 +111,6 @@ export function ReferralSection() {
                   padding: '10px 14px',
                   color: 'var(--color-text)',
                   fontSize: '14px',
-                  outline: 'none',
                   width: '100%',
                   boxSizing: 'border-box',
                 }}

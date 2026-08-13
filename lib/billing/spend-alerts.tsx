@@ -121,7 +121,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Alert name (e.g. Monthly budget)"
-                className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand md:col-span-2"
+                className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text transition md:col-span-2"
               />
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -133,7 +133,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                     value={threshold}
                     onChange={(e) => setThreshold(e.target.value)}
                     placeholder="Threshold"
-                    className="w-full rounded-lg border border-border bg-bg-input py-2 pl-7 pr-3 text-sm text-text outline-none transition focus:border-brand"
+                    className="w-full rounded-lg border border-border bg-bg-input py-2 pl-7 pr-3 text-sm text-text transition"
                   />
                 </div>
                 <button

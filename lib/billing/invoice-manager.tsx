@@ -189,7 +189,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
               setPage(1)
             }}
             placeholder="Search invoices by id, number, or status"
-            className="min-w-[250px] flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand"
+            className="min-w-[250px] flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text transition"
           />
           <select
             value={status}
@@ -197,7 +197,7 @@ export function InvoiceManager(props: InvoiceManagerProps) {
               setStatus(e.target.value as Invoice['status'] | 'all')
               setPage(1)
             }}
-            className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary outline-none transition focus:border-brand"
+            className="rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary transition"
           >
             {statusOptions.map((value) => (
               <option key={value} value={value}>

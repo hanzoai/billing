@@ -9,7 +9,7 @@ export interface BusinessProfilePanelProps {
   onSave?: (profile: BusinessProfile) => Promise<void>
 }
 
-const INPUT_CLASS = 'w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text outline-none transition focus:border-brand'
+const INPUT_CLASS = 'w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text transition'
 
 export function BusinessProfilePanel(props: BusinessProfilePanelProps) {
   const { profile, onSave } = props

@@ -60,7 +60,6 @@ export function CouponInput() {
             padding: '10px 14px',
             color: 'var(--color-text)',
             fontSize: '14px',
-            outline: 'none',
             letterSpacing: '0.05em',
           }}
         />
