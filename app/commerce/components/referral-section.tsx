@@ -20,8 +20,8 @@ export function ReferralSection() {
       padding: '0 24px 80px',
     }}>
       <div style={{
-        background: 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'color-mix(in oklab, var(--color-text) 2.5%, transparent)',
+        border: '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
         borderRadius: '20px',
         padding: '48px',
         display: 'grid',
@@ -48,11 +48,11 @@ export function ReferralSection() {
           }}>
             Affiliate Program
           </div>
-          <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fafafa', margin: '0 0 12px', letterSpacing: '-0.025em', lineHeight: 1.2 }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 12px', letterSpacing: '-0.025em', lineHeight: 1.2 }}>
             Refer and earn
           </h2>
-          <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.45)', margin: '0 0 24px', lineHeight: 1.6 }}>
-            Earn <strong style={{ color: 'rgba(255,255,255,0.75)' }}>20% recurring commission</strong> for every customer you refer. No cap. Paid monthly to your Hanzo balance or bank.
+          <p style={{ fontSize: '15px', color: 'color-mix(in oklab, var(--color-text) 45%, transparent)', margin: '0 0 24px', lineHeight: 1.6 }}>
+            Earn <strong style={{ color: 'color-mix(in oklab, var(--color-text) 75%, transparent)' }}>20% recurring commission</strong> for every customer you refer. No cap. Paid monthly to your Hanzo balance or bank.
           </p>
           <ul style={{ margin: '0 0 8px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {[
@@ -61,7 +61,7 @@ export function ReferralSection() {
               'Payouts via balance credit or ACH/wire',
               '60-day attribution window',
             ].map((item, i) => (
-              <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'rgba(255,255,255,0.55)' }}>
+              <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 55%, transparent)' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px', color: '#4ade80' }}>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -73,8 +73,8 @@ export function ReferralSection() {
 
         {/* Right: sign-up form */}
         <div style={{
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'color-mix(in oklab, var(--color-text) 3%, transparent)',
+          border: '1px solid color-mix(in oklab, var(--color-text) 8%, transparent)',
           borderRadius: '14px',
           padding: '28px',
         }}>
@@ -85,16 +85,16 @@ export function ReferralSection() {
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-              <p style={{ fontSize: '15px', fontWeight: 600, color: '#fafafa', margin: '0 0 6px' }}>You're on the list</p>
-              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
-                We'll send your affiliate link and dashboard access to <strong style={{ color: 'rgba(255,255,255,0.7)' }}>{email}</strong>.
+              <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 6px' }}>You're on the list</p>
+              <p style={{ fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
+                We'll send your affiliate link and dashboard access to <strong style={{ color: 'color-mix(in oklab, var(--color-text) 70%, transparent)' }}>{email}</strong>.
               </p>
             </div>
           ) : (
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: '#fafafa', margin: '0 0 6px' }}>Join the affiliate program</p>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 6px' }}>Join the affiliate program</p>
+                <p style={{ fontSize: '13px', color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', margin: 0 }}>
                   Enter your email to get your unique referral link.
                 </p>
               </div>
@@ -105,11 +105,11 @@ export function ReferralSection() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'color-mix(in oklab, var(--color-text) 4%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--color-text) 10%, transparent)',
                   borderRadius: '8px',
                   padding: '10px 14px',
-                  color: '#fafafa',
+                  color: 'var(--color-text)',
                   fontSize: '14px',
                   outline: 'none',
                   width: '100%',
@@ -119,8 +119,8 @@ export function ReferralSection() {
               <button
                 type="submit"
                 style={{
-                  background: '#ffffff',
-                  color: '#09090b',
+                  background: 'var(--color-brand)',
+                  color: 'var(--color-brand-foreground)',
                   border: 'none',
                   borderRadius: '8px',
                   padding: '11px 16px',
@@ -134,9 +134,9 @@ export function ReferralSection() {
               >
                 Get my referral link
               </button>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0, textAlign: 'center' }}>
+              <p style={{ fontSize: '11px', color: 'color-mix(in oklab, var(--color-text) 25%, transparent)', margin: 0, textAlign: 'center' }}>
                 By joining you agree to the{' '}
-                <a href="https://hanzo.ai/legal/affiliate" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>affiliate terms</a>.
+                <a href="https://hanzo.ai/legal/affiliate" style={{ color: 'color-mix(in oklab, var(--color-text) 40%, transparent)', textDecoration: 'underline' }}>affiliate terms</a>.
               </p>
             </form>
           )}

@@ -1,3 +1,19 @@
+/** Every navigable panel in the billing shell — the ten the sidebar offers and
+ *  the switch in `lib/components/billing-shell.tsx` has a case for.
+ *
+ *  Not listed, deliberately: cost, members, business, tax. Those four panels
+ *  exist (CostExplorer, AccountMembers, BusinessProfilePanel,
+ *  TaxCompliancePanel) but they render INSIDE usage, team and settings — they
+ *  are not destinations. Naming them here made the shell's SECTION_TITLES
+ *  incomplete, and the fix taken was to invent four titles for them, which
+ *  taught `getInitialSection` that `#cost` is a valid hash: it passes the
+ *  `hash in SECTION_TITLES` test, sets a section no case matches, and the
+ *  content area renders nothing. A section is a place you can navigate to. */
+export type BillingSection =
+  | 'overview' | 'usage' | 'invoices' | 'pricing'
+  | 'credits' | 'transactions' | 'alerts'
+  | 'payment' | 'team' | 'settings'
+
 export type BillingInterval = "monthly" | "yearly" | "quarterly" | "custom"
 
 // Subscription types
@@ -21,8 +37,23 @@ export interface SubscriptionPlan {
   externalUrl?: string
   /** Annual price alternative shown on the card */
   annualPrice?: number
+  /**
+   * The catalog's own category — `personal`, `team`, `enterprise`.
+   *
+   * Carried through from the catalog rather than inferred, because the pricing
+   * grid segments on it: Personal shows the four self-serve tiers, Business shows
+   * the seat-based and negotiated ones. Inferring "business" from perSeat or
+   * contactSales would put a per-seat personal tier on the wrong tab the day one
+   * is added; the catalog already answers this question.
+   */
+  category?: string
   /** Price is per seat — the card shows a seat selector and per-seat total */
   perSeat?: boolean
+  /**
+   * Percent off the active platform promo takes off this plan, straight from the
+   * catalog. The charge subtracts it, so the quote has to as well.
+   */
+  promoPercent?: number
   /** Minimum seats for per-seat plans (backend rejects fewer) */
   minSeats?: number
 }
@@ -152,6 +183,15 @@ export interface PaymentMethod {
   is_default: boolean
   created_at: string
   isDefault?: boolean
+  /**
+   * The vaulted card behind this method — what a charge actually names.
+   *
+   * Commerce omits it when the method has none and then REFUSES to charge such a
+   * method ("saved payment method has no chargeable card"), so any chooser that
+   * offers cards has to read it: an option without a providerRef is an option that
+   * cannot pay. Dropping it here is what put a dead card in the checkout.
+   */
+  providerRef?: string
   card?: {
     brand: string
     last4: string

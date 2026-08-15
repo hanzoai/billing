@@ -30,10 +30,13 @@ export interface SubscriptionPortalProps {
   onAcceptOffer?: (offerId: string) => Promise<void>
   onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
   /**
-   * Self-serve paid checkout: charge a Square nonce and start the subscription.
-   * Rejects with a CommerceApiError carrying the HTTP status for honest UI.
+   * Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
+   * start the subscription. Rejects with a CommerceApiError carrying the HTTP
+   * status for honest UI.
    */
-  onSubscribeWithCard?: (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => Promise<void>
+  onSubscribeWithCard?: (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => Promise<void>
+  /** Cards already on file, offered in the checkout before the blank form. */
+  savedCards?: SavedCard[]
   /**
    * Logged-out public pricing: every plan CTA calls this (start sign-in) instead
    * of subscribing. Auth gates the subscribe action, not viewing prices.
@@ -43,15 +46,9 @@ export interface SubscriptionPortalProps {
   defaultView?: 'overview' | 'plans' | 'history'
 }
 
-import { SubscribeCardForm } from './subscribe-card-form'
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
+import { SubscribeCardForm, type SavedCard } from './subscribe-card-form'
+import type { CardInput } from '@/lib/commerce-client'
+import { billableSeats, cents, chargeTotal, money, subtotal } from '@/lib/money'
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -105,11 +102,24 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     onCancel,
     onApplyDiscount,
     onSubscribeWithCard,
+    savedCards = [],
     onRequireAuth,
     defaultView = 'overview',
   } = props
 
-  const [view, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
+  const [viewChoice, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
+  // Signed out, the portal IS the catalog. The subscription card and the
+  // Overview / History views describe a subscription the viewer does not have
+  // yet — dead chrome before sign-in — so they exist only for a signed-in
+  // subject, and the plans grid still marks the current plan whenever the
+  // caller could detect one.
+  const signedOut = !!onRequireAuth
+  const view = signedOut ? 'plans' : viewChoice
+  // AUDIENCE is the axis the catalog carries, surfaced as a control instead of as
+  // more cards. Six tiers in one row asked a visitor to compare a $9 personal plan
+  // against a negotiated enterprise contract; they are different purchases and now
+  // sit on different tabs.
+  const [audience, setAudience] = React.useState<'personal' | 'business'>('personal')
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
   const [planError, setPlanError] = React.useState<string | null>(null)
   // Paid plan whose self-serve card checkout panel is open.
@@ -129,10 +139,38 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const [cancelReason, setCancelReason] = React.useState('')
   const [canceling, setCanceling] = React.useState(false)
 
+  // Segment on the CATALOG's own category, never on a heuristic. `personal` is the
+  // self-serve ladder; everything else (team, enterprise) is bought differently —
+  // seats or a conversation. A category the catalog adds tomorrow lands under
+  // Business without an edit here, which is the point of reading it rather than
+  // listing the four ids.
+  const personalPlans = React.useMemo(
+    () => availablePlans.filter((p) => (p.category ?? 'personal') === 'personal'),
+    [availablePlans],
+  )
+  const businessPlans = React.useMemo(
+    () => availablePlans.filter((p) => (p.category ?? 'personal') !== 'personal'),
+    [availablePlans],
+  )
+  const shownPlans = audience === 'personal' ? personalPlans : businessPlans
+
   const currentPlan = React.useMemo(
     () => availablePlans.find((p) => p.id === subscription.planId),
     [availablePlans, subscription.planId],
   )
+  // The plan this account ALREADY PAYS FOR, if any.
+  //
+  // commerce sells one paid subscription per subject and answers 409 to a second
+  // (POST /v1/billing/subscribe/card), because a second row does not merely charge
+  // twice — the newest one also becomes the plan the allotment resolver reports. So
+  // this is what decides whether the card checkout is the right door at all. A FREE
+  // current plan is not this: paying for the first time is exactly what the door is
+  // for.
+  const paidPlan = React.useMemo(() => {
+    if (!subscription.id) return null
+    if (subscription.status !== 'active' && subscription.status !== 'trialing') return null
+    return currentPlan && currentPlan.price > 0 ? currentPlan : null
+  }, [subscription.id, subscription.status, currentPlan])
 
   const handlePlanChange = React.useCallback(
     async (plan: SubscriptionPlan) => {
@@ -151,6 +189,17 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
       // Paid tier, self-serve: open the Square card checkout panel (toggle).
       if (plan.price > 0 && !canDirectSubscribe && onSubscribeWithCard) {
+        // Not for someone who already pays. Opening the checkout here took a card,
+        // minted a Square nonce and then lost the whole thing to a 409 — and before
+        // commerce refused, it charged the new plan in full and left the old one
+        // renewing. Say what is true instead of collecting a card for a sale that
+        // cannot complete.
+        if (paidPlan) {
+          setPlanError(
+            `This account already pays for ${paidPlan.name}. Moving between paid plans is not self-serve yet — cancel ${paidPlan.name} first, or ask us to move it.`,
+          )
+          return
+        }
         setNoProcessorPlanId(null)
         setActivationPlanId((prev) => (prev === plan.id ? null : plan.id))
         return
@@ -170,7 +219,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
+    [currentPlan, paidPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {
@@ -182,7 +231,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       if (result && result.valid) {
         const desc = result.kind === 'percent'
           ? `${result.value}% off`
-          : `${formatCurrency(result.value)} off`
+          : `${money(result.value, 'USD', 0)} off`
         setDiscountResult({ success: true, message: `Applied: ${result.name || result.code} (${desc})` })
         setDiscountCode('')
       } else {
@@ -209,6 +258,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
   return (
     <div className="space-y-6">
+      {!signedOut && (
       <div className="overflow-hidden rounded-2xl border border-border bg-bg-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -228,7 +278,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 Discount: {subscription.discount.name || subscription.discount.code} (
                 {subscription.discount.kind === 'percent'
                   ? `${subscription.discount.value}% off`
-                  : `${formatCurrency(subscription.discount.value)} off`}
+                  : `${money(subscription.discount.value, 'USD', 0)} off`}
                 {subscription.discount.duration === 'repeating' && subscription.discount.durationInMonths
                   ? ` for ${subscription.discount.durationInMonths} months`
                   : subscription.discount.duration === 'forever'
@@ -282,13 +332,14 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
           </button>
         </div>
       </div>
+      )}
 
       {view === 'overview' && (
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Current spend</p>
             <p className="mt-2 text-2xl font-semibold text-text">
-              {formatCurrency(currentPlan?.price ?? 0)}
+              <span className="mono">{money(currentPlan?.price ?? 0, 'USD', 0)}</span>
               <span className="text-sm font-normal text-text-muted">/{currentPlan?.billingPeriod ?? 'monthly'}</span>
             </p>
           </div>
@@ -321,7 +372,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     setDiscountResult(null)
                   }}
                   placeholder="Enter promo code"
-                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm font-mono uppercase text-text outline-none transition focus:border-brand"
+                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text outline-none transition focus:border-brand"
                 />
                 <button
                   type="button"
@@ -447,15 +498,15 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       {view === 'plans' && plansLoading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex animate-pulse flex-col rounded-2xl border border-white/[0.08] bg-[#141419] p-5">
-              <div className="h-4 w-20 rounded bg-white/[0.08]" />
-              <div className="mt-5 h-7 w-24 rounded bg-white/[0.08]" />
-              <div className="mt-4 h-3 w-full rounded bg-white/[0.06]" />
-              <div className="mt-2 h-3 w-3/4 rounded bg-white/[0.06]" />
+            <div key={i} className="flex animate-pulse flex-col rounded-2xl border border-ink/[0.08] bg-bg-card p-5">
+              <div className="h-4 w-20 rounded bg-ink/[0.08]" />
+              <div className="mt-5 h-7 w-24 rounded bg-ink/[0.08]" />
+              <div className="mt-4 h-3 w-full rounded bg-ink/[0.06]" />
+              <div className="mt-2 h-3 w-3/4 rounded bg-ink/[0.06]" />
               <div className="mt-6 flex-1 space-y-2">
-                {[0, 1, 2, 3].map((j) => <div key={j} className="h-3 w-5/6 rounded bg-white/[0.05]" />)}
+                {[0, 1, 2, 3].map((j) => <div key={j} className="h-3 w-5/6 rounded bg-ink/[0.05]" />)}
               </div>
-              <div className="mt-5 h-10 w-full rounded-xl bg-white/[0.06]" />
+              <div className="mt-5 h-10 w-full rounded-xl bg-ink/[0.06]" />
             </div>
           ))}
         </div>
@@ -474,17 +525,62 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
               {planError}
             </div>
           )}
+          {/* One control, not twelve cards: WHO the plan is for, read from the
+              catalog's `category`. There is deliberately no billing-interval
+              control — see the annual note on the plan cards below. */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="tablist"
+              aria-label="Plan audience"
+              className="inline-flex rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-1"
+            >
+              {(['personal', 'business'] as const).map((a) => {
+                const count = a === 'personal' ? personalPlans.length : businessPlans.length
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    role="tab"
+                    aria-selected={audience === a}
+                    disabled={count === 0}
+                    onClick={() => setAudience(a)}
+                    className={
+                      'rounded-lg px-4 py-1.5 text-[13px] font-medium capitalize transition disabled:opacity-40 ' +
+                      (audience === a
+                        ? 'bg-bg-card text-text shadow-sm'
+                        : 'text-text-muted hover:text-text')
+                    }
+                  >
+                    {a}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {availablePlans.map((plan) => {
+          {shownPlans.map((plan) => {
             const isCurrent = plan.id === subscription.planId
             const isBusy = busyPlanId === plan.id
             const isFree = plan.price === 0
             const hasTrial = (plan.trialDays ?? 0) > 0
             const isExternal = !!plan.externalUrl || plan.contactSales
             const minSeats = plan.minSeats ?? 2
-            const seats = plan.perSeat ? Math.max(minSeats, seatCounts[plan.id] ?? minSeats) : 1
-            const monthlyTotal = plan.price * seats
-            const periodPrice = isFree ? 'Free' : `$${plan.price}`
+            const seats = billableSeats(plan, seatCounts[plan.id])
+            // The quote, from the ONE price rule — the number commerce is about to
+            // charge, never a rate the wire cannot ask for. `seatSubtotal` is the
+            // list-price arithmetic the seat line shows; the two differ only while a
+            // promo is live, which is exactly when the button must show the discount
+            // and the seat line must still add up.
+            const seatSubtotal = subtotal(plan, seats)
+            const total = chargeTotal(plan, seats)
+            const totalLabel = `${money(total, plan.currency ?? 'USD', cents(total))}/mo`
+            // A priceless tier means two different things: a contact-sales tier
+            // has no list price, a $0 tier genuinely costs nothing.
+            const priceLabel = isFree
+              ? plan.contactSales ? 'Custom' : 'Free'
+              : money(plan.price, plan.currency ?? 'USD', cents(plan.price))
+            const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
             const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
             const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
             const showNoProcessor = checkoutOpen && noProcessorPlanId === plan.id
@@ -506,26 +602,32 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 key={plan.id}
                 className={`relative flex flex-col rounded-2xl border p-5 transition ${
                   plan.highlighted && !isCurrent
-                    ? 'border-white/[0.2] bg-[#141419]'
+                    ? 'border-ink/[0.2] bg-bg-card'
                     : isCurrent
-                      ? 'border-white/[0.25] bg-[#141419]'
-                      : 'border-white/[0.08] bg-[#141419]'
+                      ? 'border-ink/[0.25] bg-bg-card'
+                      : 'border-ink/[0.08] bg-bg-card'
                 }`}
               >
                 {plan.highlighted && !isCurrent && (
-                  <div className="absolute -top-px left-0 right-0 h-px rounded-t-2xl bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                  <div
+                    className="absolute -top-px left-0 right-0 h-px rounded-t-2xl"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(to right in oklab, transparent, color-mix(in oklab, #fff 40%, transparent), transparent)',
+                    }}
+                  />
                 )}
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[15px] font-semibold text-white">{plan.name}</p>
+                  <p className="text-[15px] font-semibold text-text">{plan.name}</p>
                   {plan.badge ? (
                     <span className={`rounded-full px-2 py-1 text-[11px] font-semibold flex-shrink-0 ${
                       isCurrent
-                        ? 'bg-white/10 text-white/60'
+                        ? 'bg-ink/10 text-ink/60'
                         : plan.contactSales
                           ? 'bg-amber-500/15 text-amber-400'
                           : hasTrial
                             ? 'bg-sky-500/15 text-sky-400'
-                            : 'bg-white/[0.07] text-white/40'
+                            : 'bg-ink/[0.07] text-ink/40'
                     }`}>
                       {plan.badge}
                     </span>
@@ -533,56 +635,62 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 </div>
 
                 <div className="mt-4">
-                  <p className="text-2xl font-bold text-white">
-                    {isExternal && !isFree ? `$${formatCurrency(plan.price).replace('$', '').split('.')[0]}` : periodPrice}
-                    {!isFree && !isExternal && <span className="text-sm font-normal text-white/40">{plan.perSeat ? '/user/mo' : '/mo'}</span>}
-                    {isExternal && !isFree && <span className="text-sm font-normal text-white/40">/mo+</span>}
+                  <p className="text-2xl font-bold text-text">
+                    <span className="mono">{priceLabel}</span>
+                    {priceSuffix && <span className="text-sm font-normal text-ink/40">{priceSuffix}</span>}
                   </p>
+                  {/* The annual rate is INFORMATION, not something this checkout can
+                      buy. commerce sells an annual plan the only way it can — as its
+                      own catalog row with its own price and interval — and every live
+                      row says "monthly". There is no interval on the wire either, so
+                      the charge always reads the monthly column. Quoting this number
+                      as a total is how the screen came to say "$41.50/mo" over a
+                      $49.00 charge. */}
                   {plan.annualPrice && !isCurrent ? (
-                    <p className="mt-0.5 text-[12px] text-emerald-400">${plan.annualPrice}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
+                    <p className="mt-0.5 text-[12px] text-emerald-400">{money(plan.annualPrice, plan.currency ?? 'USD', cents(plan.annualPrice))}{plan.perSeat ? '/user' : ''}/mo billed annually</p>
                   ) : null}
                   {(plan.trialCreditCents ?? 0) > 0 && !isCurrent && (
                     <p className="mt-0.5 text-[12px] text-emerald-400">+${(plan.trialCreditCents! / 100).toFixed(0)} credit included</p>
                   )}
                 </div>
 
-                <p className="mt-3 text-[13px] leading-relaxed text-white/40">{plan.description}</p>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink/40">{plan.description}</p>
 
                 {plan.perSeat && !isCurrent && (
-                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+                  <div className="mt-3 rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-white/50">Seats (min {minSeats})</span>
+                      <span className="text-[12px] text-ink/50">Seats (min {minSeats})</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           aria-label="Fewer seats"
                           disabled={seats <= minSeats}
                           onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: Math.max(minSeats, seats - 1) }))}
-                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-6 w-6 rounded-md bg-ink/[0.08] text-sm text-ink/70 hover:bg-ink/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center text-[13px] font-semibold text-white">{seats}</span>
+                        <span className="w-6 text-center text-[13px] font-semibold text-text">{seats}</span>
                         <button
                           type="button"
                           aria-label="More seats"
                           onClick={() => setSeatCounts((prev) => ({ ...prev, [plan.id]: seats + 1 }))}
-                          className="h-6 w-6 rounded-md bg-white/[0.08] text-sm text-white/70 hover:bg-white/[0.14]"
+                          className="h-6 w-6 rounded-md bg-ink/[0.08] text-sm text-ink/70 hover:bg-ink/[0.14]"
                         >
                           +
                         </button>
                       </div>
                     </div>
-                    <p className="mt-2 text-[12px] text-white/40">
-                      {seats} × ${plan.price}/mo = <span className="font-semibold text-white/80">${monthlyTotal}/mo</span>
+                    <p className="mt-2 text-[12px] text-ink/40">
+                      {seats} × {money(plan.price, plan.currency ?? 'USD', cents(plan.price))}/mo = <span className="font-semibold text-ink/80">{money(seatSubtotal, plan.currency ?? 'USD', cents(seatSubtotal))}/mo</span>
                     </p>
                   </div>
                 )}
 
                 <ul className="mt-4 flex-1 space-y-1.5">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-[13px] text-white/50">
-                      <span className="mt-0.5 flex-shrink-0 text-white/30">
+                    <li key={feature} className="flex items-start gap-2 text-[13px] text-ink/50">
+                      <span className="mt-0.5 flex-shrink-0 text-ink/30">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
@@ -598,16 +706,16 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   onClick={() => handlePlanChange(plan)}
                   className={`mt-5 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
                     isCurrent
-                      ? 'cursor-not-allowed bg-white/[0.06] text-white/30'
+                      ? 'cursor-not-allowed bg-ink/[0.06] text-ink/30'
                       : isBusy
-                        ? 'cursor-wait bg-white/[0.06] text-white/30'
+                        ? 'cursor-wait bg-ink/[0.06] text-ink/30'
                         : plan.highlighted
-                          ? 'bg-white text-black hover:bg-white/90'
+                          ? 'bg-brand text-brand-foreground hover:bg-brand-hover'
                           : isExternal
-                            ? 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                            ? 'bg-ink/[0.08] text-ink/70 hover:bg-ink/[0.12] hover:text-text'
                             : hasTrial && !subscription.id
                               ? 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30'
-                              : 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                              : 'bg-ink/[0.08] text-ink/70 hover:bg-ink/[0.12] hover:text-text'
                   }`}
                 >
                   {buttonLabel}
@@ -618,8 +726,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     planId={plan.id}
                     planName={plan.name}
                     quantity={seats}
-                    totalLabel={`$${monthlyTotal}/mo`}
-                    onSubscribe={(sourceId, idempotencyKey) => onSubscribeWithCard!(plan.id, sourceId, seats, idempotencyKey)}
+                    totalLabel={totalLabel}
+                    savedCards={savedCards}
+                    onSubscribe={(card, idempotencyKey) => onSubscribeWithCard!(plan.id, card, seats, idempotencyKey)}
                     onSuccess={() => setActivationPlanId(null)}
                     onNoProcessor={() => setNoProcessorPlanId(plan.id)}
                   />
@@ -628,13 +737,13 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 {showNoProcessor && (
                   <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
                     <p className="text-[12px] font-semibold text-amber-300">Card checkout is not enabled for this org yet</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-white/50">
+                    <p className="mt-1 text-[12px] leading-relaxed text-ink/50">
                       Your organization has no payment processor configured. Contact
                       our billing team and we will enable {plan.name} on your account.
                     </p>
                     <a
                       href={`mailto:billing@hanzo.ai?subject=${encodeURIComponent(`Activate ${plan.name} plan`)}&body=${encodeURIComponent(`Please enable card checkout and activate the ${plan.name} plan${plan.perSeat ? ` (${seats} seats)` : ''} on my account.`)}`}
-                      className="mt-3 block rounded-lg bg-white/[0.08] px-3 py-2 text-center text-[13px] font-semibold text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                      className="mt-3 block rounded-xl bg-ink/[0.08] px-3 py-2.5 text-center text-sm font-semibold text-ink/70 transition hover:bg-ink/[0.12] hover:text-text"
                     >
                       Contact billing
                     </a>
@@ -644,6 +753,86 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
             )
           })}
           </div>
+
+          {/* COMPARISON MATRIX — built from the catalog, never hand-authored.
+              A card can only show a handful of bullets before it stops being
+              scannable, so the full feature set goes here as one row per feature
+              and one column per plan. The rows are the UNION of every shown plan's
+              features, so a feature only one tier has still gets a row and its
+              absence elsewhere is visible — which is the comparison a buyer is
+              actually making. Hand-maintaining this table is how it drifts from
+              what is sold. */}
+          {shownPlans.length > 1 && (() => {
+            const rows = Array.from(
+              new Set(shownPlans.flatMap((p) => p.features ?? [])),
+            ).sort((a, b) => a.localeCompare(b))
+            if (rows.length === 0) return null
+            return (
+              <section className="mt-10">
+                <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+                  Compare {audience} plans
+                </h3>
+                {/* Its own scroll container: a wide table must never make the PAGE
+                    scroll sideways. */}
+                <div className="overflow-x-auto rounded-2xl border border-ink/[0.08]">
+                  <table className="w-full border-collapse text-[13px]">
+                    <thead>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="sticky left-0 z-10 bg-bg-card px-4 py-3 text-left font-medium text-text-muted"
+                        >
+                          Feature
+                        </th>
+                        {shownPlans.map((p) => (
+                          <th
+                            key={p.id}
+                            scope="col"
+                            className="whitespace-nowrap px-4 py-3 text-left font-semibold text-text"
+                          >
+                            {p.name}
+                            <span className="ml-2 font-normal text-text-muted mono">
+                              {p.contactSales
+                                ? 'Custom'
+                                : p.price === 0
+                                  ? 'Free'
+                                  : money(p.price, p.currency ?? 'USD', cents(p.price))}
+                            </span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((feature) => (
+                        <tr key={feature} className="border-t border-ink/[0.06]">
+                          <th
+                            scope="row"
+                            className="sticky left-0 z-10 bg-bg-card px-4 py-3 text-left font-normal text-text-secondary"
+                          >
+                            {feature}
+                          </th>
+                          {shownPlans.map((p) => (
+                            <td key={p.id} className="px-4 py-3">
+                              {(p.features ?? []).includes(feature) ? (
+                                <span aria-label="included" className="text-emerald-500">
+                                  ✓
+                                </span>
+                              ) : (
+                                <span aria-label="not included" className="text-ink/25">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          })()}
+
         </>
       )}
 

@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 // Every billing surface comes from ONE place: the local `lib/billing` barrel.
-// The published @hanzo/ui/billing bundle is deliberately NOT used — its barrel
-// drags in a first-party card form that reads the raw PAN into JS. Square Web
-// Payments hosted fields are the only card entry path here.
+// Two reasons, and both still hold. The published @hanzo/ui/billing bundle drags
+// in a first-party card form that reads the raw PAN into JS — Square Web Payments
+// hosted fields are the only card entry path here, and scripts/pci-scope.mjs
+// fails the build on an import of it. And @hanzo/ui 8 dropped ./billing anyway.
+// The local copies were always the correct ones: PaymentMethodManager tokenizes
+// through the Square SDK, and SubscriptionPortal gives per-seat plans a seat
+// selector and paid tiers the honest activation flow rather than the mint-gated
+// subscribe POST that 403s for non-platform callers.
 import {
   OverviewDashboard,
   UsagePanel,
@@ -17,14 +22,11 @@ import {
   AccountMembers,
   BusinessProfilePanel,
   TaxCompliancePanel,
+  SubscriptionPortal,
+  GuidedSetup,
 } from '@/lib/billing'
-// Use local SubscriptionPortal: per-seat plans get a seat selector, and paid
-// tiers show the honest activation flow (top-up + request) instead of firing
-// the mint-gated subscribe POST that 403s for non-platform callers.
-import { SubscriptionPortal } from '@/lib/billing/subscription-portal'
-import type { BillingSection } from '@/lib/billing'
-import { GuidedSetup } from '@/lib/billing/guided-setup'
 import type {
+  BillingSection,
   BillingAccount,
   BillingAccountMember,
   BillingRole,
@@ -37,18 +39,19 @@ import type {
   UsageSummary,
   CreditGrant,
   TransactionRecord,
+  Subscription,
+  SubscriptionPlan,
+  DiscountCode,
 } from '@/lib/billing'
-// Local billing types (the shapes the local SubscriptionPortal renders);
-// SubscriptionPlan adds perSeat/minSeats for the seat selector.
-import type { Subscription, SubscriptionPlan, DiscountCode } from '@/lib/billing/types'
-import type { Balance, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
+import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
-import { getAccessToken, logout } from '@/lib/iam-auth'
-import { type BillingOrgConfig, isAdminUser, BASE_PATH } from '@/lib/config'
+import { getAccessToken, isSuperAdmin, signOut } from '@/lib/iam-auth'
+import { type BillingOrgConfig, BASE_PATH, SALES_URL } from '@/lib/config'
+import { topupHref } from '@/lib/topup'
 import { getCommerce } from '@/lib/commerce'
+import { selectPlans } from '@/lib/plans'
 
-import { ORG_DOMAINS, HanzoHeader } from '@hanzo/ui/navigation/hanzo-shell'
-type OrgDomains = { iam: string; console: string; chat: string; platform: string; storage: string; billing: string }
+import { OrgHeader, type HanzoOrg } from '@hanzogui/shell'
 
 /* ── Sidebar section config ───────────────────────────────────── */
 const SIDEBAR_SECTIONS: Array<{ id: BillingSection; label: string; icon: React.ReactNode; group: 'main' | 'manage' }> = [
@@ -139,6 +142,7 @@ function mapCommercePaymentMethod(cpm: CommercePaymentMethod): PaymentMethod {
     is_default: cpm.isDefault ?? false,
     created_at: cpm.createdAt ?? new Date().toISOString(),
     isDefault: cpm.isDefault ?? false,
+    providerRef: cpm.providerRef,
     card: cpm.card ? {
       brand: cpm.card.brand ?? '',
       last4: cpm.card.last4 ?? '',
@@ -199,7 +203,8 @@ function mapCommerceTransaction(tx: Transaction): TransactionRecord {
     currency: tx.currency ?? 'usd',
     description: tx.notes ?? (tx.metadata?.description as string | undefined),
     balanceAfter: tx.metadata?.balanceAfter as number | undefined,
-    tags: typeof tx.tags === 'string' ? [tx.tags] : tx.tags,
+    // commerce serialises tags as a comma-joined string when there is only one
+    tags: typeof tx.tags === 'string' ? tx.tags.split(',').filter(Boolean) : tx.tags,
     createdAt: tx.createdAt ?? new Date().toISOString(),
   }
 }
@@ -243,42 +248,6 @@ function mapCommerceSpendAlert(csa: CommerceSpendAlert): SpendAlert {
 
 // Subscription tiers shown on the pricing grid (the catalog also carries
 // dns/world/social plans, which have their own product surfaces).
-const PLAN_CATEGORIES = new Set(['personal', 'team', 'enterprise'])
-
-/**
- * Project a commerce catalog plan (prices in cents, from
- * @hanzo/plans/subscription.json) onto the card the portal renders.
- * The catalog is the ONE source of plan copy — features, prices, tiers.
- */
-function mapCommercePlan(p: Plan): SubscriptionPlan {
-  const limits: Record<string, number> = {}
-  for (const [k, v] of Object.entries(p.limits ?? {})) {
-    if (typeof v === 'number') limits[k] = v
-  }
-  const perSeat = p.category === 'team'
-  return {
-    id: p.slug ?? '',
-    name: p.name ?? '',
-    description: p.description ?? '',
-    price: (p.price ?? 0) / 100,
-    annualPrice: p.priceAnnual ? p.priceAnnual / 100 : undefined,
-    billingPeriod: 'monthly',
-    currency: p.currency ?? 'usd',
-    features: p.features ?? [],
-    limits,
-    highlighted: p.popular,
-    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
-    contactSales: p.contactSales,
-    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
-    trialDays: p.trialPeriodDays || undefined,
-    trialCreditCents: limits.freeCredit ? limits.freeCredit * 100 : undefined,
-    perSeat,
-    // minSeats comes from the catalog when projected; commerce rejects fewer
-    // than 2 seats on per-seat tiers, so the selector enforces the same floor.
-    minSeats: perSeat ? limits.minSeats ?? 2 : undefined,
-  }
-}
-
 /** Normalise any API envelope (array / {data:[]} / {items:[]} etc.) to a plain array. */
 function asList<T>(v: unknown): T[] {
   if (Array.isArray(v)) return v as T[]
@@ -304,12 +273,23 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const [spendAlerts, setSpendAlerts] = useState<SpendAlert[]>([])
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
+  const [usageError, setUsageError] = useState<string | null>(null)
+  // Why a fetch produced nothing, per panel. An empty list and a failed read
+  // look identical once they reach a component, and on a money page the
+  // difference is the whole message: "you have no transactions" is a fact about
+  // the account, "we could not read them" is a fact about us. The commerce
+  // client no longer turns a 404 or a 502 into an empty success, so the
+  // rejection actually arrives here and the panel can say which one it has.
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({})
   const [creditGrants, setCreditGrants] = useState<CreditGrant[]>([])
   const [creditBalance, setCreditBalance] = useState(0)
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [billingAccounts, setBillingAccounts] = useState<BillingAccount[]>([])
   const [activeBillingAccountId, setActiveBillingAccountId] = useState<string | null>(null)
+  // The org the customer switched the header to — null is the signed-in
+  // subject (the token's owner slug, which every read below is keyed on).
+  const [subjectOrgId, setSubjectOrgId] = useState<string | null>(null)
   const [accountMembers, setAccountMembers] = useState<BillingAccountMember[]>([])
   const [userRole, setUserRole] = useState<BillingRole>('owner')
   const [loading, setLoading] = useState(true)
@@ -336,14 +316,25 @@ export function BillingShell({ org, user }: BillingShellProps) {
         commerce.listBillingAccounts(),
       ])
 
+      const failed: Record<string, string> = {}
+      const why = (r: PromiseSettledResult<unknown>) =>
+        r.status === 'rejected'
+          ? (r.reason instanceof Error ? r.reason.message : String(r.reason))
+          : ''
+      for (const [panel, result] of [
+        ['balance', bal], ['plans', planList], ['subscriptions', subs],
+        ['invoices', invList], ['payment', pmList], ['alerts', alertList],
+        ['credits', cgList], ['creditBalance', cBal], ['transactions', txList],
+        ['accounts', acctList],
+      ] as const) {
+        if (result.status === 'rejected') failed[panel] = why(result)
+      }
+      setLoadErrors(failed)
+
       if (bal.status === 'fulfilled') setBalance(bal.value)
 
       if (planList.status === 'fulfilled') {
-        setPlans(
-          asList<Plan>(planList.value)
-            .filter((p) => PLAN_CATEGORIES.has(p.category ?? ''))
-            .map(mapCommercePlan),
-        )
+        setPlans(selectPlans(asList<Plan>(planList.value)))
       }
       // Loading is over either way; a rejected fetch leaves plans empty and
       // the portal shows an honest catalog error, never stale local copy.
@@ -380,20 +371,18 @@ export function BillingShell({ org, user }: BillingShellProps) {
         if (grants.length > 0) {
           setCreditGrants(grants)
         } else if (txList.status === 'fulfilled') {
-          // The starter credit is recorded by commerce as a Deposit transaction
+          // Starter credits are no longer issued, but accounts that hold one
+          // still hold real money. Commerce recorded it as a Deposit transaction
           // tagged "starter-credit" (deliberately NOT a credit-grant — it nets
           // into the balance ledger), so getCreditGrants() is empty and we
-          // synthesize a grant from that transaction to surface it as claimed.
+          // synthesize a grant from that transaction to keep it visible.
           const txs = asList<Transaction>(txList.value)
           const creditTxs = txs.filter((tx) => tx.type === 'deposit' && (tx.tags === 'starter-credit' || (Array.isArray(tx.tags) && tx.tags.includes('starter-credit'))))
           setCreditGrants(creditTxs.map((tx): CreditGrant => ({
             id: tx.id ?? '',
-            // Name it "Starter Credit" (NOT the transaction's freeform notes, e.g.
-            // "Welcome credit: $100.00 USD …"): the credits UI recognises a claimed
-            // starter credit by name.includes('starter'), so notes-derived names
-            // left the grant showing an un-claimed "Claim $5 Starter Credit" button
-            // even though the credit was already granted. The starter-credit tag is
-            // the source of truth that this IS the starter credit.
+            // The tag is the source of truth for what this deposit is; the
+            // transaction's notes are freeform ("Welcome credit: $100.00 USD …")
+            // and make a poor row label.
             name: 'Starter Credit',
             amountCents: tx.amount ?? 0,
             remainingCents: tx.amount ?? 0,
@@ -455,6 +444,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       const token = getAccessToken()
       if (!token) return
       setUsageLoading(true)
+      setUsageError(null)
 
       const commerce = getCommerce(org.commerceUrl, token)
       const userId = user.commerceUserId || user.email || user.sub
@@ -480,8 +470,13 @@ export function BillingShell({ org, user }: BillingShellProps) {
           })),
         })
       }
-    } catch {
-      // Usage data is optional — don't block the UI
+    } catch (e) {
+      // Usage does not block the UI, but a FAILURE is not an absence. Swallowing
+      // it left `usage` null, and null already meant "no usage this period" — so
+      // a 502 from the meter rendered as "No usage data available", telling a
+      // customer their account was idle while the service that knows was down.
+      // The two facts get two values now, and the panel says which one it has.
+      setUsageError(e instanceof Error ? e.message : 'Usage is unavailable right now.')
     } finally {
       setUsageLoading(false)
     }
@@ -492,29 +487,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     loadUsage()
   }, [loadBillingData, loadUsage])
 
-  // Auto-grant $5 starter credit for new users on first visit
-  // Guard: only attempt if no credits exist AND we haven't already tried this session
-  const starterCreditAttempted = typeof sessionStorage !== 'undefined'
-    && sessionStorage.getItem('hanzo_starter_credit_attempted') === 'true'
-  useEffect(() => {
-    if (loading || creditGrants.length > 0 || starterCreditAttempted) return
-    const autoGrant = async () => {
-      try {
-        sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
-        const token = getAccessToken()
-        if (!token) return
-        const commerce = getCommerce(org.commerceUrl, token)
-        const userId = user.commerceUserId || user.email || user.sub
-        await commerce.grantStarterCredit(userId)
-        await loadBillingData()
-      } catch {
-        // Starter credit may already exist or endpoint unavailable — idempotent server-side
-      }
-    }
-    autoGrant()
-  }, [loading, creditGrants.length, starterCreditAttempted, org, user, loadBillingData])
-
-  const admin = isAdminUser(user.email)
+  const admin = isSuperAdmin(user)
 
   // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -524,7 +497,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
     // money-in is the Square top-up page — send everyone else there instead
     // of firing a deposit that 403s.
     if (!admin) {
-      window.location.href = `${BASE_PATH}/topup/?amount=${cents}`
+      window.location.href = topupHref(cents)
       return
     }
     const token = getAccessToken()
@@ -572,20 +545,37 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await handleUpgrade(planId)
   }, [handleUpgrade])
 
-  // Self-serve paid checkout: charge a Square nonce and start the subscription.
-  // Rethrows CommerceApiError (with .status) so SubscribeCardForm can branch on
-  // 402/409/422/500 with honest UI. On success, refresh state to show the plan.
-  const handleSubscribeWithCard = useCallback(async (planId: string, sourceId: string, quantity: number, idempotencyKey: string) => {
+  // Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
+  // start the subscription. Rethrows CommerceApiError (with .status) so
+  // SubscribeCardForm can branch on 402/404/409/422/500 with honest UI. On
+  // success, refresh state to show the plan.
+  const handleSubscribeWithCard = useCallback(async (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => {
     const token = getAccessToken()
     if (!token) throw new Error('Your session expired. Please sign in again.')
     const commerce = getCommerce(org.commerceUrl, token)
     const userId = user.commerceUserId || user.email || user.sub
     await commerce.subscribeWithCard(
-      { sourceId, planId, userId, quantity, currency: 'usd' },
+      { ...card, planId, userId, quantity, currency: 'usd' },
       { idempotencyKey },
     )
     await loadBillingData()
   }, [org, user, loadBillingData])
+
+  // Cards on file the checkout can CHARGE. Two tests, not one: it must be a card,
+  // and it must have a providerRef — the vaulted card a charge names. Commerce
+  // refuses a method without one ("saved payment method has no chargeable card"),
+  // so offering it put a dead option in the checkout and spent the customer's click
+  // on a 422. The label is the receipt name commerce stamps ("Visa ending in 4242")
+  // or the card facts, falling back to a generic that is still honest.
+  const savedCards = useMemo(() => paymentMethods
+    .filter((m) => m.type === 'card' && !!m.providerRef)
+    .map((m) => ({
+      id: m.id,
+      label: m.card?.brand && m.card?.last4
+        ? `${m.card.brand} ending in ${m.card.last4}`
+        : 'Saved card',
+      isDefault: m.isDefault ?? m.is_default,
+    })), [paymentMethods])
 
   const handleCancel = useCallback(async (_reason: string, _feedback?: string) => {
     const token = getAccessToken()
@@ -716,23 +706,6 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setSpendAlerts((prev) => prev.filter((a) => a.id !== id))
   }, [org])
 
-  const [claimingCredit, setClaimingCredit] = useState(false)
-  const handleClaimStarterCredit = useCallback(async () => {
-    if (claimingCredit) return // Prevent double-click
-    setClaimingCredit(true)
-    try {
-      const token = getAccessToken()
-      if (!token) return
-      const commerce = getCommerce(org.commerceUrl, token)
-      const userId = user.commerceUserId || user.email || user.sub
-      await commerce.grantStarterCredit(userId)
-      sessionStorage.setItem('hanzo_starter_credit_attempted', 'true')
-      await loadBillingData()
-    } finally {
-      setClaimingCredit(false)
-    }
-  }, [org, user, loadBillingData, claimingCredit])
-
   const handleSubscribeSupport = useCallback(async (tierId: string) => {
     const token = getAccessToken()
     if (!token) return
@@ -799,10 +772,53 @@ export function BillingShell({ org, user }: BillingShellProps) {
     setAccountMembers((prev) => prev.filter((m) => m.id !== memberId))
   }, [org, activeBillingAccountId])
 
+  // ── Subject switcher ─────────────────────────────────────────────────
+  //
+  // ONE switcher: the shell header's own dropdown, the same control every
+  // Hanzo app switches subject with. It is fed every subject billing can
+  // name — the signed-in subject first (the token's owner slug, named by
+  // what it is), then each billing account's org. An account scoped to the
+  // signed-in subject's own org enriches that row rather than appearing
+  // twice.
+  const organizations = useMemo<HanzoOrg[]>(() => {
+    const orgs: HanzoOrg[] = [
+      { id: user.commerceUserId, name: user.commerceUserId, slug: user.commerceUserId },
+    ]
+    for (const a of billingAccounts) {
+      if (!a.orgId) continue
+      const existing = orgs.find((o) => o.id === a.orgId)
+      if (existing) {
+        existing.role = a.role
+        continue
+      }
+      orgs.push({ id: a.orgId, name: a.orgName || a.name, role: a.role })
+    }
+    return orgs
+  }, [billingAccounts, user.commerceUserId])
+
+  // Switching re-scopes what the client can re-scope today: the account
+  // plane (role, members) switches for real, and every read is re-issued.
+  // commerce's EdgeAuth locks the money reads' subject to the token's owner
+  // claim server-side, so those follow the signed-in subject until commerce
+  // honors an org scope — the switch never pretends otherwise.
+  const handleOrgSwitch = useCallback(
+    (orgId: string) => {
+      setSubjectOrgId(orgId === user.commerceUserId ? null : orgId)
+      const account = billingAccounts.find((a) => a.orgId === orgId)
+      if (account) {
+        void handleSwitchAccount(account.id)
+      } else {
+        void loadBillingData()
+      }
+    },
+    [billingAccounts, handleSwitchAccount, loadBillingData, user.commerceUserId],
+  )
+
   const handleLogout = useCallback(() => {
-    logout()
-    window.location.href = '/'
-  }, [])
+    // Navigate to what signOut returns — IAM's end-session URL — so the session ends
+    // there too and the next sign-in actually asks who you are.
+    window.location.href = signOut(org.iamServerUrl, `${window.location.origin}${BASE_PATH}/`)
+  }, [org.iamServerUrl])
 
   // ── Section routing ─────────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<BillingSection>(getInitialSection)
@@ -824,26 +840,23 @@ export function BillingShell({ org, user }: BillingShellProps) {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  const starterCredit = creditGrants.find((g) => g.active && g.name?.toLowerCase().includes('starter')) ?? null
-
-  // Show guided setup on overview when user hasn't added a payment method yet.
-  // Dismissed via sessionStorage so it doesn't reappear during the same session.
-  const [setupDismissed, setSetupDismissed] = useState(() =>
-    typeof sessionStorage !== 'undefined' && sessionStorage.getItem('hanzo_setup_dismissed') === 'true'
-  )
-  const showGuidedSetup = !setupDismissed && !loading && paymentMethods.length === 0
-
-  const handleDismissSetup = useCallback(() => {
-    sessionStorage.setItem('hanzo_setup_dismissed', 'true')
-    setSetupDismissed(true)
-  }, [])
+  // The overview IS the setup card until the account can pay — but only until
+  // then. An account holding real credit has plenty honest to show (its
+  // balance, its usage, its invoices), and walling that behind "choose a plan"
+  // once trapped a six-figure prepaid account in onboarding and swallowed its
+  // Add-credit click. So: funded accounts always see the dashboard; the card
+  // remains the whole overview for accounts with no way to pay yet, which is
+  // where "paying is not optional" genuinely applies. There is still no
+  // dismiss, and every other section stays reachable from the sidebar.
+  const funded = (balance?.available ?? 0) > 0 || creditBalance > 0
+  const setupIncomplete = !funded && (paymentMethods.length === 0 || !subscription.id)
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#09090b]">
+      <main className="flex min-h-screen items-center justify-center bg-bg">
         <div className="text-center">
-          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
-          <p className="mt-4 text-[13px] text-white/30">Loading billing…</p>
+          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-ink/10 border-t-ink/60" />
+          <p className="mt-4 text-[13px] text-ink/30">Loading billing…</p>
         </div>
       </main>
     )
@@ -857,14 +870,14 @@ export function BillingShell({ org, user }: BillingShellProps) {
         const showSeparator = prev && prev.group !== s.group
         return (
           <div key={s.id}>
-            {showSeparator && <div className="my-2 border-t border-white/[0.08]" />}
+            {showSeparator && <div className="my-2 border-t border-ink/[0.08]" />}
             <button
               type="button"
               onClick={() => navigate(s.id)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                 activeSection === s.id
-                  ? 'bg-white/[0.08] text-white'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+                  ? 'bg-ink/[0.08] text-text'
+                  : 'text-ink/40 hover:text-ink/70 hover:bg-ink/[0.04]'
               }`}
             >
               <span className="flex-shrink-0">{s.icon}</span>
@@ -880,18 +893,15 @@ export function BillingShell({ org, user }: BillingShellProps) {
   const renderSection = () => {
     switch (activeSection) {
       case 'overview':
-        if (showGuidedSetup) {
+        if (setupIncomplete) {
           return (
             <GuidedSetup
               hasPaymentMethod={paymentMethods.length > 0}
               hasSubscription={!!subscription.id}
               hasSpendAlert={spendAlerts.length > 0}
-              hasCredits={creditBalance > 0}
               onAddPaymentMethod={() => navigate('payment')}
               onPickPlan={() => navigate('pricing')}
               onSetSpendLimit={() => navigate('alerts')}
-              onBuyCredits={() => navigate('credits')}
-              onDismiss={handleDismissSetup}
             />
           )
         }
@@ -902,12 +912,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
             paymentMethods={paymentMethods}
             usage={usage}
             usageLoading={usageLoading}
+            usageError={usageError}
             balance={balance}
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            starterCredit={starterCredit}
             onAddFunds={handleAddFunds}
-            onClaimStarterCredit={handleClaimStarterCredit}
             isAdmin={admin}
             onGrantCredit={admin ? handleGrantCredit : undefined}
             userEmail={user.email}
@@ -928,7 +937,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       case 'usage':
         return (
           <div className="space-y-6">
-            <UsagePanel usage={usage} loading={usageLoading} />
+            <UsagePanel usage={usage} loading={usageLoading} error={usageError} onRetry={loadUsage} />
             <CostExplorer usage={usage} usageLoading={usageLoading} />
           </div>
         )
@@ -947,6 +956,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onCancel={handleCancel}
             onApplyDiscount={handleApplyDiscount}
             onSubscribeWithCard={handleSubscribeWithCard}
+            savedCards={savedCards}
           />
         )
       case 'credits':
@@ -954,11 +964,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
           <CreditsPanel
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            onClaimStarterCredit={handleClaimStarterCredit}
+            error={loadErrors.credits ?? null}
           />
         )
       case 'transactions':
-        return <TransactionsPanel transactions={transactions} loading={transactionsLoading} />
+        return <TransactionsPanel transactions={transactions} loading={transactionsLoading} error={loadErrors.transactions ?? null} onRetry={loadBillingData} />
       case 'alerts':
         return (
           <SpendAlertsPanel
@@ -980,6 +990,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
       case 'team':
         return (
           <AccountMembers
+            error={loadErrors.accounts ?? null}
             members={accountMembers}
             userRole={userRole}
             onInvite={handleInviteMember}
@@ -1004,18 +1015,21 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b]">
+    <div className="flex min-h-screen flex-col bg-bg">
       {/* ── Unified Hanzo Header ──────────────────────── */}
-      <HanzoHeader
+      <OrgHeader
         currentApp="Billing"
         currentAppId="billing"
-        user={{ id: user.sub, name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
+        user={{ name: user.displayName ?? '', email: user.email ?? '', avatar: user.avatar ?? '' }}
+        organizations={organizations}
+        currentOrgId={subjectOrgId ?? user.commerceUserId}
+        onOrgSwitch={handleOrgSwitch}
         onSignOut={handleLogout}
         headerRight={
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="flex-shrink-0 rounded-lg p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white/70 md:hidden"
+            className="flex-shrink-0 rounded-lg p-1.5 text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70 md:hidden"
             aria-label="Toggle menu"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1029,7 +1043,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
       <div className="flex flex-1">
         {/* ── Desktop sidebar ──────────────────────────────── */}
-        <aside className="hidden w-60 flex-shrink-0 border-r border-white/[0.07] bg-[#0d0d10] md:block">
+        <aside className="hidden w-60 flex-shrink-0 border-r border-ink/[0.07] bg-bg md:block">
           {sidebarNav}
         </aside>
 
@@ -1040,7 +1054,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
               className="fixed inset-0 z-40 bg-black/60 md:hidden"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-white/[0.07] bg-[#0d0d10] pt-14 md:hidden">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-ink/[0.07] bg-bg pt-14 md:hidden">
               {sidebarNav}
             </aside>
           </>
@@ -1056,7 +1070,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             )}
 
             {activeSection !== 'overview' && (
-              <h1 className="mb-6 text-2xl font-bold tracking-tight text-white">
+              <h1 className="mb-6 text-2xl font-bold tracking-tight text-text">
                 {SECTION_TITLES[activeSection]}
               </h1>
             )}

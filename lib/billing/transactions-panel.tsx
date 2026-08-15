@@ -3,19 +3,15 @@
 import * as React from 'react'
 
 import type { TransactionRecord, TransactionType } from './types'
+import { money } from '@/lib/money'
 
 export interface TransactionsPanelProps {
   transactions: TransactionRecord[]
   loading?: boolean
   pageSize?: number
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value)
+  /** Why the ledger could not be read. Distinct from an empty ledger. */
+  error?: string | null
+  onRetry?: () => void
 }
 
 function formatDate(dateStr: string) {
@@ -45,7 +41,7 @@ const typeFilterOptions: Array<TransactionType | 'all'> = [
   'transfer',
 ]
 
-export function TransactionsPanel({ transactions, loading = false, pageSize = 20 }: TransactionsPanelProps) {
+export function TransactionsPanel({ transactions, loading = false, pageSize = 20, error = null, onRetry }: TransactionsPanelProps) {
   const [typeFilter, setTypeFilter] = React.useState<TransactionType | 'all'>('all')
   const [page, setPage] = React.useState(1)
 
@@ -80,7 +76,8 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div>
             <h3 className="text-lg font-semibold text-text">Transactions</h3>
-            <p className="text-sm text-text-muted">{filtered.length} transaction(s)</p>
+            {/* A count we never read is not zero. */}
+            <p className="text-sm text-text-muted">{error ? '—' : `${filtered.length} transaction(s)`}</p>
           </div>
           <select
             value={typeFilter}
@@ -110,7 +107,22 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {pageRows.length === 0 ? (
+              {error ? (
+                /* An unread ledger is not an empty one. Saying "no transactions"
+                   here would tell someone their money moved nowhere when in fact
+                   we never managed to look. */
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm">
+                    <p className="text-danger">Couldn&apos;t load your transactions.</p>
+                    <p className="mt-1 text-text-muted">{error}</p>
+                    {onRetry && (
+                      <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-ink/[0.14] px-4 py-1.5 text-text hover:bg-bg-elevated">
+                        Try again
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ) : pageRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-sm text-text-muted">
                     No transactions found.
@@ -131,16 +143,16 @@ export function TransactionsPanel({ transactions, loading = false, pageSize = 20
                           {typeInfo.label}
                         </span>
                       </td>
-                      <td className={`px-4 py-3 text-right text-sm font-medium ${
+                      <td className={`mono px-4 py-3 text-right text-sm font-medium ${
                         isPositive ? 'text-emerald-500' : 'text-rose-500'
                       }`}>
-                        {isPositive ? '+' : '-'}{formatCurrency(Math.abs(tx.amountCents) / 100, tx.currency)}
+                        {isPositive ? '+' : '-'}{money(Math.abs(tx.amountCents) / 100, tx.currency)}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-muted">
                         {tx.description || '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-text-secondary">
-                        {tx.balanceAfter != null ? formatCurrency(tx.balanceAfter / 100, tx.currency) : '—'}
+                      <td className="mono px-4 py-3 text-right text-sm text-text-secondary">
+                        {tx.balanceAfter != null ? money(tx.balanceAfter / 100, tx.currency) : '—'}
                       </td>
                     </tr>
                   )

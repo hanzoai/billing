@@ -55,7 +55,7 @@ export default function BillingPage() {
   }
 
   if (!user) {
-    return <PublicPricing onSignIn={handleSignIn} />
+    return <PublicPricing onSignIn={handleSignIn} commerceUrl={org.commerceUrl} />
   }
 
   return <BillingShell org={org} user={user} />

@@ -1,74 +1,81 @@
+import { getCommerce } from './commerce'
+import type { Plan } from './commerce-client'
+import { SALES_URL } from './config'
 import type { SubscriptionPlan } from './billing/types'
 
 /**
- * Public plan catalog — the ONE logged-out source of pricing.
+ * The plan catalog — ONE source, ONE unit, ONE projection.
  *
- * The commerce catalog (GET /v1/billing/plans on commerce-api) is IAM-gated and
- * 403s logged-out, so a prospect hitting the pricing grid without a session used
- * to land on a login wall. The same @hanzo/plans catalog is served publicly by
- * cloud, but the direct cloud host (api.cloud.hanzo.ai/v1/plans/subscriptions)
- * emits NO Access-Control-Allow-Origin — a cross-origin browser fetch from
- * billing.hanzo.ai is blocked. The gateway (api.hanzo.ai) proxies the identical
- * route, is public (200 unauthenticated), AND returns
- * `access-control-allow-origin: https://billing.hanzo.ai`, so it is the correct
- * browser-facing source. Prices here are in DOLLARS (priceMonthly: 20), unlike
- * commerce's cents.
+ * There used to be two. This file read a second catalog
+ * (api.hanzo.ai/v1/plans/subscriptions, prices in DOLLARS) on the stated grounds
+ * that "the commerce catalog is IAM-gated and 403s logged-out", and the shell read
+ * commerce's (prices in CENTS) with its own projection beside it. The premise was
+ * false — measured against production, GET /v1/billing/plans answers 200
+ * unauthenticated on commerce-api.hanzo.ai and returns
+ * `access-control-allow-origin: https://billing.hanzo.ai` — and the cost of the
+ * split was real: two unit conventions on one screen, two projections that each
+ * promised in a comment to mirror the other, and a live divergence in how they
+ * decided a tier was per-seat.
+ *
+ * So the logged-out grid and the signed-in grid now read the same rows through the
+ * same function. `token` is optional because the catalog is public; passing one
+ * changes nothing about what comes back.
  */
-export const PUBLIC_PLANS_URL = 'https://api.hanzo.ai/v1/plans/subscriptions'
 
-// Subscription tiers shown on the pricing grid (the catalog also carries
+// Subscription tiers shown on the pricing grid (the catalog also carries dns and
 // world/social plans, which have their own product surfaces).
 const PLAN_CATEGORIES = new Set(['personal', 'team', 'enterprise'])
 
-interface PublicPlan {
-  id?: string
-  name?: string
-  description?: string
-  category?: string
-  priceMonthly?: number // DOLLARS (0 = free)
-  priceAnnual?: number // DOLLARS per month billed annually
-  currency?: string
-  features?: string[]
-  limits?: Record<string, number | null | undefined>
-  popular?: boolean
-  contactSales?: boolean
-  trialPeriodDays?: number
-  price_ref?: { recurring?: { per_seat?: boolean } }
-}
-
-function mapPublicPlan(p: PublicPlan): SubscriptionPlan {
+/**
+ * Project a commerce catalog plan (prices in CENTS) onto the card the portal
+ * renders. The catalog is the ONE source of plan copy — features, prices, tiers.
+ */
+export function mapCommercePlan(p: Plan): SubscriptionPlan {
   const limits: Record<string, number> = {}
   for (const [k, v] of Object.entries(p.limits ?? {})) {
     if (typeof v === 'number') limits[k] = v
   }
-  const perSeat = p.price_ref?.recurring?.per_seat ?? p.category === 'team'
+  // The catalog answers per-seat-ness directly; `category === 'team'` is only the
+  // fallback for a row that does not say. Inferring it from the category alone put
+  // a per-seat flag on the wrong tier the day a per-seat personal plan is added.
+  const perSeat = p.perSeat ?? p.category === 'team'
+  // A tier with NO price is sold by a person even when the catalog forgets to flag
+  // it. Deriving it here is what keeps the fact alive past the `?? 0` below —
+  // otherwise a plan priced `null` and unflagged reaches the cards as a zero and
+  // renders as "Free".
+  const sold = !!p.contactSales || p.price == null
   return {
-    id: p.id ?? '',
+    id: p.slug ?? '',
     name: p.name ?? '',
     description: p.description ?? '',
-    price: p.priceMonthly ?? 0,
-    annualPrice: p.priceAnnual || undefined,
+    price: (p.price ?? 0) / 100,
+    annualPrice: p.priceAnnual ? p.priceAnnual / 100 : undefined,
+    category: p.category,
     billingPeriod: 'monthly',
     currency: p.currency ?? 'usd',
     features: p.features ?? [],
     limits,
     highlighted: p.popular,
-    badge: p.contactSales ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
-    contactSales: p.contactSales,
-    externalUrl: p.contactSales ? 'https://cal.com/hanzo' : undefined,
+    badge: sold ? 'Contact Sales' : p.popular ? 'Popular' : undefined,
+    contactSales: sold,
+    externalUrl: sold ? SALES_URL : undefined,
     trialDays: p.trialPeriodDays || undefined,
+    trialCreditCents: limits.freeCredit ? limits.freeCredit * 100 : undefined,
     perSeat,
-    // commerce rejects fewer than 2 seats on per-seat tiers; the selector floor
-    // matches so the public grid can't propose an amount the checkout refuses.
+    promoPercent: p.promoPercent || undefined,
+    // minSeats comes from the catalog; commerce rejects fewer than 2 seats on
+    // per-seat tiers, so the selector enforces the same floor and the grid can
+    // never propose an amount the checkout refuses.
     minSeats: perSeat ? limits.minSeats ?? 2 : undefined,
   }
 }
 
-/** Fetch and project the public catalog onto the pricing-grid plan shape. */
-export async function fetchPublicPlans(): Promise<SubscriptionPlan[]> {
-  const res = await fetch(PUBLIC_PLANS_URL, { headers: { Accept: 'application/json' } })
-  if (!res.ok) throw new Error(`plan catalog HTTP ${res.status}`)
-  const data = (await res.json()) as { plans?: PublicPlan[] }
-  const plans = Array.isArray(data.plans) ? data.plans : []
-  return plans.filter((p) => PLAN_CATEGORIES.has(p.category ?? '')).map(mapPublicPlan)
+/** The subscription tiers of a raw catalog, projected onto the card shape. */
+export function selectPlans(rows: Plan[]): SubscriptionPlan[] {
+  return rows.filter((p) => PLAN_CATEGORIES.has(p.category ?? '')).map(mapCommercePlan)
+}
+
+/** Fetch the catalog and project it onto the pricing-grid plan shape. */
+export async function fetchPlans(commerceUrl: string, token?: string): Promise<SubscriptionPlan[]> {
+  return selectPlans(await getCommerce(commerceUrl, token).getPlans(token))
 }

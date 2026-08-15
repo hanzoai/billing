@@ -379,7 +379,7 @@ function CryptoForm({ onAdd, setError }: { onAdd: (m: PaymentMethod) => Promise<
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-dim">Connected on {chainName}</p>
             </div>
-            <p className="mt-1 font-mono text-sm text-text break-all">{address}</p>
+            <p className="mt-1 mono text-sm text-text break-all">{address}</p>
           </div>
           <input
             value={label}

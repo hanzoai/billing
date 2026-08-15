@@ -3,6 +3,7 @@
 import * as React from 'react'
 
 import type { SupportTier } from './types'
+import { money } from '@/lib/money'
 
 export interface SupportTiersPanelProps {
   currentTier?: string
@@ -51,15 +52,6 @@ const SUPPORT_TIERS: SupportTier[] = [
     ],
   },
 ]
-
-function formatCurrency(value: number) {
-  if (value === 0) return 'Free'
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
 
 export function SupportTiersPanel({ currentTier, onSubscribe }: SupportTiersPanelProps) {
   const [busyTierId, setBusyTierId] = React.useState<string | null>(null)
@@ -111,7 +103,7 @@ export function SupportTiersPanel({ currentTier, onSubscribe }: SupportTiersPane
 
               <p className="text-lg font-semibold text-text">{tier.name}</p>
               <p className="mt-2 text-2xl font-bold text-text">
-                {formatCurrency(tier.price)}
+                <span className="mono">{tier.price === 0 ? 'Free' : money(tier.price, 'USD', 0)}</span>
                 {tier.price > 0 && (
                   <span className="text-sm font-normal text-text-muted">/{tier.billingPeriod}</span>
                 )}

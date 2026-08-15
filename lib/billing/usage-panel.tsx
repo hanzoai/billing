@@ -3,19 +3,21 @@
 import * as React from 'react'
 
 import type { UsageSummary, UsageRecord } from './types'
+import { money } from '@/lib/money'
 
 export interface UsagePanelProps {
   usage: UsageSummary | null
   loading?: boolean
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
+  /**
+   * Why usage could not be read, when it could not be read.
+   *
+   * Without this there was one value for two facts — `null` meant both "you used
+   * nothing this period" and "the meter did not answer" — so a 502 rendered as
+   * "No usage data available" and told a customer their account was idle. On a
+   * money surface, an outage must never be shown as a zero.
+   */
+  error?: string | null
+  onRetry?: () => void
 }
 
 function formatNumber(value: number) {
@@ -68,8 +70,8 @@ function UsageMeter({ record }: { record: UsageRecord }) {
           <p className="text-sm font-medium text-text">{record.label}</p>
         </div>
         {record.cost > 0 && (
-          <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
-            {formatCurrency(record.cost)}
+          <span className="mono rounded-full bg-bg-elevated px-2 py-0.5 text-xs font-medium text-text-secondary">
+            {money(record.cost)}
           </span>
         )}
       </div>
@@ -112,7 +114,36 @@ function UsageMeter({ record }: { record: UsageRecord }) {
 }
 
 export function UsagePanel(props: UsagePanelProps) {
-  const { usage, loading = false } = props
+  const { usage, loading = false, error = null, onRetry } = props
+
+  // The failure is answered BEFORE the empty state, because an unread meter is
+  // not an idle account and only one of the two is the customer's business.
+  if (error && !loading) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
+        <div className="border-b border-border p-4">
+          <h3 className="text-lg font-semibold text-text">Usage</h3>
+          <p className="text-sm text-text-muted">Current billing period resource consumption</p>
+        </div>
+        <div className="p-6">
+          <p className="text-sm text-danger">Usage could not be loaded.</p>
+          <p className="mt-1 text-sm text-text-muted">{error}</p>
+          <p className="mt-1 text-sm text-text-muted">
+            This is a problem reading the meter, not a record of your usage — nothing you spent is lost.
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-4 rounded-lg border border-border px-4 py-2 text-sm text-text transition hover:bg-bg-elevated"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -149,8 +180,8 @@ export function UsagePanel(props: UsagePanelProps) {
           </div>
           <div className="text-right">
             <p className="text-xs uppercase tracking-wide text-text-muted">Total cost</p>
-            <p className="mt-1 text-xl font-semibold text-text">
-              {formatCurrency(usage.totalCost, usage.currency)}
+            <p className="mono mt-1 text-xl font-semibold text-text">
+              {money(usage.totalCost, usage.currency)}
             </p>
           </div>
         </div>

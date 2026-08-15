@@ -1,21 +1,14 @@
 'use client'
 
-import * as React from 'react'
-
 import type { CreditGrant } from './types'
+import { cents, moneyFromCents } from '@/lib/money'
+import { TOPUP_AMOUNTS, topupHref } from '@/lib/topup'
 
 export interface CreditsPanelProps {
+  /** Why the grants could not be read. Distinct from holding none. */
+  error?: string | null
   creditGrants: CreditGrant[]
   creditBalance?: number
-  onClaimStarterCredit?: () => Promise<void>
-}
-
-function formatCurrency(value: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatCountdown(expiresAt: string): string {
@@ -36,29 +29,9 @@ function formatDate(dateStr: string) {
   }).format(new Date(dateStr))
 }
 
-export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCredit }: CreditsPanelProps) {
-  const [claiming, setClaiming] = React.useState(false)
-  const [claimError, setClaimError] = React.useState<string | null>(null)
-
-  const hasStarterCredit = creditGrants.some(
-    (g) => g.name.toLowerCase().includes('starter') && g.active,
-  )
-
+export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: CreditsPanelProps) {
   const activeGrants = creditGrants.filter((g) => g.active && !g.voided)
   const expiredGrants = creditGrants.filter((g) => !g.active || g.voided)
-
-  const handleClaim = React.useCallback(async () => {
-    if (!onClaimStarterCredit) return
-    setClaiming(true)
-    setClaimError(null)
-    try {
-      await onClaimStarterCredit()
-    } catch (err) {
-      setClaimError(err instanceof Error ? err.message : 'Failed to claim credit')
-    } finally {
-      setClaiming(false)
-    }
-  }, [onClaimStarterCredit])
 
   return (
     <div className="space-y-4">
@@ -66,7 +39,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
       <div className="overflow-hidden rounded-xl border border-border bg-bg-card">
         <div className="border-b border-border p-4">
           <h3 className="text-lg font-semibold text-text">Credits</h3>
-          <p className="text-sm text-text-muted">View your credit grants, starter credits, and promotional balances</p>
+          <p className="text-sm text-text-muted">View your credit grants and promotional balances</p>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 p-4">
@@ -74,28 +47,33 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
               Total credit balance
             </p>
-            <p className="mt-1 text-3xl font-bold text-text">
-              {formatCurrency(creditBalance / 100)}
+            <p className="mono mt-1 text-3xl font-bold text-text">
+              {moneyFromCents(creditBalance)}
             </p>
           </div>
+          {/* The standing money-in. This section only DISPLAYS grants; without
+              this door the whole product had no reachable way to add funds.
 
-          {onClaimStarterCredit && !hasStarterCredit && (
-            <button
-              type="button"
-              disabled={claiming}
-              onClick={handleClaim}
-              className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {claiming ? 'Claiming...' : 'Claim $5 Starter Credit'}
-            </button>
-          )}
-        </div>
-
-        {claimError && (
-          <div className="border-t border-border px-4 py-2">
-            <p className="text-sm text-danger">{claimError}</p>
+              The amount rides along: the link used to name none, so a customer
+              who had already decided on $100 arrived at the page's default and
+              decided again. The top-up page still takes a custom amount. */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Add credit
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {TOPUP_AMOUNTS.map((c) => (
+                <a
+                  key={c}
+                  href={topupHref(c)}
+                  className="mono rounded-full bg-brand px-4 py-2 text-sm font-bold text-brand-foreground transition hover:bg-brand-hover active:scale-[0.97]"
+                >
+                  {moneyFromCents(c, 'USD', cents(c / 100))}
+                </a>
+              ))}
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Active grants */}
@@ -117,7 +95,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
                       <p className="text-sm font-medium text-text">{grant.name}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span>
-                          {formatCurrency(grant.remainingCents / 100, grant.currency)} of {formatCurrency(grant.amountCents / 100, grant.currency)} remaining
+                          {moneyFromCents(grant.remainingCents, grant.currency)} of {moneyFromCents(grant.amountCents, grant.currency)} remaining
                         </span>
                         {grant.createdAt && (
                           <span>Granted {formatDate(grant.createdAt)}</span>
@@ -164,7 +142,7 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
                 <div>
                   <p className="text-sm font-medium text-text-muted">{grant.name}</p>
                   <p className="text-xs text-text-dim">
-                    {formatCurrency(grant.amountCents / 100, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
+                    {moneyFromCents(grant.amountCents, grant.currency)} · {grant.voided ? 'Voided' : 'Expired'}
                   </p>
                 </div>
                 {grant.expiresAt && (
@@ -178,12 +156,14 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, onClaimStarterCr
         </div>
       )}
 
-      {creditGrants.length === 0 && (
+      {error ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-danger">Couldn&apos;t load your credit grants.</p>
+          <p className="mt-1 text-sm text-text-muted">{error}</p>
+        </div>
+      ) : creditGrants.length === 0 && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-text-muted">No credit grants yet.</p>
-          {onClaimStarterCredit && !hasStarterCredit && (
-            <p className="mt-2 text-xs text-text-dim">Claim your $5 starter credit above to get started.</p>
-          )}
         </div>
       )}
     </div>

@@ -4,12 +4,9 @@ export interface GuidedSetupProps {
   hasPaymentMethod: boolean
   hasSubscription: boolean
   hasSpendAlert: boolean
-  hasCredits: boolean
   onAddPaymentMethod: () => void
   onPickPlan: () => void
   onSetSpendLimit: () => void
-  onBuyCredits: () => void
-  onDismiss: () => void
 }
 
 interface Step {
@@ -24,32 +21,24 @@ interface Step {
 export function GuidedSetup(props: GuidedSetupProps) {
   const steps: Step[] = [
     {
-      label: '$5 free credit ready',
-      description: 'Your starter credit is active. Use it to explore all Hanzo AI services — no card needed to get started.',
-      done: props.hasCredits,
-      required: false,
-      action: props.onBuyCredits,
-      actionLabel: 'View credits',
-    },
-    {
       label: 'Add a payment method',
-      description: 'Save a card to keep your account running when free credits are used. Verified securely via Square.',
+      description: 'Usage is billed to this card. Entered in Square’s own fields — the number never reaches us.',
       done: props.hasPaymentMethod,
-      required: false,
+      required: true,
       action: props.onAddPaymentMethod,
       actionLabel: 'Add card',
     },
     {
       label: 'Choose a plan',
-      description: 'Unlock higher rate limits, more models, and team features with a monthly or annual plan.',
+      description: 'Your plan sets your rate limits, model access and team features.',
       done: props.hasSubscription,
-      required: false,
+      required: true,
       action: props.onPickPlan,
       actionLabel: 'See plans',
     },
     {
       label: 'Set a spend limit',
-      description: 'Prevent surprise charges by setting a monthly budget with automatic email alerts.',
+      description: 'Cap your monthly spend and get an email before you reach it.',
       done: props.hasSpendAlert,
       required: false,
       action: props.onSetSpendLimit,
@@ -57,26 +46,27 @@ export function GuidedSetup(props: GuidedSetupProps) {
     },
   ]
 
-  const completedCount = steps.filter(s => s.done).length
-  const allDone = completedCount === steps.length
+  const required = steps.filter(s => s.required)
+  const requiredDone = required.filter(s => s.done).length
+  const ready = requiredDone === required.length
 
   return (
     <div className="mx-auto max-w-lg py-8">
       <div className="rounded-2xl border border-border bg-bg-card p-8">
         <h2 className="text-lg font-semibold text-text mb-1">
-          {allDone ? 'You\'re all set 🎉' : 'Get started with Hanzo'}
+          {ready ? 'You’re all set' : 'Get started with Hanzo'}
         </h2>
         <p className="text-sm text-text-muted mb-6">
-          {allDone
-            ? 'Your billing account is fully configured.'
-            : `${completedCount} of ${steps.length} steps complete — no steps are required to use your free credits.`}
+          {ready
+            ? 'Your billing account is ready.'
+            : `${requiredDone} of ${required.length} required steps complete.`}
         </p>
 
-        {/* Progress bar */}
+        {/* Progress bar — required steps only */}
         <div className="h-1.5 rounded-full bg-bg-elevated mb-8 overflow-hidden">
           <div
             className="h-full rounded-full bg-success transition-all duration-500"
-            style={{ width: `${(completedCount / steps.length) * 100}%` }}
+            style={{ width: `${(requiredDone / required.length) * 100}%` }}
           />
         </div>
 
@@ -84,7 +74,7 @@ export function GuidedSetup(props: GuidedSetupProps) {
           {steps.map((step, i) => (
             <div
               key={step.label}
-              className={`flex items-start gap-4 rounded-xl border p-4 transition ${
+              className={`flex flex-wrap items-start gap-4 rounded-xl border p-4 transition ${
                 step.done
                   ? 'border-success/20 bg-success/5'
                   : 'border-border bg-bg'
@@ -105,14 +95,16 @@ export function GuidedSetup(props: GuidedSetupProps) {
                 )}
               </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
+              {/* Content. The min width is what makes the action wrap below on a
+                  narrow screen instead of squeezing the label to a word a line. */}
+              <div className="min-w-[160px] flex-1">
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className={`text-sm font-medium ${step.done ? 'text-success' : 'text-text'}`}>
                     {step.label}
                   </p>
+                  {/* Required is the default; only the exception is labelled. */}
                   {!step.required && !step.done && (
-                    <span className="text-[10px] uppercase tracking-wider text-text-dim">Optional</span>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-dim">Optional</span>
                   )}
                 </div>
                 <p className="text-xs text-text-muted">{step.description}</p>
@@ -130,16 +122,6 @@ export function GuidedSetup(props: GuidedSetupProps) {
               )}
             </div>
           ))}
-        </div>
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={props.onDismiss}
-            className="text-sm text-text-muted transition hover:text-text"
-          >
-            Skip setup
-          </button>
         </div>
       </div>
     </div>

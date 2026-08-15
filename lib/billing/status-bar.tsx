@@ -1,11 +1,7 @@
 'use client'
 
 import type { Subscription, SubscriptionPlan, PaymentMethod } from './types'
-
-export type BillingSection =
-  | 'overview' | 'usage' | 'invoices' | 'pricing'
-  | 'credits' | 'transactions' | 'alerts'
-  | 'payment' | 'team' | 'settings'
+import { money } from '@/lib/money'
 
 export interface StatusBarProps {
   subscription: Subscription
@@ -14,10 +10,6 @@ export interface StatusBarProps {
   currency: string
   paymentMethods: PaymentMethod[]
   onNavigate: (target: string) => void
-}
-
-function fmt(amount: number, currency = 'usd') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
 }
 
 function fmtDate(d: Date) {
@@ -63,7 +55,7 @@ export function StatusBar({ subscription, currentPlan, mtdSpend, currency, payme
         {/* MTD Spend */}
         <div className="p-4">
           <p className="text-[11px] uppercase tracking-wide text-text-dim mb-1">This Period</p>
-          <p className="text-sm font-semibold text-text">{fmt(mtdSpend, currency)}</p>
+          <p className="mono text-sm font-semibold text-text">{money(mtdSpend, currency)}</p>
           <p className="text-xs text-text-muted mt-0.5">Month-to-date</p>
         </div>
 

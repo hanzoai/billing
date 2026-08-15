@@ -79,7 +79,7 @@ export function TaxCompliancePanel(props: TaxCompliancePanelProps) {
                 }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  className={`inline-block h-4 w-4 rounded-full bg-brand-foreground transition ${
                     automaticTax ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
