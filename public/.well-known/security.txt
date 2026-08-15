@@ -8,4 +8,5 @@ Contact: mailto:security@hanzo.ai
 Expires: 2027-08-01T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://billing.hanzo.ai/.well-known/security.txt
+Canonical: https://commerce.hanzo.ai/.well-known/security.txt
 Policy: https://hanzo.ai/security
