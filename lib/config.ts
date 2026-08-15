@@ -34,6 +34,13 @@ export interface BillingOrgConfig {
   iamServerUrl: string
   iamClientId: string
   commerceUrl: string
+  /**
+   * The branded Pay checkout (pay.<brand>) — the ONE place a card is entered.
+   * Picking a plan with no card on file deep-links here:
+   * `<payUrl>/confirm/card?plan=<slug>`, which carries IAM sign-in through to the
+   * card form and starts the subscription. Same host the IAM `payUrl` names.
+   */
+  payUrl: string
   logo: string
   theme: {
     brand: string
@@ -47,6 +54,7 @@ const hanzo: BillingOrgConfig = {
   iamServerUrl: 'https://hanzo.id',
   iamClientId: 'hanzo-billing',
   commerceUrl: 'https://commerce-api.hanzo.ai',
+  payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/hanzo.svg',
   theme: {
     brand: '#ffffff',
@@ -60,6 +68,7 @@ const lux: BillingOrgConfig = {
   iamServerUrl: 'https://lux.id',
   iamClientId: 'lux-billing',
   commerceUrl: 'https://commerce-api.hanzo.ai',
+  payUrl: 'https://pay.lux.cloud',
   logo: '/logos/lux.svg',
   theme: {
     brand: '#6366f1',
@@ -73,6 +82,7 @@ const zoo: BillingOrgConfig = {
   iamServerUrl: 'https://zoolabs.id',
   iamClientId: 'zoo-billing',
   commerceUrl: 'https://commerce-api.hanzo.ai',
+  payUrl: 'https://pay.zoo.cloud',
   logo: '/logos/zoo.svg',
   theme: {
     brand: '#22c55e',
@@ -86,6 +96,8 @@ const pars: BillingOrgConfig = {
   iamServerUrl: 'https://pars.id',
   iamClientId: 'pars-billing',
   commerceUrl: 'https://commerce-api.hanzo.ai',
+  // Pars has no branded Pay host yet; the shared checkout serves it until it does.
+  payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/pars.svg',
   theme: {
     brand: '#f59e0b',

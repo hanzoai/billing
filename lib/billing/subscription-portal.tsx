@@ -35,20 +35,36 @@ export interface SubscriptionPortalProps {
    * status for honest UI.
    */
   onSubscribeWithCard?: (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => Promise<void>
-  /** Cards already on file, offered in the checkout before the blank form. */
+  /** Cards already on file — the default one is charged in a single click. */
   savedCards?: SavedCard[]
   /**
-   * Logged-out public pricing: every plan CTA calls this (start sign-in) instead
-   * of subscribing. Auth gates the subscribe action, not viewing prices.
+   * The branded Pay checkout base (pay.<brand>). A paid plan with no card on file
+   * deep-links to `<checkoutUrl>/confirm/card?plan=<slug>` — the one place a card
+   * is entered — which carries IAM sign-in through to the card form itself.
+   */
+  checkoutUrl?: string
+  /**
+   * Logged-out public pricing: free-tier CTAs call this (start sign-in). Paid
+   * tiers deep-link to the Pay checkout instead, which carries sign-in itself.
    */
   onRequireAuth?: () => void
   showHistory?: boolean
   defaultView?: 'overview' | 'plans' | 'history'
 }
 
-import { SubscribeCardForm, type SavedCard } from './subscribe-card-form'
-import type { CardInput } from '@/lib/commerce-client'
+import { CommerceApiError, type CardInput } from '@/lib/commerce-client'
 import { billableSeats, cents, chargeTotal, money, subtotal } from '@/lib/money'
+import { chargeKey, clearChargeKey } from '@/lib/charge'
+import { BASE_PATH } from '@/lib/config'
+import { track } from '@/lib/track'
+
+/** A card already on file — charged in one click, no card entry needed. */
+export interface SavedCard {
+  id: string
+  /** e.g. "Visa ending in 4242". */
+  label: string
+  isDefault?: boolean
+}
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -103,6 +119,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     onApplyDiscount,
     onSubscribeWithCard,
     savedCards = [],
+    checkoutUrl,
     onRequireAuth,
     defaultView = 'overview',
   } = props
@@ -122,8 +139,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const [audience, setAudience] = React.useState<'personal' | 'business'>('personal')
   const [busyPlanId, setBusyPlanId] = React.useState<string | null>(null)
   const [planError, setPlanError] = React.useState<string | null>(null)
-  // Paid plan whose self-serve card checkout panel is open.
-  const [activationPlanId, setActivationPlanId] = React.useState<string | null>(null)
   // Paid plan whose org has no payment processor (422) — show the contact fallback.
   const [noProcessorPlanId, setNoProcessorPlanId] = React.useState<string | null>(null)
   // Seat count per per-seat plan id, defaulting to the plan minimum
@@ -172,6 +187,23 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     return currentPlan && currentPlan.price > 0 ? currentPlan : null
   }, [subscription.id, subscription.status, currentPlan])
 
+  // The one card checkout: pay.<brand>/confirm/card?plan=<slug>. It carries IAM
+  // sign-in through to the card form itself, so the same link serves a signed-in
+  // subject with no card AND a logged-out visitor. returnUrl brings a finished
+  // buyer back to billing; quantity rides along only for a per-seat plan.
+  const checkoutHref = React.useCallback(
+    (plan: SubscriptionPlan, seats: number): string => {
+      const base = (checkoutUrl ?? 'https://pay.hanzo.ai').replace(/\/+$/, '')
+      const params = new URLSearchParams({ plan: plan.id })
+      if (plan.perSeat) params.set('quantity', String(seats))
+      if (typeof window !== 'undefined') {
+        params.set('returnUrl', `${window.location.origin}${BASE_PATH}/#overview`)
+      }
+      return `${base}/confirm/card?${params}`
+    },
+    [checkoutUrl],
+  )
+
   const handlePlanChange = React.useCallback(
     async (plan: SubscriptionPlan) => {
       // External / contact-sales plans (marketing CTA — no auth needed).
@@ -179,32 +211,77 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         window.open(plan.externalUrl, '_blank', 'noopener,noreferrer')
         return
       }
-      // Logged-out public pricing: viewing is open, subscribing needs sign-in.
-      if (onRequireAuth) {
-        onRequireAuth()
-        return
-      }
       if (plan.id === currentPlan?.id) return
       setPlanError(null)
+      setNoProcessorPlanId(null)
+      track('plan_clicked', { plan: plan.id })
 
-      // Paid tier, self-serve: open the Square card checkout panel (toggle).
-      if (plan.price > 0 && !canDirectSubscribe && onSubscribeWithCard) {
-        // Not for someone who already pays. Opening the checkout here took a card,
-        // minted a Square nonce and then lost the whole thing to a 409 — and before
-        // commerce refused, it charged the new plan in full and left the old one
-        // renewing. Say what is true instead of collecting a card for a sale that
-        // cannot complete.
+      const seats = billableSeats(plan, seatCounts[plan.id])
+      const amount = chargeTotal(plan, seats)
+
+      // ── Paid, self-serve: the shortest path from plan to paid ────────────
+      // A platform admin subscribes directly; everyone else either charges a card
+      // already on file in one click, or lands on the one card checkout.
+      if (plan.price > 0 && !canDirectSubscribe) {
+        // commerce sells one paid subscription per subject and 409s a second, so
+        // moving between paid plans is not self-serve. Say so rather than start a
+        // charge that cannot complete.
         if (paidPlan) {
           setPlanError(
             `This account already pays for ${paidPlan.name}. Moving between paid plans is not self-serve yet — cancel ${paidPlan.name} first, or ask us to move it.`,
           )
           return
         }
-        setNoProcessorPlanId(null)
-        setActivationPlanId((prev) => (prev === plan.id ? null : plan.id))
+
+        // Express: a vaulted card, a subject to charge, and no trial to honor →
+        // one click, one charge, no card entry, no page hop. A trial plan goes to
+        // the checkout instead, which shows its terms before anything is charged.
+        const hasTrial = (plan.trialDays ?? 0) > 0
+        const card = savedCards.find((c) => c.isDefault) ?? savedCards[0]
+        if (card && onSubscribeWithCard && !hasTrial) {
+          setBusyPlanId(plan.id)
+          track('checkout_started', { plan: plan.id, amount })
+          const scope = `subscribe:${plan.id}:${seats}`
+          const key = chargeKey(scope)
+          try {
+            await onSubscribeWithCard(plan.id, { paymentMethodId: card.id }, seats, key)
+            clearChargeKey(scope)
+            // Payment settled → commerce emits order_completed server-side; a client
+            // emit here would double-count, so the client funnel ends at the wire.
+          } catch (err) {
+            // Anything the buyer fixes with a different card or a fresh session,
+            // hand to the full checkout (it owns card entry and re-auth); the
+            // three failures it cannot fix, say plainly.
+            const status = err instanceof CommerceApiError ? err.status : 0
+            if (status === 422 && /payment processor/i.test((err as CommerceApiError).message)) {
+              setNoProcessorPlanId(plan.id)
+            } else if (status === 409) {
+              setPlanError((err as CommerceApiError).message || 'This account already has an active plan.')
+            } else if (status === 500) {
+              setPlanError('Your card was charged but activation did not complete. Contact billing@hanzo.ai — do not retry.')
+            } else {
+              clearChargeKey(scope)
+              window.location.href = checkoutHref(plan, seats)
+              return
+            }
+          } finally {
+            setBusyPlanId(null)
+          }
+          return
+        }
+
+        // No card on file (or a logged-out visitor): the one card checkout.
+        track('checkout_started', { plan: plan.id, amount })
+        window.location.href = checkoutHref(plan, seats)
         return
       }
 
+      // ── Free tier ────────────────────────────────────────────────────────
+      // Logged-out: viewing is open, activating needs sign-in.
+      if (onRequireAuth) {
+        onRequireAuth()
+        return
+      }
       // Free tiers (and platform admins) subscribe directly.
       setBusyPlanId(plan.id)
       try {
@@ -219,7 +296,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, paidPlan, onDowngrade, onUpgrade, canDirectSubscribe, onSubscribeWithCard, onRequireAuth],
+    [currentPlan, paidPlan, seatCounts, savedCards, onSubscribeWithCard, checkoutHref, onDowngrade, onUpgrade, canDirectSubscribe, onRequireAuth],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {
@@ -581,9 +658,14 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
               ? plan.contactSales ? 'Custom' : 'Free'
               : money(plan.price, plan.currency ?? 'USD', cents(plan.price))
             const priceSuffix = isFree ? null : isExternal ? '/mo+' : plan.perSeat ? '/user/mo' : '/mo'
-            const checkoutOpen = activationPlanId === plan.id && !isCurrent && !isFree && !isExternal && !canDirectSubscribe && !!onSubscribeWithCard
-            const showCheckout = checkoutOpen && noProcessorPlanId !== plan.id
-            const showNoProcessor = checkoutOpen && noProcessorPlanId === plan.id
+            // Paid, self-serve, no trial, and a card already on file → the button
+            // charges it in one click, so it names the price it is about to charge.
+            const expressCard = plan.price > 0 && !canDirectSubscribe && !isCurrent && !isExternal && !hasTrial && !paidPlan && !!onSubscribeWithCard
+              ? (savedCards.find((c) => c.isDefault) ?? savedCards[0])
+              : undefined
+            // Org has no payment processor (422 from the express charge) — the one
+            // failure a buyer cannot act on, so the card shows the contact fallback.
+            const showNoProcessor = noProcessorPlanId === plan.id && !isCurrent && !isFree && !isExternal
 
             const buttonLabel = isCurrent
               ? 'Current plan'
@@ -593,9 +675,11 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                   ? plan.contactSales ? 'Contact Sales →' : 'Get started →'
                   : hasTrial && !subscription.id
                     ? `Start ${plan.trialDays}-day free trial`
-                    : currentPlan && plan.price < (currentPlan?.price ?? 0)
-                      ? 'Downgrade'
-                      : 'Upgrade'
+                    : expressCard
+                      ? `Subscribe · ${totalLabel}`
+                      : currentPlan && plan.price < (currentPlan?.price ?? 0)
+                        ? 'Downgrade'
+                        : 'Upgrade'
 
             return (
               <div
@@ -720,19 +804,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 >
                   {buttonLabel}
                 </button>
-
-                {showCheckout && (
-                  <SubscribeCardForm
-                    planId={plan.id}
-                    planName={plan.name}
-                    quantity={seats}
-                    totalLabel={totalLabel}
-                    savedCards={savedCards}
-                    onSubscribe={(card, idempotencyKey) => onSubscribeWithCard!(plan.id, card, seats, idempotencyKey)}
-                    onSuccess={() => setActivationPlanId(null)}
-                    onNoProcessor={() => setNoProcessorPlanId(plan.id)}
-                  />
-                )}
 
                 {showNoProcessor && (
                   <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">

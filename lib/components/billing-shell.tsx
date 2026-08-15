@@ -545,10 +545,11 @@ export function BillingShell({ org, user }: BillingShellProps) {
     await handleUpgrade(planId)
   }, [handleUpgrade])
 
-  // Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
-  // start the subscription. Rethrows CommerceApiError (with .status) so
-  // SubscribeCardForm can branch on 402/404/409/422/500 with honest UI. On
-  // success, refresh state to show the plan.
+  // Express paid checkout: charge a card already on file (paymentMethodId) and
+  // start the subscription in one call. Rethrows CommerceApiError (with .status)
+  // so the pricing grid can branch on 402/404/409/422/500 — handing card-fixable
+  // failures to the pay.hanzo.ai checkout and naming the rest. On success, refresh
+  // state to show the active plan. New-card entry lives at pay.hanzo.ai.
   const handleSubscribeWithCard = useCallback(async (planId: string, card: CardInput, quantity: number, idempotencyKey: string) => {
     const token = getAccessToken()
     if (!token) throw new Error('Your session expired. Please sign in again.')
@@ -951,6 +952,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             plansLoading={plansLoading}
             canDirectSubscribe={admin}
             defaultView="plans"
+            checkoutUrl={org.payUrl}
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
@@ -1062,7 +1064,12 @@ export function BillingShell({ org, user }: BillingShellProps) {
 
         {/* ── Main content ─────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-4xl px-8 py-8">
+          {/* max-w-5xl is the design system's widest container and the same width
+              the public pricing page gives this plan grid — four-up cards and the
+              compare table stay readable beside the 240px rail, and the grid wraps
+              to 2-up below xl. (The scale stops at 5xl; 4xl was too narrow here,
+              squeezing the four cards and leaving the wide left gutter.) */}
+          <div className="mx-auto max-w-5xl px-8 py-8">
             {error && (
               <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}

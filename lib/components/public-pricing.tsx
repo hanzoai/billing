@@ -23,7 +23,7 @@ const NO_SUBSCRIPTION: Subscription = {
  * second set of units. Auth gates only the subscribe action: any plan CTA starts
  * sign-in.
  */
-export function PublicPricing({ onSignIn, commerceUrl }: { onSignIn: () => void; commerceUrl: string }) {
+export function PublicPricing({ onSignIn, commerceUrl, checkoutUrl }: { onSignIn: () => void; commerceUrl: string; checkoutUrl: string }) {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -66,6 +66,7 @@ export function PublicPricing({ onSignIn, commerceUrl }: { onSignIn: () => void;
           availablePlans={plans}
           plansLoading={loading}
           defaultView="plans"
+          checkoutUrl={checkoutUrl}
           onRequireAuth={onSignIn}
         />
       </main>
