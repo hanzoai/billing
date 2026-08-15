@@ -72,7 +72,7 @@ const FALLBACK_PLANS: PricingPlan[] = [
     priceMonthly: 9999,
     priceAnnual: 7999,
     contactSales: true,
-    features: ['Unlimited members', '99.99% SLA', 'Dedicated account manager', 'Custom rate limits', 'On-premise deployment', 'SOC 2 compliance'],
+    features: ['Unlimited members', 'Multi-region redundancy with automated failover', 'Dedicated account manager', 'Custom rate limits', 'On-premise deployment', 'SOC 2 Type II controls'],
   },
 ]
 
@@ -98,7 +98,7 @@ async function getPlans(): Promise<PricingPlan[]> {
 const STATS = [
   { value: '14+', label: 'Zen AI models' },
   { value: '1M', label: 'Max context window' },
-  { value: '99.99%', label: 'Uptime SLA' },
+  { value: 'Multi-region', label: 'Automated failover' },
   { value: '20%', label: 'Idle compute payout' },
 ]
 
