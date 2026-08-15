@@ -1,7 +1,9 @@
 'use client'
 
 import * as React from 'react'
+import { AnalyticsProvider } from '@hanzo/event/react'
 
+import { analytics } from './analytics'
 import { projectId } from './wallet'
 
 // wagmi + RainbowKit are half a megabyte and only the crypto payment UI needs
@@ -21,11 +23,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // button permanently disabled — self-service money-in could not complete.
   const [wallet] = React.useState(() => projectId() !== '')
 
-  if (!wallet) return <>{children}</>
-
+  // Telemetry wraps BOTH paths and is never conditional, for the same reason the
+  // wallet decision is frozen: a provider that appears or disappears remounts
+  // everything under it. It also has to be outside the wallet branch to count a
+  // visitor who never loads the wallet chunk, which is most of them.
   return (
-    <React.Suspense fallback={null}>
-      <WalletProviders>{children}</WalletProviders>
-    </React.Suspense>
+    <AnalyticsProvider client={analytics}>
+      {wallet ? (
+        <React.Suspense fallback={null}>
+          <WalletProviders>{children}</WalletProviders>
+        </React.Suspense>
+      ) : (
+        children
+      )}
+    </AnalyticsProvider>
   )
 }

@@ -56,7 +56,8 @@ import { CommerceApiError, type CardInput } from '@/lib/commerce-client'
 import { billableSeats, cents, chargeTotal, money, subtotal } from '@/lib/money'
 import { chargeKey, clearChargeKey } from '@/lib/charge'
 import { BASE_PATH } from '@/lib/config'
-import { track } from '@/lib/track'
+import { EVENTS } from '@hanzo/event'
+import { useAnalytics } from '@hanzo/event/react'
 
 /** A card already on file — charged in one click, no card entry needed. */
 export interface SavedCard {
@@ -124,6 +125,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     defaultView = 'overview',
   } = props
 
+  const analytics = useAnalytics()
   const [viewChoice, setView] = React.useState<'overview' | 'plans' | 'history'>(defaultView)
   // Signed out, the portal IS the catalog. The subscription card and the
   // Overview / History views describe a subscription the viewer does not have
@@ -132,6 +134,14 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   // caller could detect one.
   const signedOut = !!onRequireAuth
   const view = signedOut ? 'plans' : viewChoice
+
+  // The plans grid IS the pricing surface here, and it is a tab rather than a
+  // page, so a pageview does not see it. Without this the funnel's first step
+  // exists only on the marketing site and a buyer who arrives straight at
+  // billing looks like a plan click out of nowhere.
+  React.useEffect(() => {
+    if (view === 'plans') analytics.capture(EVENTS.PRICING_VIEWED)
+  }, [analytics, view])
   // AUDIENCE is the axis the catalog carries, surfaced as a control instead of as
   // more cards. Six tiers in one row asked a visitor to compare a $9 personal plan
   // against a negotiated enterprise contract; they are different purchases and now
@@ -214,7 +224,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       if (plan.id === currentPlan?.id) return
       setPlanError(null)
       setNoProcessorPlanId(null)
-      track('plan_clicked', { plan: plan.id })
+      analytics.capture(EVENTS.PLAN_CLICKED, { plan: plan.id })
 
       const seats = billableSeats(plan, seatCounts[plan.id])
       const amount = chargeTotal(plan, seats)
@@ -240,7 +250,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         const card = savedCards.find((c) => c.isDefault) ?? savedCards[0]
         if (card && onSubscribeWithCard && !hasTrial) {
           setBusyPlanId(plan.id)
-          track('checkout_started', { plan: plan.id, amount })
+          analytics.capture(EVENTS.CHECKOUT_STARTED, { plan: plan.id, amount, path: 'express' })
           const scope = `subscribe:${plan.id}:${seats}`
           const key = chargeKey(scope)
           try {
@@ -271,7 +281,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         }
 
         // No card on file (or a logged-out visitor): the one card checkout.
-        track('checkout_started', { plan: plan.id, amount })
+        // The hop to pay is a page unload, so the batch leaves as a beacon.
+        analytics.capture(EVENTS.CHECKOUT_STARTED, { plan: plan.id, amount, path: 'checkout' })
+        analytics.flush(true)
         window.location.href = checkoutHref(plan, seats)
         return
       }
@@ -296,7 +308,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         setBusyPlanId(null)
       }
     },
-    [currentPlan, paidPlan, seatCounts, savedCards, onSubscribeWithCard, checkoutHref, onDowngrade, onUpgrade, canDirectSubscribe, onRequireAuth],
+    [analytics, currentPlan, paidPlan, seatCounts, savedCards, onSubscribeWithCard, checkoutHref, onDowngrade, onUpgrade, canDirectSubscribe, onRequireAuth],
   )
 
   const handleApplyDiscount = React.useCallback(async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@hanzo/billing",
-  "version": "1.0.27",
+  "version": "1.0.31",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@hanzo/design": "^0.5.1",
+    "@hanzo/event": "^0.3.22",
     "@hanzo/gui": "^8.1.1",
     "@hanzo/ui": "^8.0.72",
     "@hanzogui/shell": "^8.1.5",
