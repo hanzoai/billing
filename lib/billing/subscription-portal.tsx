@@ -48,6 +48,15 @@ export interface SubscriptionPortalProps {
    * tiers deep-link to the Pay checkout instead, which carries sign-in itself.
    */
   onRequireAuth?: () => void
+  /**
+   * A plan the buyer already picked before they arrived — `?plan=<slug>` on the
+   * way in, which is what every "Get started" on the marketing site sends.
+   *
+   * The grid CONTINUES that choice through the same door a click uses, so the
+   * tier chosen on one surface is the tier checked out on the next. It cannot
+   * charge on its own: see `express` on handlePlanChange.
+   */
+  chosen?: string
   showHistory?: boolean
   defaultView?: 'overview' | 'plans' | 'history'
 }
@@ -122,6 +131,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     savedCards = [],
     checkoutUrl,
     onRequireAuth,
+    chosen,
     defaultView = 'overview',
   } = props
 
@@ -214,8 +224,13 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     [checkoutUrl],
   )
 
+  // `express` is whether a card already on file may be charged in this one step.
+  // A CLICK says yes — the button reads `Subscribe · $49`, and pressing it is the
+  // buyer's yes. A plan CARRIED IN on a link says no: arriving somewhere is not
+  // consent to be charged, so a link stops at the card form and the buyer presses
+  // pay there. That is the whole difference between the two entrances.
   const handlePlanChange = React.useCallback(
-    async (plan: SubscriptionPlan) => {
+    async (plan: SubscriptionPlan, express = true) => {
       // External / contact-sales plans (marketing CTA — no auth needed).
       if (plan.externalUrl) {
         window.open(plan.externalUrl, '_blank', 'noopener,noreferrer')
@@ -247,7 +262,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         // one click, one charge, no card entry, no page hop. A trial plan goes to
         // the checkout instead, which shows its terms before anything is charged.
         const hasTrial = (plan.trialDays ?? 0) > 0
-        const card = savedCards.find((c) => c.isDefault) ?? savedCards[0]
+        const card = express ? savedCards.find((c) => c.isDefault) ?? savedCards[0] : undefined
         if (card && onSubscribeWithCard && !hasTrial) {
           setBusyPlanId(plan.id)
           analytics.capture(EVENTS.CHECKOUT_STARTED, { plan: plan.id, amount, path: 'express' })
@@ -310,6 +325,20 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     },
     [analytics, currentPlan, paidPlan, seatCounts, savedCards, onSubscribeWithCard, checkoutHref, onDowngrade, onUpgrade, canDirectSubscribe, onRequireAuth],
   )
+
+  // Continue the choice the buyer arrived with, once — the catalog decides both
+  // the price and the tab, so this waits for it rather than guessing either. An
+  // id is matched only when the plan HAS one: the projection gives a row with no
+  // slug the empty id, which would otherwise answer to a blank `?plan=`.
+  const carried = React.useRef(false)
+  React.useEffect(() => {
+    if (carried.current || !chosen || availablePlans.length === 0) return
+    const plan = availablePlans.find((p) => p.id !== '' && p.id === chosen)
+    if (!plan) return
+    carried.current = true
+    setAudience((plan.category ?? 'personal') === 'personal' ? 'personal' : 'business')
+    void handlePlanChange(plan, false)
+  }, [chosen, availablePlans, handlePlanChange])
 
   const handleApplyDiscount = React.useCallback(async () => {
     if (!onApplyDiscount || !discountCode.trim()) return

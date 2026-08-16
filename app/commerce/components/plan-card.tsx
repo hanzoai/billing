@@ -66,8 +66,10 @@ function ctaLabel(plan: PricingPlan): string {
   return bySales(plan) ? 'Talk to sales' : 'Get started'
 }
 
+// The CTA names the tier it sits under, so the grid it opens continues that
+// choice instead of asking for it again.
 function ctaHref(plan: PricingPlan): string {
-  return bySales(plan) ? CAL_URL : `${BILLING_URL}#pricing`
+  return bySales(plan) ? CAL_URL : `${BILLING_URL}/?plan=${encodeURIComponent(plan.id)}#pricing`
 }
 
 export function PlanCard({ plan, billingInterval }: PlanCardProps) {

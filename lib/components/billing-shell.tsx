@@ -80,16 +80,21 @@ const SECTION_TITLES: Record<BillingSection, string> = {
   settings: 'Settings',
 }
 
-function getInitialSection(): BillingSection {
+function getInitialSection(chosen?: string): BillingSection {
   if (typeof window === 'undefined') return 'overview'
   const hash = window.location.hash.replace('#', '') as BillingSection
   if (hash && hash in SECTION_TITLES) return hash
+  // A plan carried in is a pricing intent whether or not the link spelled the
+  // hash, so the grid opens instead of the overview.
+  if (chosen) return 'pricing'
   return 'overview'
 }
 
 interface BillingShellProps {
   org: BillingOrgConfig
   user: IamUser
+  /** A plan the buyer already picked — see SubscriptionPortal's `chosen`. */
+  chosen?: string
 }
 
 const EMPTY_SUBSCRIPTION: Subscription = {
@@ -260,7 +265,7 @@ function asList<T>(v: unknown): T[] {
   return []
 }
 
-export function BillingShell({ org, user }: BillingShellProps) {
+export function BillingShell({ org, user, chosen }: BillingShellProps) {
   const [balance, setBalance] = useState<Balance | null>(null)
   const [subscription, setSubscription] = useState<Subscription>(EMPTY_SUBSCRIPTION)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
@@ -822,7 +827,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
   }, [org.iamServerUrl])
 
   // ── Section routing ─────────────────────────────────────────────────
-  const [activeSection, setActiveSection] = useState<BillingSection>(getInitialSection)
+  const [activeSection, setActiveSection] = useState<BillingSection>(() => getInitialSection(chosen))
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navigate = useCallback((section: BillingSection) => {
@@ -959,6 +964,7 @@ export function BillingShell({ org, user }: BillingShellProps) {
             onApplyDiscount={handleApplyDiscount}
             onSubscribeWithCard={handleSubscribeWithCard}
             savedCards={savedCards}
+            chosen={chosen}
           />
         )
       case 'credits':

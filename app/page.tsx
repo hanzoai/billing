@@ -12,10 +12,15 @@ export default function BillingPage() {
   const [user, setUser] = useState<IamUser | null>(null)
   const [checked, setChecked] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  // The plan the buyer already picked, from `/?plan=pro#pricing` — the shape
+  // every "Get started" on the marketing site links to. Read from the URL
+  // because this is a static export: there is no server to hand it over.
+  const [chosen, setChosen] = useState<string | undefined>()
 
   useEffect(() => {
     const detectedOrg = getOrgByHost(window.location.host)
     setOrg(detectedOrg)
+    setChosen(new URLSearchParams(window.location.search).get('plan') ?? undefined)
     // Do NOT auto-redirect to login: logged-out prospects see public pricing
     // (no login wall). Auth gates only the subscribe action.
     if (isLoggedIn()) setUser(getCurrentUser())
@@ -24,7 +29,9 @@ export default function BillingPage() {
 
   const handleSignIn = useCallback(() => {
     if (!org) return
-    startLogin(makeAuthConf(org)).catch((err) => {
+    // Sign in and come back to the same spot, plan included — the round trip
+    // lands on this one page, so the query and hash are the whole destination.
+    startLogin(makeAuthConf(org), window.location.search + window.location.hash).catch((err) => {
       setAuthError(err instanceof Error ? err.message : 'Could not start sign in')
     })
   }, [org])
@@ -55,8 +62,8 @@ export default function BillingPage() {
   }
 
   if (!user) {
-    return <PublicPricing onSignIn={handleSignIn} commerceUrl={org.commerceUrl} checkoutUrl={org.payUrl} />
+    return <PublicPricing onSignIn={handleSignIn} commerceUrl={org.commerceUrl} checkoutUrl={org.payUrl} chosen={chosen} />
   }
 
-  return <BillingShell org={org} user={user} />
+  return <BillingShell org={org} user={user} chosen={chosen} />
 }

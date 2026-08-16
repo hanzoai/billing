@@ -13,13 +13,8 @@ help: ## Show this help.
 build: node_modules ## Build the Next.js app (next build).
 	$(PNPM) build
 
-# billing ships NO tests — no `test` script, no spec files, no runner. The
-# target exists because the fleet vocabulary promises it, and it exits 0 because
-# nothing failed: a red exit would claim a suite ran and broke, which is the
-# opposite lie. It says so on every run, so a green line here is never read as
-# coverage. Delete this recipe the day the repo grows a real suite.
-test: ## No test suite in this repo — says so, exits 0.
-	@echo ">> billing has NO tests (no test script, no spec files). Green here is not coverage."
+test: node_modules ## Run the suite (vitest).
+	$(PNPM) test
 
 # Two real static checks, both required. `pnpm lint` is scripts/pci-scope.mjs —
 # the SAQ-A boundary, scanned against the source AND the built bundle, so it

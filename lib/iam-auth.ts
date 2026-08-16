@@ -12,6 +12,20 @@ const KEY_REFRESH_TOKEN = `${KEY_PREFIX}refresh_token`
 const KEY_EXPIRES_AT = `${KEY_PREFIX}expires_at`
 const KEY_CODE_VERIFIER = `${KEY_PREFIX}code_verifier`
 const KEY_STATE = `${KEY_PREFIX}state`
+const KEY_RESUME = `${KEY_PREFIX}resume`
+
+/**
+ * Where sign-in resumes, read once and consumed.
+ *
+ * Only a query and hash are ever kept — never a path and never a host. The whole
+ * app is one page, so the suffix IS the destination, and a stored value that
+ * does not begin with `?` or `#` cannot name somewhere else to land.
+ */
+export function resumed(): string {
+  const at = localStorage.getItem(KEY_RESUME)
+  localStorage.removeItem(KEY_RESUME)
+  return at && /^[?#]/.test(at) ? at : ''
+}
 
 export interface IamUser {
   email: string
@@ -186,8 +200,16 @@ export function isSuperAdmin(user: IamUser): boolean {
   return user.owner === 'admin'
 }
 
-/** Start OIDC/PKCE login flow — redirects to Hanzo IAM login page. */
-export async function startLogin(config: IamAuthConfig): Promise<void> {
+/**
+ * Start OIDC/PKCE login flow — redirects to Hanzo IAM login page.
+ *
+ * `resume` is the query and hash to come back to, so a buyer signing in from
+ * `/?plan=pro#pricing` still has that plan afterwards. It is remembered here
+ * rather than sent to IAM: the authorize URL is a public place, and where
+ * someone was standing is nobody else's business. Passing nothing keeps what is
+ * already remembered, which is what a retry of an interrupted sign-in wants.
+ */
+export async function startLogin(config: IamAuthConfig, resume?: string): Promise<void> {
   const state = generateRandom(32)
   const codeVerifier = generateRandom(64)
   const challengeBuffer = await sha256(codeVerifier)
@@ -195,6 +217,7 @@ export async function startLogin(config: IamAuthConfig): Promise<void> {
 
   localStorage.setItem(KEY_STATE, state)
   localStorage.setItem(KEY_CODE_VERIFIER, codeVerifier)
+  if (resume) localStorage.setItem(KEY_RESUME, resume)
 
   const base = config.iamServerUrl.replace(/\/+$/, '')
   const params = new URLSearchParams({

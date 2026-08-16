@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BASE_PATH, getOrgByHost } from '@/lib/config'
 import { makeAuthConf } from '@/lib/auth'
-import { handleCallback, startLogin, forgetTokens } from '@/lib/iam-auth'
+import { handleCallback, startLogin, forgetTokens, resumed } from '@/lib/iam-auth'
 
 // One-shot retry flag — survives the authorize round-trip via sessionStorage so
 // a transient first-attempt failure self-heals silently but can never loop.
@@ -26,7 +26,9 @@ export default function CallbackPage() {
     handleCallback(conf)
       .then(() => {
         sessionStorage.removeItem(RETRY_KEY)
-        window.location.href = `${BASE_PATH}/`
+        // Back to the spot sign-in started from — a plan picked before signing
+        // in is still the plan afterwards.
+        window.location.href = `${BASE_PATH}/${resumed()}`
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : 'Authentication failed'
