@@ -54,7 +54,7 @@ export interface SubscriptionPortalProps {
    *
    * The grid CONTINUES that choice through the same door a click uses, so the
    * tier chosen on one surface is the tier checked out on the next. It cannot
-   * charge on its own: see `express` on handlePlanChange.
+   * complete a purchase on its own: see `pressed` on handlePlanChange.
    */
   chosen?: string
   showHistory?: boolean
@@ -224,13 +224,15 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     [checkoutUrl],
   )
 
-  // `express` is whether a card already on file may be charged in this one step.
-  // A CLICK says yes — the button reads `Subscribe · $49`, and pressing it is the
-  // buyer's yes. A plan CARRIED IN on a link says no: arriving somewhere is not
-  // consent to be charged, so a link stops at the card form and the buyer presses
-  // pay there. That is the whole difference between the two entrances.
+  // `pressed` is whether a buyer asked for this by pressing the button, which is
+  // what separates the two entrances to the same door.
+  //
+  // A press may FINISH the job: charge a card already on file, or subscribe an
+  // account that may do so directly. A plan CARRIED IN on a link may only OPEN
+  // it — the card form, or sign-in — because arriving somewhere is not consent
+  // to be charged, and a link that spends money is a link anyone can send.
   const handlePlanChange = React.useCallback(
-    async (plan: SubscriptionPlan, express = true) => {
+    async (plan: SubscriptionPlan, pressed = true) => {
       // External / contact-sales plans (marketing CTA — no auth needed).
       if (plan.externalUrl) {
         window.open(plan.externalUrl, '_blank', 'noopener,noreferrer')
@@ -262,7 +264,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         // one click, one charge, no card entry, no page hop. A trial plan goes to
         // the checkout instead, which shows its terms before anything is charged.
         const hasTrial = (plan.trialDays ?? 0) > 0
-        const card = express ? savedCards.find((c) => c.isDefault) ?? savedCards[0] : undefined
+        const card = pressed ? savedCards.find((c) => c.isDefault) ?? savedCards[0] : undefined
         if (card && onSubscribeWithCard && !hasTrial) {
           setBusyPlanId(plan.id)
           analytics.capture(EVENTS.CHECKOUT_STARTED, { plan: plan.id, amount, path: 'express' })
@@ -309,7 +311,10 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         onRequireAuth()
         return
       }
-      // Free tiers (and platform admins) subscribe directly.
+      // Free tiers (and platform admins) subscribe directly — which finishes the
+      // job rather than opening a door, so it waits for the press. A carried
+      // plan has already picked the tab and the card; the button says the rest.
+      if (!pressed) return
       setBusyPlanId(plan.id)
       try {
         if (!currentPlan || plan.price >= (currentPlan?.price ?? 0)) {
