@@ -241,7 +241,10 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       if (plan.id === currentPlan?.id) return
       setPlanError(null)
       setNoProcessorPlanId(null)
-      analytics.capture(EVENTS.PLAN_CLICKED, { plan: plan.id })
+      // A $0 rung reports no plan click. It is the rung an account already sits
+      // on and the one choice that cannot reach a checkout, so counting it would
+      // dilute the step with a choice that definitionally cannot convert.
+      if (plan.price > 0) analytics.capture(EVENTS.PLAN_CLICKED, { plan: plan.id })
 
       const seats = billableSeats(plan, seatCounts[plan.id])
       const amount = chargeTotal(plan, seats)
@@ -719,7 +722,9 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                 ? 'Applying…'
                 : isExternal
                   ? plan.contactSales ? 'Contact Sales →' : 'Get started →'
-                  : hasTrial && !subscription.id
+                  : isFree
+                    ? 'Get started'
+                    : hasTrial && !subscription.id
                     ? `Start ${plan.trialDays}-day free trial`
                     : expressCard
                       ? `Subscribe · ${totalLabel}`
