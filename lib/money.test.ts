@@ -16,18 +16,19 @@ import { describe, expect, it } from 'vitest'
 import { annualSaving, billableSeats, chargeTotal, cents, money, subtotal } from './money'
 
 // The live catalog, as the portal projects it (mapCommercePlan: cents / 100).
-const GO = { price: 9, annualPrice: 8.25 }
-const PRO = { price: 49, annualPrice: 41.5 }
+const GO = { price: 8, annualPrice: 7 }
+const PRO = { price: 19, annualPrice: 16.5 }
 const TEAM = { price: 25, annualPrice: 20, perSeat: true, minSeats: 2 }
 
 describe('chargeTotal mirrors what commerce charges', () => {
   it('quotes the MONTHLY price, never the annual rate', () => {
-    // The defect: the Annual tab quoted $41.50/mo and the card was charged $49.00.
+    // The Annual tab shows a monthly-equivalent rate; the card is charged the
+    // MONTHLY price, so the quote must be the monthly one.
     // There is no interval on the wire (subscribeCardRequest carries none) and
     // subscribe_card.go reads the monthly column, so the annual rate is never a
     // total. Passing the whole plan means a future edit cannot reach for it.
-    expect(chargeTotal(PRO)).toBe(49)
-    expect(chargeTotal(GO)).toBe(9)
+    expect(chargeTotal(PRO)).toBe(19)
+    expect(chargeTotal(GO)).toBe(8)
     expect(chargeTotal(PRO)).not.toBe(PRO.annualPrice)
   })
 
@@ -35,7 +36,7 @@ describe('chargeTotal mirrors what commerce charges', () => {
     expect(chargeTotal(TEAM, 5)).toBe(125)
     // A flat plan is ×1 however many seats are asked for — commerce sets
     // seatMult = quantity only when perSeat(planId).
-    expect(chargeTotal(PRO, 5)).toBe(49)
+    expect(chargeTotal(PRO, 5)).toBe(19)
   })
 
   it('clamps to the catalog floor commerce would reject below', () => {
@@ -58,8 +59,8 @@ describe('a live promo is subtracted, exactly as commerce subtracts it', () => {
   // integer cents. A quote that ignored it over-stated the charge; a quote that
   // rounds in dollars disagrees by a cent on plenty of prices.
   it('mirrors the server rounding on cents, not dollars', () => {
-    expect(chargeTotal({ ...PRO, promoPercent: 50 })).toBe(24.5) // 4900 -> 2450
-    expect(chargeTotal({ ...GO, promoPercent: 10 })).toBe(8.1) //  900 ->  810
+    expect(chargeTotal({ ...PRO, promoPercent: 50 })).toBe(9.5) // 1900 -> 950
+    expect(chargeTotal({ ...GO, promoPercent: 10 })).toBe(7.2) //  800 ->  720
     // 1900 * 33% = 627 exactly; the +50 half-up rounding lands on 627, not 626.
     expect(chargeTotal({ price: 19, promoPercent: 33 })).toBe(19 - 6.27)
   })
@@ -67,8 +68,8 @@ describe('a live promo is subtracted, exactly as commerce subtracts it', () => {
   it('never discounts below zero or above the subtotal', () => {
     expect(chargeTotal({ ...PRO, promoPercent: 100 })).toBe(0)
     expect(chargeTotal({ ...PRO, promoPercent: 250 })).toBe(0)
-    expect(chargeTotal({ ...PRO, promoPercent: 0 })).toBe(49)
-    expect(chargeTotal({ ...PRO, promoPercent: -5 })).toBe(49)
+    expect(chargeTotal({ ...PRO, promoPercent: 0 })).toBe(19)
+    expect(chargeTotal({ ...PRO, promoPercent: -5 })).toBe(19)
   })
 
   it('discounts the seat-multiplied subtotal, not the unit price', () => {
@@ -86,10 +87,10 @@ describe('a live promo is subtracted, exactly as commerce subtracts it', () => {
 
 describe('every quoted figure is formatted the one way', () => {
   it('never prints a bare truncated float', () => {
-    // `$${41.5}` printed "$41.5". Money on a checkout button reads as money — and
+    // `$${16.5}` printed "$16.5". Money on a checkout button reads as money — and
     // a whole-dollar price stays whole, which is what `cents` decides.
-    expect(money(41.5, 'USD', cents(41.5))).toBe('$41.50')
-    expect(money(49, 'USD', cents(49))).toBe('$49')
+    expect(money(16.5, 'USD', cents(16.5))).toBe('$16.50')
+    expect(money(19, 'USD', cents(19))).toBe('$19')
     expect(money(125, 'usd', cents(125))).toBe('$125')
   })
 
@@ -103,8 +104,8 @@ describe('every quoted figure is formatted the one way', () => {
 
 describe('annualSaving reports the catalog, it does not invent a discount', () => {
   it('is a year of the difference between the two monthly rates', () => {
-    expect(annualSaving(PRO)).toBe((49 - 41.5) * 12)
-    expect(annualSaving({ price: 49 })).toBeNull()
+    expect(annualSaving(PRO)).toBe((19 - 16.5) * 12)
+    expect(annualSaving({ price: 19 })).toBeNull()
     expect(annualSaving({ price: 0, annualPrice: 0 })).toBeNull()
   })
 })
