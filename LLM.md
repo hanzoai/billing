@@ -231,6 +231,36 @@ transaction tagged `starter-credit`, and `loadBillingData` still synthesizes a
 grant row from it so the money stays visible — showing a past grant is not
 advertising a current offer.
 
+## A discount is server-computed — there is no code to type
+
+The one discount mechanism is the **platform promo**: a SuperAdmin sets
+`{percentOff, start, end, plans, active}` at `PUT /v1/admin/promos`, commerce
+annotates each covered plan with `promoPercent`, and `subscribe_card.go`
+subtracts it from the charge. `lib/money.ts` `chargeTotal` mirrors that
+arithmetic so the button quotes the number the card is charged. It carries no
+code and nobody redeems it — a covered plan is discounted with nothing typed.
+
+**Do not add a code field.** Three shipped here and none could work, because the
+fleet routes none of the addresses they called — `/v1/coupon/validate`,
+`/v1/billing/discount/validate` and `/v1/billing/subscriptions/{id}/promotion`
+are all absent from `GET /v1/openapi.json`, whose `/v1/billing` product publishes
+38 concrete paths and no catch-all to hide behind. The hero field on `/commerce`
+also held its code in local state and handed it to nothing, so a *successful*
+validation would have said "Code applied" over a cart that never saw it — worse
+than the red "Unable to validate coupon right now" it actually showed, which
+reads as a passing outage and was permanent.
+
+Redeemable codes are not a thing we sell: cloud's `apps/marketing/promos.go`
+compiles `campaignsLive = false` (read from no env var, no column, no flag),
+purges the one campaign row on every boot, and states that credit enters an org
+only by a manual admin grant. `/v1/commerce/discount` is a *merchant tenant's*
+price rules for their own store, not ours, and it has no validate verb either.
+
+`lib/billing/discount-surface.test.ts` holds the line: no `placeholder` may
+invite a code, the commerce client may name none of those three addresses, and
+`chargeTotal` must still subtract `promoPercent`. On the day a server evaluates
+a code, that test changes in the same commit as the route.
+
 ## Payment flows (one way each)
 
 - **Money is formatted in ONE place**: `lib/money.ts` — `money(value, currency,
@@ -280,6 +310,24 @@ advertising a current offer.
   proxies the same catalog AND returns `access-control-allow-origin:
   https://billing.hanzo.ai`). Public catalog prices are DOLLARS; commerce's are
   cents.
+
+- **A chosen plan travels intact**: `/?plan=<slug>` is what every "Get started"
+  on the marketing site links to. `app/page.tsx` reads it once (static export —
+  `URLSearchParams(window.location.search)`, the `app/topup` precedent) and hands
+  it to `SubscriptionPortal` as `chosen`; the portal waits for the catalog, opens
+  the tab the plan lives on, and runs the SAME `handlePlanChange` a click runs.
+  A slug the catalog does not hold changes nothing.
+  - `handlePlanChange(plan, pressed)` — a press may FINISH (charge a card on
+    file, or the `canDirectSubscribe` mint path); a plan carried in may only
+    OPEN (the Pay card form, or sign-in). A link that spends money is a link
+    anyone can send.
+  - Sign-in keeps it: `startLogin(conf, resume)` remembers the query and hash,
+    `resumed()` hands them back at `/auth/callback`. Only a `?`/`#` suffix is
+    ever stored, so nothing in it can name another path or host.
+  - Downstream is unchanged and already correct: `pay.<brand>/confirm/card?plan=`
+    reads the slug, carries its own sign-in (`startLogin({redirect: here})` keeps
+    path+search+hash), and `POST /v1/billing/subscribe/card` prices the `planId`
+    server-side. The slug is the only thing that travels — never an amount.
 
 ## Testing money flows in sandbox
 

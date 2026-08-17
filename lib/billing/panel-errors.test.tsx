@@ -53,7 +53,6 @@ const OVERVIEW = {
   usageLoading: false,
   creditGrants: [],
   creditBalance: 0,
-  onAddFunds: async () => {},
   isAdmin: false,
   userEmail: 'z@hanzo.ai',
   invoices: [],

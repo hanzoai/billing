@@ -218,18 +218,6 @@ export type CommerceUsageSummary = {
   records?: CommerceUsageRecord[]
 }
 
-export type CommerceDiscountCode = {
-  id?: string
-  code?: string
-  name?: string | null
-  kind?: 'percent' | 'amount'
-  value?: number
-  currency?: string | null
-  duration?: 'forever' | 'once' | 'repeating' | null
-  durationInMonths?: number | null
-  valid?: boolean
-}
-
 export type CommerceCreditGrant = {
   id?: string
   userId?: string
@@ -396,15 +384,6 @@ export class Commerce {
     })
   }
 
-  async addDeposit(
-    params: { user: string; currency?: string; amount: number; notes?: string; tags?: string[]; expiresIn?: string },
-    token?: string,
-  ): Promise<Transaction> {
-    return this.request<Transaction>('/v1/billing/deposit', {
-      method: 'POST', body: params, token,
-    })
-  }
-
   // ── Settings ─────────────────────────────────────────────────────────
 
   /**
@@ -505,12 +484,6 @@ export class Commerce {
   async updateSubscription(subscriptionId: string, params: { planId: string }, token?: string): Promise<Subscription> {
     return this.request<Subscription>(`/v1/billing/subscriptions/${subscriptionId}`, {
       method: 'PATCH', body: params, token,
-    })
-  }
-
-  async applyDiscount(subscriptionId: string, code: string, token?: string): Promise<CommerceDiscountCode> {
-    return this.request<CommerceDiscountCode>(`/v1/billing/subscriptions/${subscriptionId}/promotion`, {
-      method: 'POST', body: { code }, token,
     })
   }
 
@@ -628,14 +601,6 @@ export class Commerce {
   async deleteSpendAlert(alertId: string, token?: string): Promise<void> {
     await this.request<void>(`/v1/billing/alerts/${alertId}`, {
       method: 'DELETE', token,
-    })
-  }
-
-  // ── Discount Codes ───────────────────────────────────────────────────
-
-  async validateDiscountCode(code: string, token?: string): Promise<CommerceDiscountCode> {
-    return this.request<CommerceDiscountCode>('/v1/billing/discount/validate', {
-      params: { code }, token,
     })
   }
 

@@ -357,19 +357,6 @@ export interface SupportTier {
   highlighted?: boolean
 }
 
-// Discount / promotion code
-export interface DiscountCode {
-  id: string
-  code: string
-  name: string | null
-  kind: "percent" | "amount"
-  value: number
-  currency: string | null
-  duration: "forever" | "once" | "repeating" | null
-  durationInMonths: number | null
-  valid: boolean
-}
-
 // Multi-billing-account types
 export type BillingRole = 'owner' | 'admin' | 'viewer'
 

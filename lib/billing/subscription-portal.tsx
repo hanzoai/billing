@@ -7,7 +7,6 @@ import type {
   SubscriptionPlan,
   RetentionOffer,
   SubscriptionHistory,
-  DiscountCode,
 } from './types'
 
 export interface SubscriptionPortalProps {
@@ -33,7 +32,6 @@ export interface SubscriptionPortalProps {
   onDowngrade?: (planId: string) => Promise<void>
   onCancel?: (reason: string, feedback?: string) => Promise<void>
   onAcceptOffer?: (offerId: string) => Promise<void>
-  onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
   /**
    * Self-serve paid checkout: charge a fresh Square nonce OR a saved card and
    * start the subscription. Rejects with a CommerceApiError carrying the HTTP
@@ -134,7 +132,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     onUpgrade,
     onDowngrade,
     onCancel,
-    onApplyDiscount,
     onSubscribeWithCard,
     savedCards = [],
     checkoutUrl,
@@ -171,11 +168,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const [noProcessorPlanId, setNoProcessorPlanId] = React.useState<string | null>(null)
   // Seat count per per-seat plan id, defaulting to the plan minimum
   const [seatCounts, setSeatCounts] = React.useState<Record<string, number>>({})
-
-  // Discount code state
-  const [discountCode, setDiscountCode] = React.useState('')
-  const [applyingDiscount, setApplyingDiscount] = React.useState(false)
-  const [discountResult, setDiscountResult] = React.useState<{ success: boolean; message: string } | null>(null)
 
   // Cancel confirmation
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false)
@@ -356,28 +348,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
     void handlePlanChange(plan, false)
   }, [chosen, availablePlans, handlePlanChange])
 
-  const handleApplyDiscount = React.useCallback(async () => {
-    if (!onApplyDiscount || !discountCode.trim()) return
-    setApplyingDiscount(true)
-    setDiscountResult(null)
-    try {
-      const result = await onApplyDiscount(discountCode.trim())
-      if (result && result.valid) {
-        const desc = result.kind === 'percent'
-          ? `${result.value}% off`
-          : `${money(result.value, 'USD', 0)} off`
-        setDiscountResult({ success: true, message: `Applied: ${result.name || result.code} (${desc})` })
-        setDiscountCode('')
-      } else {
-        setDiscountResult({ success: false, message: 'Invalid or expired discount code' })
-      }
-    } catch (err) {
-      setDiscountResult({ success: false, message: err instanceof Error ? err.message : 'Failed to apply code' })
-    } finally {
-      setApplyingDiscount(false)
-    }
-  }, [onApplyDiscount, discountCode])
-
   const handleCancel = React.useCallback(async () => {
     if (!onCancel || !cancelReason.trim()) return
     setCanceling(true)
@@ -514,37 +484,6 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
                     : 'No subscription'}
             </p>
           </div>
-
-          {/* Discount code */}
-          {onApplyDiscount && subscription.id && (
-            <div className="md:col-span-3 rounded-xl border border-border bg-bg-card p-4">
-              <p className="text-xs uppercase tracking-wide text-text-muted">Discount code</p>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={discountCode}
-                  onChange={(e) => {
-                    setDiscountCode(e.target.value.toUpperCase())
-                    setDiscountResult(null)
-                  }}
-                  placeholder="Enter promo code"
-                  className="flex-1 rounded-lg border border-border bg-bg-input px-3 py-2 text-sm mono uppercase text-text transition"
-                />
-                <button
-                  type="button"
-                  disabled={!discountCode.trim() || applyingDiscount}
-                  onClick={handleApplyDiscount}
-                  className="rounded-lg bg-text px-4 py-2 text-sm font-medium text-bg transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {applyingDiscount ? 'Applying…' : 'Apply'}
-                </button>
-              </div>
-              {discountResult && (
-                <p className={`mt-2 text-sm ${discountResult.success ? 'text-success' : 'text-danger'}`}>
-                  {discountResult.message}
-                </p>
-              )}
-            </div>
-          )}
 
           {usageMetrics.length > 0 && (
             <div className="md:col-span-3 rounded-xl border border-border bg-bg-card p-4">
