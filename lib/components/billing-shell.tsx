@@ -332,9 +332,12 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
         if (r.status !== 'rejected') return ''
         const e: unknown = r.reason
         if (e instanceof CommerceApiError) {
-          return e.status === 401 || e.status === 403
-            ? 'Your session expired. Sign in again to see this.'
-            : `Billing couldn't answer (${e.status}). ${e.message}`.trim()
+          // 401 and 403 are both refusals but they ask for different things:
+          // one is fixed by signing in again, the other never is, and sending
+          // a signed-in customer back to the login page fixes nothing twice.
+          if (e.status === 401) return 'Your session expired. Sign in again to see this.'
+          if (e.status === 403) return 'This account does not have access to this.'
+          return `Billing couldn't answer (${e.status}). ${e.message}`.trim()
         }
         // No status at all: the request never got an answer — timeout, abort,
         // DNS. That is ours to say plainly rather than dress as a refusal.

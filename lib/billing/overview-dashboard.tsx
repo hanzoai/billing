@@ -130,10 +130,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   // Every read this page summarises but does not own a section for. Each states
   // its own reason once, together, rather than leaving the tiles to show a dash
   // with no account of why.
-  const unread: Array<[string, string]> = [
-    ...(props.balanceError ? [['balance', props.balanceError] as [string, string]] : []),
-    ...(props.paymentError ? [['payment methods', props.paymentError] as [string, string]] : []),
-  ]
+  const unread: Array<[string, string]> = []
+  if (props.balanceError) unread.push(['balance', props.balanceError])
+  if (props.paymentError) unread.push(['payment methods', props.paymentError])
   const defaultPm = props.paymentMethods.find(m => m.is_default || m.isDefault) ?? props.paymentMethods[0]
   const hasActivePlan = !!props.subscription.id && props.subscription.status === 'active'
 
