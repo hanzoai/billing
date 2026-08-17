@@ -79,6 +79,30 @@ export interface SavedCard {
   isDefault?: boolean
 }
 
+/**
+ * Leave for the checkout, saying whether THIS page should stay reachable by the
+ * back button.
+ *
+ * That is the whole difference between the two entrances to the same door, and
+ * it is not a detail — it is the back button working or not working on the one
+ * path that takes money.
+ *
+ * A plan CARRIED IN on `?plan=pro` forwards before the reader has read
+ * anything, so this page is not somewhere they went. Pushing it made Back a
+ * TRAP: it returned here, the carry fired again, and the reader was thrown
+ * forward to the very page they were trying to leave. Measured on the live
+ * chain from the pricing ladder — three presses of Back, still at the far end.
+ * Replacing means Back skips this page and lands on the ladder they clicked
+ * from, which is what they are reaching for.
+ *
+ * A PRESSED plan is the opposite. The reader chose it from the grid on this
+ * page, so the grid is where Back belongs and the entry is theirs to return to.
+ */
+export function go(href: string, back: boolean): void {
+  if (back) window.location.href = href
+  else window.location.replace(href)
+}
+
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -304,7 +328,7 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
         // The hop to pay is a page unload, so the batch leaves as a beacon.
         analytics.capture(EVENTS.CHECKOUT_STARTED, { plan: plan.id, amount, path: 'checkout' })
         analytics.flush(true)
-        window.location.href = checkoutHref(plan, seats)
+        go(checkoutHref(plan, seats), pressed)
         return
       }
 
