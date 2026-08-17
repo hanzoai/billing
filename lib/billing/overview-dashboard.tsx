@@ -10,7 +10,6 @@ import type {
   CreditGrant,
   Invoice,
   SpendAlert,
-  DiscountCode,
   BusinessProfile,
 } from './types'
 import type { Balance } from '../commerce-client'
@@ -33,9 +32,7 @@ export interface OverviewDashboardProps {
   onRetry?: () => void
   creditGrants: CreditGrant[]
   creditBalance: number
-  onAddFunds: (amount: number) => Promise<void>
   isAdmin: boolean
-  onGrantCredit?: (email: string, amount: number) => Promise<void>
   userEmail: string
   invoices: Invoice[]
   spendAlerts: SpendAlert[]
@@ -43,7 +40,6 @@ export interface OverviewDashboardProps {
   onUpgrade?: (planId: string) => Promise<void>
   onDowngrade?: (planId: string) => Promise<void>
   onCancel?: (reason: string, feedback?: string) => Promise<void>
-  onApplyDiscount?: (code: string) => Promise<DiscountCode | null>
   businessProfile: BusinessProfile
   onSaveBusinessProfile?: (profile: BusinessProfile) => Promise<void>
   onAddPaymentMethod?: (method: PaymentMethod) => Promise<void>

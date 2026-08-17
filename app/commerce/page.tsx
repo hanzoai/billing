@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { CouponInput } from './components/coupon-input'
 import { ReferralSection } from './components/referral-section'
 import { BillingToggle } from './components/billing-toggle'
 import type { PricingPlan } from './components/plan-card'
@@ -246,9 +245,6 @@ export default async function CommercePage() {
         }}>
           Full-stack AI commerce infrastructure — billing, payments, subscriptions, usage metering, and analytics.
         </p>
-
-        {/* Coupon input (client component) */}
-        <CouponInput />
       </section>
 
       {/* ── Stats row ────────────────────────────────────────────── */}

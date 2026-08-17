@@ -41,14 +41,12 @@ import type {
   TransactionRecord,
   Subscription,
   SubscriptionPlan,
-  DiscountCode,
 } from '@/lib/billing'
 import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
 import { CommerceApiError } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, isSuperAdmin, signOut } from '@/lib/iam-auth'
 import { type BillingOrgConfig, BASE_PATH, SALES_URL } from '@/lib/config'
-import { topupHref } from '@/lib/topup'
 import { getCommerce } from '@/lib/commerce'
 import { selectPlans } from '@/lib/plans'
 
@@ -513,35 +511,6 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
 
   // ── Handlers ──────────────────────────────────────────────────────────
 
-  const handleAddFunds = useCallback(async (amount: number) => {
-    const cents = Math.round(amount * 100)
-    // POST /v1/billing/deposit is mint-gated (platform only). The self-serve
-    // money-in is the Square top-up page — send everyone else there instead
-    // of firing a deposit that 403s.
-    if (!admin) {
-      window.location.href = topupHref(cents)
-      return
-    }
-    const token = getAccessToken()
-    if (!token) return
-    const commerce = getCommerce(org.commerceUrl, token)
-    const userId = user.commerceUserId || user.email || user.sub
-    await commerce.addDeposit({ user: userId, amount: cents, currency: 'usd' })
-    const newBalance = await commerce.getBalance(userId)
-    setBalance(newBalance)
-  }, [org, user, admin])
-
-  const handleGrantCredit = useCallback(async (email: string, amount: number) => {
-    const token = getAccessToken()
-    if (!token) return
-    const commerce = getCommerce(org.commerceUrl, token)
-    await commerce.addDeposit({ user: email, amount: Math.round(amount * 100), currency: 'usd', notes: `Admin credit grant by ${user.email}` })
-    if (email === user.email || email === user.sub) {
-      const newBalance = await commerce.getBalance(email)
-      setBalance(newBalance)
-    }
-  }, [org, user])
-
   const handleUpgrade = useCallback(async (planId: string) => {
     // Paid-tier subscribe is mint-gated server-side (403 for non-platform
     // callers). For overview-originated upgrades, land on the pricing section
@@ -606,28 +575,6 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
     const commerce = getCommerce(org.commerceUrl, token)
     await commerce.cancelSubscription(subscription.id)
     await loadBillingData()
-  }, [subscription.id, org, loadBillingData])
-
-  const handleApplyDiscount = useCallback(async (code: string): Promise<DiscountCode | null> => {
-    const token = getAccessToken()
-    if (!token || !subscription.id) return null
-    const commerce = getCommerce(org.commerceUrl, token)
-    const result = await commerce.applyDiscount(subscription.id, code)
-    if (result) {
-      await loadBillingData()
-      return {
-        id: result.id ?? '',
-        code: result.code ?? code,
-        name: result.name ?? null,
-        kind: result.kind ?? 'percent',
-        value: result.value ?? 0,
-        currency: result.currency ?? null,
-        duration: result.duration ?? null,
-        durationInMonths: result.durationInMonths ?? null,
-        valid: result.valid ?? true,
-      }
-    }
-    return null
   }, [subscription.id, org, loadBillingData])
 
   const handleAddPaymentMethod = useCallback(async (method: PaymentMethod) => {
@@ -947,9 +894,7 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
             onRetry={loadBillingData}
             creditGrants={creditGrants}
             creditBalance={creditBalance}
-            onAddFunds={handleAddFunds}
             isAdmin={admin}
-            onGrantCredit={admin ? handleGrantCredit : undefined}
             userEmail={user.email}
             invoices={invoices}
             spendAlerts={spendAlerts}
@@ -957,7 +902,6 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
-            onApplyDiscount={handleApplyDiscount}
             businessProfile={businessProfile}
             onSaveBusinessProfile={handleSaveBusinessProfile}
             onAddPaymentMethod={handleAddPaymentMethod}
@@ -989,7 +933,6 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
             onUpgrade={handleUpgrade}
             onDowngrade={handleDowngrade}
             onCancel={handleCancel}
-            onApplyDiscount={handleApplyDiscount}
             onSubscribeWithCard={handleSubscribeWithCard}
             savedCards={savedCards}
             chosen={chosen}
