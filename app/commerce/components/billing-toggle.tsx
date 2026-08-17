@@ -8,7 +8,16 @@ interface BillingToggleProps {
 }
 
 export function BillingToggle({ plans }: BillingToggleProps) {
-  const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly')
+  // ANNUAL first. It is the cheaper of the two and the one most buyers take, so
+  // it is the price the page should be answering "what does this cost?" with —
+  // Team reads $20 per user rather than $25, and the monthly rate is one click
+  // away for anyone who wants it.
+  //
+  // The same choice hanzo.ai's team strip already made, for the same reason
+  // stated there: annual is the headline, month-to-month is the note under it.
+  // Two surfaces quoting the same plan at two different numbers is the thing
+  // worth avoiding.
+  const [interval, setInterval] = useState<'monthly' | 'annual'>('annual')
 
   return (
     <>

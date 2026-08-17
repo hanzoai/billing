@@ -121,34 +121,60 @@ export default async function CommercePage() {
   const plans = await getPlans()
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)', display: 'flex' }}>
 
-      {/* ── Nav bar ──────────────────────────────────────────────── */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '56px',
-        padding: '0 24px',
-        borderBottom: '1px solid color-mix(in oklab, var(--color-text) 7%, transparent)',
-        background: 'rgba(9,9,11,0.9)',
-        backdropFilter: 'blur(16px)',
-      }}>
-        <a href="https://hanzo.ai" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+      {/* ── The rail ─────────────────────────────────────────────────
+          A COLUMN on the left, the arrangement hanzo.app and hanzo.chat
+          already use, rather than a bar across the top.
+
+          This is an account surface — you come here to do a thing to your
+          own billing and then leave — and a horizontal bar spends the one
+          dimension a page has least of on four links that never change,
+          while pushing the thing you came for down. A rail spends the
+          dimension there is plenty of, and it is where every other Hanzo
+          app of this kind puts its navigation, so moving between them
+          costs no relearning.
+
+          It hides below `md`: 240px of chrome on a 390px phone is most of
+          the screen. There the links fall to the footer, which already
+          carries them. */}
+      <aside
+        className="hz-rail"
+        style={{
+          position: 'sticky',
+          top: 0,
+          alignSelf: 'flex-start',
+          height: '100vh',
+          width: '240px',
+          flexShrink: 0,
+          // `display` is NOT here. It is the one property the media query below
+          // has to change, and an inline declaration is the wrong place to state
+          // something a stylesheet must be able to answer — fighting that with
+          // `!important` would leave two homes for one property. `.hz-rail` owns
+          // it: flex on a desktop, none on a phone, decided once.
+          flexDirection: 'column',
+          gap: '4px',
+          padding: '20px 12px',
+          borderRight: '1px solid color-mix(in oklab, var(--color-text) 7%, transparent)',
+          background: 'rgba(9,9,11,0.9)',
+          backdropFilter: 'blur(16px)',
+        }}
+      >
+        <a href="https://hanzo.ai" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', padding: '4px 8px', marginBottom: '16px' }}>
           <HMark />
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', letterSpacing: '-0.01em' }}>Hanzo</span>
+          {/* The company's name. A bare "Hanzo" is the one spelling that is
+              nobody's in particular, and the rest of the estate says Hanzo AI. */}
+          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', letterSpacing: '-0.01em' }}>Hanzo AI</span>
         </a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {[
             { label: 'Docs', href: 'https://docs.hanzo.ai' },
             { label: 'Chat', href: 'https://hanzo.chat' },
             { label: 'Console', href: 'https://console.hanzo.ai' },
           ].map((link) => (
             <a key={link.label} href={link.href} style={{
-              padding: '6px 12px',
+              display: 'block',
+              padding: '8px 12px',
               fontSize: '13px',
               fontWeight: 500,
               color: 'color-mix(in oklab, var(--color-text) 40%, transparent)',
@@ -173,7 +199,10 @@ export default async function CommercePage() {
             Sign in
           </a>
         </div>
-      </header>
+      </aside>
+
+      {/* The page itself, beside the rail. */}
+      <div style={{ flex: 1, minWidth: 0 }}>
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section style={{ textAlign: 'center', padding: '80px 24px 56px' }}>
@@ -359,6 +388,7 @@ export default async function CommercePage() {
           ))}
         </div>
       </footer>
+      </div>
     </div>
   )
 }

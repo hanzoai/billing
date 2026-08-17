@@ -2013,3 +2013,11 @@ html.transitioning *::after {
     display: flex;
   }
 }
+
+/* The rail is desktop chrome. 240px of navigation on a 390px phone is most of
+   the screen, and every link it carries is already in the footer — so below
+   `md` the page is the page and nothing else. */
+.hz-rail { display: flex; }
+@media (max-width: 767px) {
+  .hz-rail { display: none; }
+}

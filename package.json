@@ -17,7 +17,7 @@
     "@hanzo/event": "^0.3.22",
     "@hanzo/gui": "^8.1.1",
     "@hanzo/ui": "^8.0.72",
-    "@hanzogui/shell": "^8.1.5",
+    "@hanzogui/shell": "8.1.44",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.94.5",
     "next": "^16.2.1",
