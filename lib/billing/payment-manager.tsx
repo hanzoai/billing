@@ -10,6 +10,9 @@ import { ErrorBoundary } from '../components/error-boundary'
 import { useWalletReady } from '../wallet-ready'
 
 export interface PaymentMethodManagerProps {
+  /** Why the saved methods could not be read. Distinct from holding none. */
+  error?: string | null
+  onRetry?: () => void
   paymentMethods?: PaymentMethod[]
   initialMethods?: PaymentMethod[]
   onAdd?: (method: PaymentMethod) => Promise<void>
@@ -117,6 +120,8 @@ type AddMethodTab = 'card' | 'crypto' | 'wire'
 
 export function PaymentMethodManager(props: PaymentMethodManagerProps) {
   const {
+    error = null,
+    onRetry,
     paymentMethods,
     initialMethods,
     onAdd,
@@ -134,7 +139,10 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
   const [showForm, setShowForm] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<AddMethodTab>('card')
   const [status, setStatus] = React.useState<string | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
+  // Why a SAVE failed. The `error` prop is why the READ failed; a panel that
+  // shared one slot for both would blame the customer's last click for an
+  // outage that happened before they touched anything.
+  const [saveError, setSaveError] = React.useState<string | null>(null)
 
   // Crypto payments render wagmi hooks + RainbowKit's ConnectButton, which MUST
   // sit inside the mounted WagmiProvider/RainbowKitProvider. `useWalletReady()`
@@ -159,11 +167,11 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
       setMethods(prev => [...prev, method])
       onMethodAdded?.(method)
       setShowForm(false)
-      setError(null)
+      setSaveError(null)
       setStatus('Payment method added')
       setTimeout(() => setStatus(null), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add payment method')
+      setSaveError(err instanceof Error ? err.message : 'Failed to add payment method')
     }
   }, [onAdd, onMethodAdded])
 
@@ -200,7 +208,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
           </div>
           <button
             type="button"
-            onClick={() => { setShowForm(v => !v); setError(null) }}
+            onClick={() => { setShowForm(v => !v); setSaveError(null) }}
             className="rounded-lg bg-text px-3 py-2 text-sm font-medium text-bg transition hover:opacity-80"
           >
             {showForm ? 'Cancel' : 'Add method'}
@@ -220,7 +228,7 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => { setActiveTab(id); setError(null) }}
+                  onClick={() => { setActiveTab(id); setSaveError(null) }}
                   className={`${TAB_CLASS} ${activeTab === id ? TAB_ACTIVE : TAB_INACTIVE}`}
                 >
                   {label}
@@ -258,12 +266,12 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
                   </div>
                 )}
               >
-                <CryptoForm onAdd={addMethod} setError={setError} />
+                <CryptoForm onAdd={addMethod} setError={setSaveError} />
               </ErrorBoundary>
             )}
             {activeTab === 'wire' && <WireForm onAdd={addMethod} />}
 
-            {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+            {saveError && <p className="mt-3 text-sm text-danger">{saveError}</p>}
           </div>
         )}
 
@@ -276,7 +284,21 @@ export function PaymentMethodManager(props: PaymentMethodManagerProps) {
 
         {/* Method list */}
         <div className="divide-y divide-border">
-          {methods.length === 0 ? (
+          {error ? (
+            /* An unread list is not an empty one. "No payment methods on file"
+               is what onboarding acts on, so saying it here walls a customer
+               who has a card — behind a wall they cannot clear by adding a
+               second one. */
+            <div className="p-6 text-sm">
+              <p className="text-danger">Couldn&apos;t load your payment methods.</p>
+              <p className="mt-1 text-text-muted">{error}</p>
+              {onRetry && (
+                <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-ink/[0.14] px-4 py-1.5 text-text hover:bg-bg-elevated">
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : methods.length === 0 ? (
             <div className="p-6 text-sm text-text-muted">No payment methods on file.</div>
           ) : (
             methods.map(method => {

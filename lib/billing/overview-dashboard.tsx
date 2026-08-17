@@ -26,6 +26,11 @@ export interface OverviewDashboardProps {
   /** Why usage could not be read. Distinct from having none. */
   usageError?: string | null
   balance: Balance | null
+  /** Why the balance could not be read. Distinct from a balance of zero. */
+  balanceError?: string | null
+  /** Why the saved methods could not be read. Distinct from holding none. */
+  paymentError?: string | null
+  onRetry?: () => void
   creditGrants: CreditGrant[]
   creditBalance: number
   onAddFunds: (amount: number) => Promise<void>
@@ -116,7 +121,19 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   const currency = props.usage?.currency ?? 'usd'
   const periodEnd = props.subscription.currentPeriodEnd
   const daysLeft = daysUntil(periodEnd)
+  // Only a READ balance is a number. Unread, it is our unknown — never the
+  // customer's zero — so every figure below it renders as an em dash and the
+  // "you have $0" banner does not fire at all.
+  const balanceKnown = !props.balanceError && props.balance != null
   const totalCreditsRemaining = (props.balance?.available ?? 0) / 100
+
+  // Every read this page summarises but does not own a section for. Each states
+  // its own reason once, together, rather than leaving the tiles to show a dash
+  // with no account of why.
+  const unread: Array<[string, string]> = [
+    ...(props.balanceError ? [['balance', props.balanceError] as [string, string]] : []),
+    ...(props.paymentError ? [['payment methods', props.paymentError] as [string, string]] : []),
+  ]
   const defaultPm = props.paymentMethods.find(m => m.is_default || m.isDefault) ?? props.paymentMethods[0]
   const hasActivePlan = !!props.subscription.id && props.subscription.status === 'active'
 
@@ -151,8 +168,33 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   return (
     <div className="space-y-5">
 
+      {/* ── What we could not read ── */}
+      {unread.length > 0 && (
+        <FadeIn delay={0}>
+          <div className="rounded-2xl border border-red-500/25 bg-red-500/[0.06] p-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-red-400">
+                Couldn&apos;t load your {unread.map(([what]) => what).join(' or ')}
+              </p>
+              {unread.map(([what, reason]) => (
+                <p key={what} className="text-[13px] text-ink/50 mt-1">{reason}</p>
+              ))}
+            </div>
+            {props.onRetry && (
+              <button
+                type="button"
+                onClick={props.onRetry}
+                className="rounded-full border border-ink/[0.14] px-5 py-2 text-sm font-semibold text-text transition hover:bg-bg-elevated active:scale-[0.97] flex-shrink-0"
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        </FadeIn>
+      )}
+
       {/* ── Add funds banner ── */}
-      {totalCreditsRemaining <= 0 && (
+      {balanceKnown && totalCreditsRemaining <= 0 && (
         <FadeIn delay={0}>
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5 flex items-center justify-between gap-4">
             <div>
@@ -299,7 +341,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               <div className="text-right">
                 <p className="text-[11px] text-ink/30 mb-1">{mtdSpend > 0 ? 'API spend' : 'Credits available'}</p>
                 <p className="text-xl font-semibold text-text mono">
-                  {mtdSpend > 0 ? money(mtdSpend, currency) : totalCreditsRemaining > 0 ? money(totalCreditsRemaining, currency) : money(0, currency)}
+                  {mtdSpend > 0 ? money(mtdSpend, currency) : balanceKnown ? money(totalCreditsRemaining, currency) : '—'}
                 </p>
                 <p className="text-[12px] text-ink/30 mt-1">
                   {props.subscription.id ? `${daysLeft}d until renewal` : 'prepaid — no renewal'}
@@ -340,8 +382,8 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 className="rounded-xl border border-ink/[0.06] bg-ink/[0.02] p-3 text-left transition-all hover:border-ink/[0.12] hover:bg-ink/[0.04]"
               >
                 <p className="text-[11px] text-ink/30 mb-1">Credits left</p>
-                <p className={`text-base font-semibold tnum ${totalCreditsRemaining <= 0 ? 'text-amber-400' : 'text-text'}`}>
-                  {money(totalCreditsRemaining)}
+                <p className={`text-base font-semibold tnum ${balanceKnown && totalCreditsRemaining <= 0 ? 'text-amber-400' : 'text-text'}`}>
+                  {balanceKnown ? money(totalCreditsRemaining) : '—'}
                 </p>
               </button>
             </div>
@@ -370,7 +412,8 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 </svg>
               </div>
             </div>
-            <p className="text-2xl font-bold text-text mono">{money(totalCreditsRemaining)}</p>
+            <p className="text-2xl font-bold text-text mono">{balanceKnown ? money(totalCreditsRemaining) : '—'}</p>
+            {!balanceKnown && <p className="text-[11px] text-red-400 mt-1">Balance unavailable</p>}
             <p className="text-[11px] text-ink/30 mt-3 mb-2">Add credit</p>
             <div className="flex flex-wrap gap-1.5">
               {TOPUP_AMOUNTS.map((c) => (
@@ -422,8 +465,13 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
             <p className="text-2xl font-bold text-text">
               {defaultPm?.card ? `•••• ${defaultPm.card.last4}` : defaultPm ? defaultPm.type : '—'}
             </p>
+            {/* "Add a payment method" is what a customer with a card on file
+                acts on when we could not read it — the same false claim the
+                onboarding card is built from, one tile smaller. */}
             <p className="text-[13px] text-ink/35 mt-1.5 group-hover:text-ink/50 transition-colors">
-              {defaultPm?.card ? defaultPm.card.brand : defaultPm ? 'Active' : 'Add a payment method'}
+              {props.paymentError
+                ? 'Unavailable'
+                : defaultPm?.card ? defaultPm.card.brand : defaultPm ? 'Active' : 'Add a payment method'}
             </p>
           </button>
         </div>

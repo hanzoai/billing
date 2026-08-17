@@ -7,6 +7,9 @@ import { money } from '@/lib/money'
 
 export interface SpendAlertsPanelProps {
   alerts: SpendAlert[]
+  /** Why the alerts could not be read. Distinct from having none configured. */
+  error?: string | null
+  onRetry?: () => void
   onCreateAlert?: (title: string, threshold: number) => Promise<void>
   onUpdateAlert?: (id: string, title: string, threshold: number) => Promise<void>
   onDeleteAlert?: (id: string) => Promise<void>
@@ -23,7 +26,7 @@ function formatDate(dateStr: string) {
 }
 
 export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
-  const { alerts, onCreateAlert, onUpdateAlert, onDeleteAlert } = props
+  const { alerts, error = null, onRetry, onCreateAlert, onUpdateAlert, onDeleteAlert } = props
 
   const [showForm, setShowForm] = React.useState(false)
   const [editingId, setEditingId] = React.useState<string | null>(null)
@@ -31,7 +34,8 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
   const [threshold, setThreshold] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [busyDeleteId, setBusyDeleteId] = React.useState<string | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
+  // Why a SAVE failed. The `error` prop is why the READ failed.
+  const [saveError, setSaveError] = React.useState<string | null>(null)
 
   const canSubmit = title.trim().length > 0 && parseFloat(threshold) > 0
 
@@ -40,18 +44,18 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
     setThreshold('')
     setEditingId(null)
     setShowForm(false)
-    setError(null)
+    setSaveError(null)
   }, [])
 
   const handleCreate = React.useCallback(async () => {
     if (!canSubmit || !onCreateAlert) return
     setBusy(true)
-    setError(null)
+    setSaveError(null)
     try {
       await onCreateAlert(title.trim(), parseFloat(threshold))
       resetForm()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create alert')
+      setSaveError(err instanceof Error ? err.message : 'Failed to create alert')
     } finally {
       setBusy(false)
     }
@@ -60,12 +64,12 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
   const handleUpdate = React.useCallback(async () => {
     if (!canSubmit || !editingId || !onUpdateAlert) return
     setBusy(true)
-    setError(null)
+    setSaveError(null)
     try {
       await onUpdateAlert(editingId, title.trim(), parseFloat(threshold))
       resetForm()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update alert')
+      setSaveError(err instanceof Error ? err.message : 'Failed to update alert')
     } finally {
       setBusy(false)
     }
@@ -86,7 +90,7 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
     setTitle(alert.title)
     setThreshold(String(alert.threshold))
     setShowForm(true)
-    setError(null)
+    setSaveError(null)
   }, [])
 
   return (
@@ -146,12 +150,25 @@ export function SpendAlertsPanel(props: SpendAlertsPanelProps) {
                 </button>
               </div>
             </div>
-            {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+            {saveError && <p className="mt-2 text-sm text-danger">{saveError}</p>}
           </div>
         )}
 
         <div className="divide-y divide-border">
-          {alerts.length === 0 ? (
+          {error ? (
+            /* An unread list is not an empty one. "No spend alerts configured"
+               reads as an all-clear — the customer believes nothing is watching
+               their spend, when in fact we could not look. */
+            <div className="p-6 text-sm">
+              <p className="text-danger">Couldn&apos;t load your spend alerts.</p>
+              <p className="mt-1 text-text-muted">{error}</p>
+              {onRetry && (
+                <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-ink/[0.14] px-4 py-1.5 text-text hover:bg-bg-elevated">
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : alerts.length === 0 ? (
             <div className="p-6 text-sm text-text-muted">No spend alerts configured.</div>
           ) : (
             alerts.map((alert) => {

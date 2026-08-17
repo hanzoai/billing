@@ -7,6 +7,9 @@ import { money } from '@/lib/money'
 
 export interface InvoicesPaymentsProps {
   invoices: Invoice[]
+  /** Why the invoices could not be read. Distinct from having none. */
+  error?: string | null
+  onRetry?: () => void
   onDownloadInvoice?: (invoice: Invoice) => Promise<void>
 }
 
@@ -36,7 +39,7 @@ function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 
 export function InvoicesPayments(props: InvoicesPaymentsProps) {
   const [page, setPage] = useState(0)
-  const { invoices } = props
+  const { invoices, error = null, onRetry } = props
   const totalPages = Math.ceil(invoices.length / PAGE_SIZE)
   const pageInvoices = invoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
@@ -47,7 +50,20 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
           <h3 className="text-[15px] font-semibold text-text">All invoices</h3>
         </div>
         <div className="border-t border-ink/[0.06]">
-          {invoices.length === 0 ? (
+          {error ? (
+            /* An unread history is not an empty one. "No invoices yet" tells a
+               customer nothing was ever billed to them, which is a statement
+               about their money we have no reading to support. */
+            <div className="py-20 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm font-medium text-danger">Couldn&apos;t load your invoices.</p>
+              <p className="text-[13px] text-ink/40">{error}</p>
+              {onRetry && (
+                <button type="button" onClick={onRetry} className="mt-1 rounded-full border border-ink/[0.14] px-4 py-1.5 text-[13px] text-text hover:bg-bg-elevated">
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : invoices.length === 0 ? (
             <div className="py-20 flex flex-col items-center justify-center gap-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-ink/[0.08] bg-ink/[0.03] text-ink/20">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

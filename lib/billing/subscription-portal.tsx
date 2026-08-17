@@ -12,9 +12,14 @@ import type {
 
 export interface SubscriptionPortalProps {
   subscription: Subscription
+  /** Why the subscription could not be read. Distinct from holding none. */
+  subscriptionError?: string | null
   availablePlans: SubscriptionPlan[]
   /** Plans are still loading from the catalog — render a skeleton grid */
   plansLoading?: boolean
+  /** Why the catalog could not be read. Distinct from a catalog with no rows. */
+  plansError?: string | null
+  onRetry?: () => void
   /**
    * Caller may create paid-tier subscriptions directly (platform admin) via the
    * mint-gated POST /v1/billing/subscriptions. When false, paid plans run the
@@ -117,8 +122,11 @@ const statusTone: Record<
 export function SubscriptionPortal(props: SubscriptionPortalProps) {
   const {
     subscription,
+    subscriptionError = null,
     availablePlans,
     plansLoading = false,
+    plansError = null,
+    onRetry,
     canDirectSubscribe = false,
     usageMetrics = [],
     retentionOffers = [],
@@ -462,27 +470,48 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
 
       {view === 'overview' && (
         <div className="grid gap-4 md:grid-cols-3">
+          {/* An unread subscription is not an absent one. "No subscription" and
+              a $0 spend are both claims about what this customer bought, and a
+              failed read knows neither — so the three tiles state the reason
+              once and print nothing that could be mistaken for a fact. */}
+          {subscriptionError && (
+            <div className="md:col-span-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] p-4">
+              <p className="text-sm text-red-400">Couldn&apos;t load your subscription.</p>
+              <p className="mt-1 text-sm text-text-muted">{subscriptionError}</p>
+              {onRetry && (
+                <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-ink/[0.14] px-4 py-1.5 text-sm text-text hover:bg-bg-elevated">
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Current spend</p>
             <p className="mt-2 text-2xl font-semibold text-text">
-              <span className="mono">{money(currentPlan?.price ?? 0, 'USD', 0)}</span>
-              <span className="text-sm font-normal text-text-muted">/{currentPlan?.billingPeriod ?? 'monthly'}</span>
+              {subscriptionError ? <span className="mono">—</span> : (
+                <>
+                  <span className="mono">{money(currentPlan?.price ?? 0, 'USD', 0)}</span>
+                  <span className="text-sm font-normal text-text-muted">/{currentPlan?.billingPeriod ?? 'monthly'}</span>
+                </>
+              )}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Next invoice</p>
             <p className="mt-2 text-lg font-semibold text-text">
-              {subscription.id ? formatDate(subscription.currentPeriodEnd) : '—'}
+              {!subscriptionError && subscription.id ? formatDate(subscription.currentPeriodEnd) : '—'}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-text-muted">Status</p>
             <p className="mt-2 text-lg font-semibold text-text">
-              {subscription.cancelAtPeriodEnd
-                ? 'Cancels at period end'
-                : subscription.id
-                  ? 'Auto-renewing'
-                  : 'No subscription'}
+              {subscriptionError
+                ? 'Unknown'
+                : subscription.cancelAtPeriodEnd
+                  ? 'Cancels at period end'
+                  : subscription.id
+                    ? 'Auto-renewing'
+                    : 'No subscription'}
             </p>
           </div>
 
@@ -641,6 +670,14 @@ export function SubscriptionPortal(props: SubscriptionPortalProps) {
       {view === 'plans' && !plansLoading && availablePlans.length === 0 && (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-6 text-sm text-red-400">
           Could not load the plan catalog. Retry, or reach us at billing@hanzo.ai.
+          {/* The catalog read knows WHY it failed; the grid used to say only
+              that it had. */}
+          {plansError && <span className="mt-1 block text-text-muted">{plansError}</span>}
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="mt-3 block rounded-full border border-ink/[0.14] px-4 py-1.5 text-text hover:bg-bg-elevated">
+              Try again
+            </button>
+          )}
         </div>
       )}
 

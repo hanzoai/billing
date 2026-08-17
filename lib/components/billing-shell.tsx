@@ -44,6 +44,7 @@ import type {
   DiscountCode,
 } from '@/lib/billing'
 import type { Balance, CardInput, CommerceBillingAccount, CommerceBillingAccountMember, CommerceInvoice, CommercePaymentMethod, CommerceSpendAlert, CommerceCreditGrant, Transaction, Plan, Subscription as CommerceSubscription } from '@/lib/commerce-client'
+import { CommerceApiError } from '@/lib/commerce-client'
 import type { IamUser } from '@/lib/iam-auth'
 import { getAccessToken, isSuperAdmin, signOut } from '@/lib/iam-auth'
 import { type BillingOrgConfig, BASE_PATH, SALES_URL } from '@/lib/config'
@@ -322,10 +323,23 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
       ])
 
       const failed: Record<string, string> = {}
-      const why = (r: PromiseSettledResult<unknown>) =>
-        r.status === 'rejected'
-          ? (r.reason instanceof Error ? r.reason.message : String(r.reason))
-          : ''
+      // A refused read and an unreadable one are different sentences, and the
+      // client already knows which it has: CommerceApiError carries the HTTP
+      // status. Reading only .message renders an expired session as whatever
+      // the gateway put in the body — "Bad Gateway" for a customer whose only
+      // problem is a stale token, and no hint that signing in again fixes it.
+      const why = (r: PromiseSettledResult<unknown>) => {
+        if (r.status !== 'rejected') return ''
+        const e: unknown = r.reason
+        if (e instanceof CommerceApiError) {
+          return e.status === 401 || e.status === 403
+            ? 'Your session expired. Sign in again to see this.'
+            : `Billing couldn't answer (${e.status}). ${e.message}`.trim()
+        }
+        // No status at all: the request never got an answer — timeout, abort,
+        // DNS. That is ours to say plainly rather than dress as a refusal.
+        return e instanceof Error ? e.message : String(e)
+      }
       for (const [panel, result] of [
         ['balance', bal], ['plans', planList], ['subscriptions', subs],
         ['invoices', invList], ['payment', pmList], ['alerts', alertList],
@@ -855,7 +869,12 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
   // where "paying is not optional" genuinely applies. There is still no
   // dismiss, and every other section stays reachable from the sidebar.
   const funded = (balance?.available ?? 0) > 0 || creditBalance > 0
-  const setupIncomplete = !funded && (paymentMethods.length === 0 || !subscription.id)
+  // Setup is incomplete only when we READ that it is. The card list and the
+  // subscription are the two facts the wall is built on, and a failed read
+  // leaves both looking empty — which put a paying customer behind onboarding
+  // for an outage, with nothing they could do to clear it.
+  const setupUnread = !!(loadErrors.payment || loadErrors.subscriptions || loadErrors.balance || loadErrors.creditBalance)
+  const setupIncomplete = !funded && !setupUnread && (paymentMethods.length === 0 || !subscription.id)
 
   if (loading) {
     return (
@@ -920,6 +939,9 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
             usageLoading={usageLoading}
             usageError={usageError}
             balance={balance}
+            balanceError={loadErrors.balance ?? null}
+            paymentError={loadErrors.payment ?? null}
+            onRetry={loadBillingData}
             creditGrants={creditGrants}
             creditBalance={creditBalance}
             onAddFunds={handleAddFunds}
@@ -948,13 +970,16 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
           </div>
         )
       case 'invoices':
-        return <InvoicesPayments invoices={invoices} onDownloadInvoice={handleDownloadInvoice} />
+        return <InvoicesPayments invoices={invoices} error={loadErrors.invoices ?? null} onRetry={loadBillingData} onDownloadInvoice={handleDownloadInvoice} />
       case 'pricing':
         return (
           <SubscriptionPortal
             subscription={subscription}
+            subscriptionError={loadErrors.subscriptions ?? null}
             availablePlans={plans}
             plansLoading={plansLoading}
+            plansError={loadErrors.plans ?? null}
+            onRetry={loadBillingData}
             canDirectSubscribe={admin}
             defaultView="plans"
             checkoutUrl={org.payUrl}
@@ -973,6 +998,8 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
             creditGrants={creditGrants}
             creditBalance={creditBalance}
             error={loadErrors.credits ?? null}
+            balanceError={loadErrors.creditBalance ?? null}
+            onRetry={loadBillingData}
           />
         )
       case 'transactions':
@@ -981,6 +1008,8 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
         return (
           <SpendAlertsPanel
             alerts={spendAlerts}
+            error={loadErrors.alerts ?? null}
+            onRetry={loadBillingData}
             onCreateAlert={handleCreateSpendAlert}
             onUpdateAlert={handleUpdateSpendAlert}
             onDeleteAlert={handleDeleteSpendAlert}
@@ -989,6 +1018,8 @@ export function BillingShell({ org, user, chosen }: BillingShellProps) {
       case 'payment':
         return (
           <PaymentMethodManager
+            error={loadErrors.payment ?? null}
+            onRetry={loadBillingData}
             paymentMethods={paymentMethods as any}
             onAdd={handleAddPaymentMethod}
             onRemove={handleRemovePaymentMethod}

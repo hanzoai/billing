@@ -7,6 +7,9 @@ import { TOPUP_AMOUNTS, topupHref } from '@/lib/topup'
 export interface CreditsPanelProps {
   /** Why the grants could not be read. Distinct from holding none. */
   error?: string | null
+  /** Why the credit balance could not be read. Distinct from a zero balance. */
+  balanceError?: string | null
+  onRetry?: () => void
   creditGrants: CreditGrant[]
   creditBalance?: number
 }
@@ -29,7 +32,7 @@ function formatDate(dateStr: string) {
   }).format(new Date(dateStr))
 }
 
-export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: CreditsPanelProps) {
+export function CreditsPanel({ creditGrants, creditBalance = 0, error = null, balanceError = null, onRetry }: CreditsPanelProps) {
   const activeGrants = creditGrants.filter((g) => g.active && !g.voided)
   const expiredGrants = creditGrants.filter((g) => !g.active || g.voided)
 
@@ -47,9 +50,12 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: 
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
               Total credit balance
             </p>
+            {/* A balance we could not read is our unknown, not the customer's
+                zero — and a zero printed here is a figure they will act on. */}
             <p className="mono mt-1 text-3xl font-bold text-text">
-              {moneyFromCents(creditBalance)}
+              {balanceError ? '—' : moneyFromCents(creditBalance)}
             </p>
+            {balanceError && <p className="mt-1 text-sm text-danger">{balanceError}</p>}
           </div>
           {/* The standing money-in. This section only DISPLAYS grants; without
               this door the whole product had no reachable way to add funds.
@@ -160,6 +166,11 @@ export function CreditsPanel({ creditGrants, creditBalance = 0, error = null }: 
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-danger">Couldn&apos;t load your credit grants.</p>
           <p className="mt-1 text-sm text-text-muted">{error}</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-ink/[0.14] px-4 py-1.5 text-sm text-text hover:bg-bg-elevated">
+              Try again
+            </button>
+          )}
         </div>
       ) : creditGrants.length === 0 && (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
