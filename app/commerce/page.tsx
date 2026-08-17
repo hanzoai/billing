@@ -15,69 +15,70 @@ export const metadata: Metadata = {
   },
 }
 
-// Skeleton fallback when the pricing service is unreachable at build time —
-// aligned with the canonical @hanzo/plans/subscription.json tiers.
+// The paint before the catalog answers. Every row here is a copy of a row the
+// catalog owns, so it is generated from the catalog rather than written: read
+// api.hanzo.ai/v1/pricing/subscriptions and paste what it returns.
 const FALLBACK_PLANS: PricingPlan[] = [
   {
-    id: 'developer',
-    name: 'Developer',
-    description: 'Explore the API. No monthly fee — usage is billed to your card.',
+    id: "free",
+    name: "Free",
+    description: "An account and the free models, bounded by a daily allowance.",
     priceMonthly: 0,
     priceAnnual: 0,
-    features: ['60 requests/min', '100K tokens/min', 'Community support', 'API access', 'Earn up to 20% on idle compute & LLM resale'],
+    features: ["The free models — 20 messages a day, resetting at midnight UTC", "60 requests a minute", "Add credit at any time to reach the paid models"],
     payouts: { idleResalePercent: 20 },
   },
   {
-    id: 'pro',
-    name: 'Pro',
-    description: 'For developers shipping real products. One $20 subscription with unified AI usage across hanzo.ai, hanzo.app, and hanzo.team.',
-    priceMonthly: 20,
-    priceAnnual: 16,
+    id: "go",
+    name: "Go",
+    description: "Omnichannel agent hosting and the Hanzo desktop app, for builders getting started.",
+    priceMonthly: 8,
+    priceAnnual: 7,
+    features: ["Hanzo Bot Gateway — host local agents across WhatsApp, Telegram, Discord and Slack", "Hanzo Chat & UI — desktop app layout with instant global model context"],
+    payouts: { idleResalePercent: 20 },
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    description: "Multi-agent orchestration, background review, and maximum reasoning depth.",
+    priceMonthly: 19,
+    priceAnnual: 16.5,
     popular: true,
-    features: ['$20/mo included usage', 'hanzo.team access — invite up to 3 guests', '500 requests/min', '1M tokens/min', 'Priority inference', 'Earn up to 20% on idle compute & LLM resale'],
+    features: ["Auto Drive orchestration — multi-agent teams executing repo milestones (/plan, /code, /solve)", "Auto Review — background watcher running changes in hidden git worktrees to suggest fixes silently", "High and XHigh reasoning dials — maximum context processing depth", "Headless browser CDP — the agent tests and screenshots its own front-end work"],
     payouts: { idleResalePercent: 20 },
   },
   {
-    id: 'plus',
-    name: 'Plus',
-    description: '5x Pro for power users. Max-tier models and priority support.',
-    priceMonthly: 100,
-    priceAnnual: 80,
-    features: ['Everything in Pro, 5x the usage', '$100/mo included usage', 'hanzo.team access — invite up to 3 guests', '2500 requests/min', '5M tokens/min', 'Max-tier model access', 'Priority support'],
+    id: "max",
+    name: "Max",
+    description: "Enso orchestration, unlimited managed agents, and shared team workspaces.",
+    priceMonthly: 99,
+    priceAnnual: 83.25,
+    features: ["Enso orchestration — dedicated routing through Hanzo's foundational framework model", "Unlimited managed agents — continuous background scheduling to unified team dashboards", "Shared team workspaces — RBAC, KMS-backed credentials, centralized billing", "Priority GPU inference queues"],
     payouts: { idleResalePercent: 20 },
   },
   {
-    id: 'max',
-    name: 'Max',
-    description: 'Maximum AI power for individuals. 20x Pro usage and unlimited premium models.',
-    priceMonthly: 200,
-    priceAnnual: 160,
-    features: ['Everything in Plus', 'Unlimited premium model access', 'hanzo.team access — invite up to 3 guests', '5000 requests/min', '10M tokens/min', '$100/mo cloud credits included', 'Dedicated support channel'],
-    payouts: { idleResalePercent: 20 },
-  },
-  {
-    id: 'team',
-    name: 'Team',
-    description: 'hanzo.team for your whole org. $25 per user, minimum 2 seats.',
+    id: "team",
+    name: "Team",
+    description: "For teams building together. Org workspaces, SSO via Hanzo IAM, and one unified bill.",
     priceMonthly: 25,
     priceAnnual: 20,
-    features: ['$25/user/mo — minimum 2 seats', 'SSO / SAML + IAM team management', 'Shared billing + usage analytics', 'Audit log + enterprise-grade security', 'Up to 100 members', 'Priority support'],
+    features: ["$25 per user per month, or $20 billed annually — minimum 2 seats", "Org workspaces with shared history and projects", "SSO via Hanzo IAM", "One unified bill for everyone", "Centralized, KMS-backed credentials"],
     payouts: { idleResalePercent: 20 },
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
-    description: 'Full-scale AI infrastructure. Dedicated support, SLA, and on-prem deployment.',
-    priceMonthly: 9999,
-    priceAnnual: 7999,
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Dedicated capacity, on-prem or air-gapped deployment, custom SLAs and model hosting.",
+    priceMonthly: null,
     contactSales: true,
-    features: ['Unlimited members', 'Multi-region redundancy with automated failover', 'Dedicated account manager', 'Custom rate limits', 'On-premise deployment', 'SOC 2 Type II controls'],
+    features: ["Dedicated compute cluster", "On-premise or air-gapped deployment", "Custom SLA up to 99.999%", "Custom model training and hosting", "SOC 2 support and compliance review", "White-glove onboarding and 24/7 engineering support"],
+    payouts: { idleResalePercent: 20 },
   },
 ]
 
 async function getPlans(): Promise<PricingPlan[]> {
   try {
-    const res = await fetch('https://pricing.hanzo.ai/v1/pricing/subscriptions', {
+    const res = await fetch('https://api.hanzo.ai/v1/pricing/subscriptions', {
       next: { revalidate: 3600 },
     })
     if (!res.ok) return FALLBACK_PLANS
