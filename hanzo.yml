@@ -1,6 +1,6 @@
 # CI/CD for hanzoai/billing — billing.hanzo.ai.
 #
-# This file IS the opt-in. A push to git.hanzo.ai fires ONE forge-wide system
+# This file IS the opt-in. A push to git.hanzo.ai fires ONE Hanzo Git-wide system
 # webhook at platform.hanzo.ai, which reads this document at the pushed sha and
 # schedules a BuildKit job per declared image. A repo WITHOUT a hanzo.yml is
 # accepted and builds nothing — the delivery is green, the log says "202
