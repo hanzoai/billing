@@ -53,7 +53,7 @@ const hanzo: BillingOrgConfig = {
   displayName: 'Hanzo',
   iamServerUrl: 'https://hanzo.id',
   iamClientId: 'hanzo-billing',
-  commerceUrl: 'https://commerce-api.hanzo.ai',
+  commerceUrl: 'https://api.hanzo.ai',
   payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/hanzo.svg',
   theme: {
@@ -67,7 +67,7 @@ const lux: BillingOrgConfig = {
   displayName: 'Lux',
   iamServerUrl: 'https://lux.id',
   iamClientId: 'lux-billing',
-  commerceUrl: 'https://commerce-api.hanzo.ai',
+  commerceUrl: 'https://api.hanzo.ai',
   payUrl: 'https://pay.lux.cloud',
   logo: '/logos/lux.svg',
   theme: {
@@ -81,7 +81,7 @@ const zoo: BillingOrgConfig = {
   displayName: 'Zoo',
   iamServerUrl: 'https://zoolabs.id',
   iamClientId: 'zoo-billing',
-  commerceUrl: 'https://commerce-api.hanzo.ai',
+  commerceUrl: 'https://api.hanzo.ai',
   payUrl: 'https://pay.zoo.cloud',
   logo: '/logos/zoo.svg',
   theme: {
@@ -95,7 +95,7 @@ const pars: BillingOrgConfig = {
   displayName: 'Pars',
   iamServerUrl: 'https://pars.id',
   iamClientId: 'pars-billing',
-  commerceUrl: 'https://commerce-api.hanzo.ai',
+  commerceUrl: 'https://api.hanzo.ai',
   // Pars has no branded Pay host yet; the shared checkout serves it until it does.
   payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/pars.svg',
