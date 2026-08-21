@@ -11,7 +11,7 @@ import type { SubscriptionPlan } from './billing/types'
  * that "the commerce catalog is IAM-gated and 403s logged-out", and the shell read
  * commerce's (prices in CENTS) with its own projection beside it. The premise was
  * false — measured against production, GET /v1/billing/plans answers 200
- * unauthenticated on commerce-api.hanzo.ai and returns
+ * unauthenticated on api.hanzo.ai and returns
  * `access-control-allow-origin: https://billing.hanzo.ai` — and the cost of the
  * split was real: two unit conventions on one screen, two projections that each
  * promised in a comment to mirror the other, and a live divergence in how they
