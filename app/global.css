@@ -10,6 +10,8 @@
  * class-merging pass at runtime.
  */
 
+@import '@hanzo/design/tokens/fonts.css';
+
 /* ── tokens ──────────────────────────────────────────────────────────────── */
 
 :root {

@@ -1,12 +1,8 @@
 import './global.css'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/lib/theme/theme-provider'
 import { Providers } from '@/lib/providers'
-
-const geist = Geist({ variable: '--font-sans', subsets: ['latin'] })
-const mono = Geist_Mono({ variable: '--font-mono', subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Hanzo Billing',
@@ -23,7 +19,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${mono.variable}`}>
+    <html lang="en">
       <body className="antialiased">
         <ThemeProvider>
           <Providers>{children}</Providers>
