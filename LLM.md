@@ -78,7 +78,7 @@ vocabulary the markup uses. There is no build plugin, no `postcss.config`, no
 2. Fonts must be imported or nothing fails LOUDLY. `@hanzo/ui` 8.0.47 removed its
    own `@font-face` (it duplicated design's and pointed at assets ui never
    shipped), so ui only NAMES the faces — `.mono` asks for the literal family
-   `'Geist Mono'`. Without design's `fonts.css` the build is green, gui-css-check
+   `'Zen Mono'`. Without design's `fonts.css` the build is green, gui-css-check
    is green, and every money figure silently falls back to `ui-monospace`: still
    monospace, still tabular, wrong face, invisible in a screenshot.
    **Do not use `next/font` here** — it mints a scoped family name
@@ -153,7 +153,7 @@ rule was written later, and it beat the `outline:none` the field rule stated to
 prevent exactly that. Both rules then painted. design 0.4.9 deleted the field
 rule; `@hanzo/ui` 8.0.69 was the first release to re-inline the fixed layer.
 
-Money must be tabular. Numeric cells carry `mono` (Geist Mono +
+Money must be tabular. Numeric cells carry `mono` (Zen Mono +
 `font-variant-numeric: tabular-nums`); `tnum` is the same tabular figures
 without changing the face. Both come from `@hanzo/ui` — do not re-declare a
 local `.font-mono` or `.tabular-nums`, which is what they replaced.
