@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hanzo/design": "^0.5.21",
+    "@hanzo/design": "0.5.24",
     "@hanzogui/shell": "^8.0.3",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.94.5",
@@ -34,5 +34,6 @@
     "onlyBuiltDependencies": [
       "sharp"
     ]
-  }
+  },
+  "packageManager": "pnpm@11.24.0"
 }
