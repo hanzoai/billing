@@ -9,7 +9,7 @@ import { Providers } from '@/lib/providers'
 // --font-sans and --font-mono get their values. next/font/google used to load
 // them here, and that was the silent bug: it mints a scoped family name like
 // `__Geist_Mono_abc123` and binds it to --font-mono, so @hanzo/ui's `.mono`
-// — which asks for the literal family 'Geist Mono' — never matched and every
+// — which asks for the literal family 'Zen Mono' — never matched and every
 // money figure fell through to ui-monospace. One owner of the faces, and it is
 // the package that ships the woff2.
 

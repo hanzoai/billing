@@ -52,7 +52,7 @@
  *
  * FONTS are the one thing @hanzo/ui does NOT carry, deliberately: 8.0.47 dropped
  * its @font-face because it duplicated design's and pointed at assets ui does
- * not ship. ui only NAMES the faces — `.mono` is `font-family:'Geist Mono',
+ * not ship. ui only NAMES the faces — `.mono` is `font-family:'Zen Mono',
  * ui-monospace,...` — so whoever renders must declare them, and design's
  * fonts.css is where they are declared, with urls relative to the package and
  * the two woff2 files alongside (SIL OFL-1.1). Miss that import and nothing
