@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { ThemeProvider } from '@/lib/theme/theme-provider'
 import { Providers } from '@/lib/providers'
 
-// Geist and Geist Mono are self-hosted by @hanzo/design and declared in
 // app/global.css (@hanzo/design/tokens/fonts.css), which is also where
 // --font-sans and --font-mono get their values. next/font/google used to load
 // them here, and that was the silent bug: it mints a scoped family name like
