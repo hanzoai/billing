@@ -13,10 +13,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hanzo/design": "^0.5.1",
-    "@hanzo/event": "^0.3.22",
-    "@hanzo/gui": "^8.1.1",
-    "@hanzo/ui": "^8.0.72",
+    "@hanzo/design": "^0.5.25",
+    "@hanzo/event": "^0.3.37",
+    "@hanzo/gui": "^8.3.1",
+    "@hanzo/ui": "^8.27.5",
     "@hanzogui/shell": "8.1.44",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.94.5",
