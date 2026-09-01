@@ -7,8 +7,9 @@ import type { NextConfig } from 'next'
 //   • Standalone on a dedicated host (e.g. billing.hanzo.ai), served at root by
 //     the ghcr.io/hanzoai/spa container — build with NEXT_PUBLIC_BASE_PATH="".
 //     A basePath here would emit /admin/billing/_next/* URLs that the root-
-//     serving container can't resolve (it returns index.html → blank page).
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '/admin/billing'
+// Standalone on dedicated host (billing.hanzo.ai) defaults to root ("").
+// Embedded in commerce binary sets NEXT_PUBLIC_BASE_PATH=/admin/billing.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
 const config: NextConfig = {
   output: 'export',

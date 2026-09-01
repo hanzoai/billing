@@ -1,30 +1,16 @@
-// Same deploy-shape selection as next.config.ts: embedded build serves under
-// /admin/billing, standalone (billing.hanzo.ai) builds with NEXT_PUBLIC_BASE_PATH="".
-// Raw <a href> / window.location targets must carry it themselves.
-export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/admin/billing'
+// SPDX-License-Identifier: Apache-2.0
+
+// Base path configuration: standalone builds (billing.hanzo.ai) serve at root,
+// while embedded builds (/admin/billing) set NEXT_PUBLIC_BASE_PATH.
+export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
 /**
- * Where commerce answers — ONE spelling, because the money-in surfaces must all
- * ask the same deployment. It matters most for the card form: `lib/square.ts`
- * reads the org's Square application from here and the charge is sent here, so
- * two addresses would be two Square accounts and a nonce minted for the wrong one.
+ * The unified Hanzo API endpoint (never a fragmented per-service host).
  */
 export const COMMERCE_URL = process.env.NEXT_PUBLIC_COMMERCE_URL ?? 'https://api.hanzo.ai'
 
 /**
- * Where a tier that is sold by a person sends the buyer — OUR calendar.
- *
- * ONE address, because it was written in two files and a third surface linked
- * somewhere else entirely, so "talk to sales" meant three destinations.
- *
- * It pointed at cal.com, a hosted product we do not run, while cal.hanzo.ai is
- * live and books end to end: an Intro event with real slots, a name/email form,
- * and POST /v1/calendar/bookings behind it.
- *
- * The ROOT, deliberately. cal.hanzo.ai routes only `/`, `/booking/:uid` and
- * `/:owner/:slug` with no catch-all, so the two URLs anyone would guess —
- * /hanzo and /sales — render a blank page. `/` and `/hanzo/intro` are the two
- * that work, and the root is the one that survives the event being renamed.
+ * Direct sales booking calendar.
  */
 export const SALES_URL = 'https://cal.hanzo.ai/'
 
@@ -34,12 +20,6 @@ export interface BillingOrgConfig {
   iamServerUrl: string
   iamClientId: string
   commerceUrl: string
-  /**
-   * The branded Pay checkout (pay.<brand>) — the ONE place a card is entered.
-   * Picking a plan with no card on file deep-links here:
-   * `<payUrl>/confirm/card?plan=<slug>`, which carries IAM sign-in through to the
-   * card form and starts the subscription. Same host the IAM `payUrl` names.
-   */
   payUrl: string
   logo: string
   theme: {
@@ -53,7 +33,7 @@ const hanzo: BillingOrgConfig = {
   displayName: 'Hanzo',
   iamServerUrl: 'https://hanzo.id',
   iamClientId: 'hanzo-billing',
-  commerceUrl: 'https://api.hanzo.ai',
+  commerceUrl: COMMERCE_URL,
   payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/hanzo.svg',
   theme: {
@@ -67,7 +47,7 @@ const lux: BillingOrgConfig = {
   displayName: 'Lux',
   iamServerUrl: 'https://lux.id',
   iamClientId: 'lux-billing',
-  commerceUrl: 'https://api.hanzo.ai',
+  commerceUrl: COMMERCE_URL,
   payUrl: 'https://pay.lux.cloud',
   logo: '/logos/lux.svg',
   theme: {
@@ -81,7 +61,7 @@ const zoo: BillingOrgConfig = {
   displayName: 'Zoo',
   iamServerUrl: 'https://zoolabs.id',
   iamClientId: 'zoo-billing',
-  commerceUrl: 'https://api.hanzo.ai',
+  commerceUrl: COMMERCE_URL,
   payUrl: 'https://pay.zoo.cloud',
   logo: '/logos/zoo.svg',
   theme: {
@@ -95,8 +75,7 @@ const pars: BillingOrgConfig = {
   displayName: 'Pars',
   iamServerUrl: 'https://pars.id',
   iamClientId: 'pars-billing',
-  commerceUrl: 'https://api.hanzo.ai',
-  // Pars has no branded Pay host yet; the shared checkout serves it until it does.
+  commerceUrl: COMMERCE_URL,
   payUrl: 'https://pay.hanzo.ai',
   logo: '/logos/pars.svg',
   theme: {
@@ -113,9 +92,3 @@ export function getOrgByHost(host: string): BillingOrgConfig {
   if (host.includes('pars')) return pars
   return hanzo
 }
-
-/**
- * Plan copy lives in ONE place: the commerce catalog (GET /v1/billing/plans,
- * projected from @hanzo/plans/subscription.json). The SPA fetches it at
- * runtime and renders a skeleton until it arrives — no local plan table.
- */
