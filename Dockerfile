@@ -30,5 +30,5 @@ RUN if [ -n "$SQUARE_APPLICATION_ID" ]; then \
     fi && \
     pnpm build
 
-FROM ghcr.io/hanzoai/spa:1.4.8
+FROM ghcr.io/hanzoai/spa:1.4.13
 COPY --from=builder /app/out /public
