@@ -197,7 +197,16 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
                   <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
                 </svg>
-                <span className="text-sm font-semibold text-amber-400">Your credit balance is $0</span>
+                <span className="text-sm font-semibold text-amber-400">
+                  Your credit balance is{' '}
+                  {totalCreditsRemaining === 0 && currency.toLowerCase() === 'usd'
+                    ? '$0'
+                    : moneyFromCents(
+                        props.balance?.available ?? 0,
+                        currency,
+                        (props.balance?.available ?? 0) === 0 ? 0 : 2,
+                      )}
+                </span>
               </div>
               <p className="text-[13px] text-ink/50">Add funds to continue using Hanzo AI models and API.</p>
             </div>
@@ -255,7 +264,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                   name. Everything here now comes from the plan it links to. */}
               <p className="text-[22px] font-bold text-text mb-1">
                 All AI models. One plan.{' '}
-                <span className="text-sky-400">{money(recommendedPlan.price, recommendedPlan.currency, 0)}/mo.</span>
+                <span className="text-sky-400">
+                  {money(recommendedPlan.price, recommendedPlan.currency, cents(recommendedPlan.price))}/mo.
+                </span>
               </p>
               <p className="text-[13px] text-ink/50 mb-5">
                 14+ Zen AI models · 1M+ token context · Unlimited chat · MCP tools · Priority inference
@@ -288,8 +299,8 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
                   already computed correctly two files away. */}
               {annualSaving(recommendedPlan) && (
                 <p className="mt-3 text-[12px] text-emerald-400">
-                  Or {money(recommendedPlan.annualPrice!, recommendedPlan.currency, 0)}/mo billed annually — save{' '}
-                  {money(annualSaving(recommendedPlan)!, recommendedPlan.currency, 0)} a year
+                  Or {money(recommendedPlan.annualPrice!, recommendedPlan.currency, cents(recommendedPlan.annualPrice!))}/mo billed annually — save{' '}
+                  {money(annualSaving(recommendedPlan)!, recommendedPlan.currency, cents(annualSaving(recommendedPlan)!))} a year
                 </p>
               )}
             </div>
