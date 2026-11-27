@@ -2021,3 +2021,13 @@ html.transitioning *::after {
 @media (max-width: 767px) {
   .hz-rail { display: none; }
 }
+
+/* @hanzo/ui >=8.2 removed the unprefixed .mono alias in favor of .hz-mono;
+   keep .mono in billing's local utility vocabulary for numeric/code cells. */
+.mono {
+  font-family: var(--font-mono, 'Zen Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+}
+

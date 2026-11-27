@@ -19,6 +19,16 @@ function fmtDate(d: Date | string) {
 
 const PAGE_SIZE = 20
 
+export function sliceInvoicePage(invoices: Invoice[], page: number, pageSize = PAGE_SIZE) {
+  const totalPages = Math.ceil(invoices.length / pageSize)
+  const safePage = totalPages > 0 ? Math.min(Math.max(0, page), totalPages - 1) : 0
+  return {
+    totalPages,
+    safePage,
+    pageInvoices: invoices.slice(safePage * pageSize, (safePage + 1) * pageSize),
+  }
+}
+
 /* ── Fade-in animation ─────────────────────────────────────── */
 function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -40,8 +50,10 @@ function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 export function InvoicesPayments(props: InvoicesPaymentsProps) {
   const [page, setPage] = useState(0)
   const { invoices, error = null, onRetry } = props
-  const totalPages = Math.ceil(invoices.length / PAGE_SIZE)
-  const pageInvoices = invoices.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const { totalPages, safePage, pageInvoices } = sliceInvoicePage(invoices, page)
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
 
   return (
     <FadeIn delay={0}>
@@ -120,21 +132,21 @@ export function InvoicesPayments(props: InvoicesPaymentsProps) {
               {totalPages > 1 && (
                 <div className="border-t border-ink/[0.06] px-6 py-3 flex items-center justify-between bg-ink/[0.02]">
                   <p className="text-[13px] text-ink/30">
-                    Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, invoices.length)} of {invoices.length}
+                    Showing {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, invoices.length)} of {invoices.length}
                   </p>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
-                      disabled={page === 0}
-                      onClick={() => setPage(p => p - 1)}
+                      disabled={safePage === 0}
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
                       className="rounded-full border border-ink/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-ink/70 transition-all hover:bg-ink/[0.05] hover:border-ink/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
                     >
                       Previous
                     </button>
                     <button
                       type="button"
-                      disabled={page >= totalPages - 1}
-                      onClick={() => setPage(p => p + 1)}
+                      disabled={safePage >= totalPages - 1}
+                      onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                       className="rounded-full border border-ink/[0.1] px-3.5 py-1.5 text-[13px] font-medium text-ink/70 transition-all hover:bg-ink/[0.05] hover:border-ink/[0.2] disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
                     >
                       Next

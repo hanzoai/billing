@@ -11,12 +11,13 @@
  * has to remember which side it is on.
  */
 export function money(value: number, currency = 'USD', digits: 0 | 2 = 2): string {
+  const clean = Math.abs(value) < 0.5 * 10 ** -digits ? 0 : value
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value)
+  }).format(clean)
 }
 
 /**
@@ -32,7 +33,7 @@ export function money(value: number, currency = 'USD', digits: 0 | 2 = 2): strin
  * So the price itself decides, and every catalog figure asks the same question.
  */
 export function cents(value: number): 0 | 2 {
-  return Number.isInteger(value) ? 0 : 2
+  return Math.round(Math.abs(value) * 100) % 100 === 0 ? 0 : 2
 }
 
 /** Commerce ledger amounts (balances, transactions, top-ups) are CENTS. */
@@ -55,7 +56,7 @@ export function annualSaving(plan: { price?: number; annualPrice?: number }): nu
   const monthly = plan.price ?? 0
   const annual = plan.annualPrice ?? 0
   if (monthly <= 0 || annual <= 0) return null
-  const saved = (monthly - annual) * 12
+  const saved = Math.round((monthly - annual) * 12 * 100) / 100
   return saved > 0 ? saved : null
 }
 
