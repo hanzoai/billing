@@ -11,12 +11,13 @@
  * has to remember which side it is on.
  */
 export function money(value: number, currency = 'USD', digits: 0 | 2 = 2): string {
+  const safe = Number.isFinite(value) ? (value === 0 ? 0 : value) : 0
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value)
+  }).format(safe)
 }
 
 /**
